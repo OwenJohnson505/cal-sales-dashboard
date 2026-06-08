@@ -80,7 +80,7 @@ function login(){
 }
 async function doIn(){ setMsg(""); var r=await sb.auth.signInWithPassword({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { boot(); } }
 async function doUp(){ setMsg(""); var r=await sb.auth.signUp({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { setMsg("Request sent. Once an admin approves you, sign in."); } }
-function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin hasn't approved access yet. You'll see the dashboard as soon as you're approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
+function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin has not approved access yet. You will see the dashboard as soon as you are approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+'</p><div class="row"><button onclick="boot()">Retry</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 async function out(){ await sb.auth.signOut(); boot(); }
 
@@ -116,7 +116,7 @@ function renderDash(p, sess){
         '<th class="num" onclick="setSort(\'contacts\')">Contacts</th><th onclick="setSort(\'rep_list\')">Reps</th>'+
         '<th onclick="setSort(\'last_activity\')">Last activity</th>'+
       '</tr></thead><tbody id="rows"></tbody></table>'+
-      '<div class="foot">Source: <span class="badge b-src">Front email</span> (reps' inboxes, by recipient domain) + <span class="badge b-src">Aircall</span> (by company main number). Calls to numbers not in HubSpot stay rep-level. "Customer" = name matched to a domain; some net-new are customers awaiting domain matching.</div>'+
+      '<div class="foot">Source: <span class="badge b-src">Front email</span> (rep inboxes, by recipient domain) + <span class="badge b-src">Aircall</span> (by company main number). Calls to numbers not in HubSpot stay rep-level. "Customer" = name matched to a domain; some net-new are customers awaiting domain matching.</div>'+
     '</div>');
   DATA=p.companies||[];
   maxAct=Math.max.apply(null,[1].concat(DATA.map(function(d){return (Number(d.emails)||0)+(Number(d.calls)||0);})));
