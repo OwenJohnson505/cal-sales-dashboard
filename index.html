@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cal Sameday â€” Sales Intelligence</title>
+<title>Cal Sameday - Sales Intelligence</title>
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -40,7 +40,7 @@ input#search { flex:1; min-width:160px; margin:0; }
 </style>
 </head>
 <body>
-<div id="app" class="wrap">Loadingâ€¦</div>
+<div id="app" class="wrap">Loading...</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 var URL_="https://bbklqpmojvfoqsmxbtfv.supabase.co";
@@ -53,14 +53,14 @@ function h(x){app.innerHTML=x;}
 function val(id){var e=document.getElementById(id);return e?e.value:"";}
 function setMsg(m){var e=document.getElementById("msg");if(e)e.textContent=m||"";}
 var nf=function(v){return (Number(v)||0).toLocaleString();};
-function pct(a,b){return b>0?Math.round(100*a/b)+"%":"â€”";}
-function fmtDate(s){if(!s)return"â€”";var d=new Date(s);return isNaN(d)?"â€”":d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});}
+function pct(a,b){return b>0?Math.round(100*a/b)+"%":"-";}
+function fmtDate(s){if(!s)return"-";var d=new Date(s);return isNaN(d)?"-":d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});}
 
 async function boot(){
   var s=await sb.auth.getSession();
   var sess=s.data.session;
   if(!sess){return login();}
-  app.innerHTML='<p class="sub">Loading your dataâ€¦</p>';
+  app.innerHTML='<p class="sub">Loading your data...</p>';
   var res;
   try{
     res=await fetch(DATA_,{headers:{Authorization:"Bearer "+sess.access_token,apikey:KEY_}});
@@ -73,14 +73,14 @@ async function boot(){
   renderDash(payload, sess);
 }
 function login(){
-  h('<div class="card"><h2>Cal Sameday</h2><p>Sales intelligence â€” sign in to continue.</p>'+
+  h('<div class="card"><h2>Cal Sameday</h2><p>Sales intelligence - sign in to continue.</p>'+
     '<input id="em" placeholder="Work email"><input id="pw" type="password" placeholder="Password">'+
     '<div class="row"><button onclick="doIn()">Sign in</button><button class="alt" onclick="doUp()">Request access</button></div>'+
     '<div id="msg" class="msg"></div></div>');
 }
 async function doIn(){ setMsg(""); var r=await sb.auth.signInWithPassword({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { boot(); } }
 async function doUp(){ setMsg(""); var r=await sb.auth.signUp({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { setMsg("Request sent. Once an admin approves you, sign in."); } }
-function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin hasnâ€™t approved access yet. Youâ€™ll see the dashboard as soon as youâ€™re approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
+function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin hasn't approved access yet. You'll see the dashboard as soon as you're approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+'</p><div class="row"><button onclick="boot()">Retry</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 async function out(){ await sb.auth.signOut(); boot(); }
 
@@ -98,13 +98,13 @@ function renderDash(p, sess){
     kpi("Both channels",nf(s.both),"emailed & called")+
     kpi("Calls",nf(s.calls),"linked to a co.");
   var reps='<table><thead><tr><th>Rep</th><th class="num">Emails</th><th class="num">Calls</th><th class="num">Answered</th><th class="num">Companies emailed</th><th>Last active</th></tr></thead><tbody>'+
-    (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">â€”</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">â€”</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'â€”')+'</td></tr>';}).join("")+'</tbody></table>';
-  h('<div class="top"><div class="t">Cal Sameday â€” Company Activity 360</div><div class="r">'+adminBtn+'<button onclick="out()">Sign out</button></div></div>'+
-    '<p class="sub">Live Â· who your team actually emails &amp; calls, stitched across Front + Aircall Â· updated '+fmtDate(p.generated_at)+'</p>'+
+    (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'-')+'</td></tr>';}).join("")+'</tbody></table>';
+  h('<div class="top"><div class="t">Cal Sameday - Company Activity 360</div><div class="r">'+adminBtn+'<button onclick="out()">Sign out</button></div></div>'+
+    '<p class="sub">Live - who your team actually emails &amp; calls, stitched across Front + Aircall - updated '+fmtDate(p.generated_at)+'</p>'+
     '<div class="kpis">'+kpis+'</div>'+
-    '<div class="panel"><h2>Rep activity â€” email &amp; phone</h2>'+reps+'</div>'+
+    '<div class="panel"><h2>Rep activity - email &amp; phone</h2>'+reps+'</div>'+
     '<div class="panel"><h2>Companies engaged</h2>'+
-      '<div class="controls"><input id="search" placeholder="Search company or domainâ€¦" oninput="flt()">'+
+      '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="flt()">'+
       '<span class="chip active" data-f="all" onclick="setF(this)">All</span>'+
       '<span class="chip" data-f="customer" onclick="setF(this)">Customers</span>'+
       '<span class="chip" data-f="prospect" onclick="setF(this)">Prospects</span>'+
@@ -116,7 +116,7 @@ function renderDash(p, sess){
         '<th class="num" onclick="setSort(\'contacts\')">Contacts</th><th onclick="setSort(\'rep_list\')">Reps</th>'+
         '<th onclick="setSort(\'last_activity\')">Last activity</th>'+
       '</tr></thead><tbody id="rows"></tbody></table>'+
-      '<div class="foot">Source: <span class="badge b-src">Front email</span> (repsâ€™ inboxes, by recipient domain) + <span class="badge b-src">Aircall</span> (by company main number). Calls to numbers not in HubSpot stay rep-level. â€œCustomerâ€ = name matched to a domain; some net-new are customers awaiting domain matching.</div>'+
+      '<div class="foot">Source: <span class="badge b-src">Front email</span> (reps' inboxes, by recipient domain) + <span class="badge b-src">Aircall</span> (by company main number). Calls to numbers not in HubSpot stay rep-level. "Customer" = name matched to a domain; some net-new are customers awaiting domain matching.</div>'+
     '</div>');
   DATA=p.companies||[];
   maxAct=Math.max.apply(null,[1].concat(DATA.map(function(d){return (Number(d.emails)||0)+(Number(d.calls)||0);})));
@@ -146,9 +146,9 @@ function flt(){
     return '<tr><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td>'+
       '<td>'+badge(d)+'</td>'+
       '<td class="num"><span class="bar"><i style="width:'+w+'%"></i></span>'+nf(em)+'</td>'+
-      '<td class="num">'+(ca?nf(ca):'<span class="muted">â€”</span>')+'</td>'+
-      '<td class="num">'+(d.contacts?nf(d.contacts):'<span class="muted">â€”</span>')+'</td>'+
-      '<td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">â€”</span>')+'</td>'+
+      '<td class="num">'+(ca?nf(ca):'<span class="muted">-</span>')+'</td>'+
+      '<td class="num">'+(d.contacts?nf(d.contacts):'<span class="muted">-</span>')+'</td>'+
+      '<td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td>'+
       '<td>'+fmtDate(d.last_activity)+'</td></tr>';
   }).join("");
 }
@@ -156,7 +156,7 @@ async function adminView(){
   var us=(await sb.from("app_user").select("id,email,approved,is_admin")).data||[];
   var rows=us.map(function(u){var act=u.approved?'<span class="muted">approved</span>':'<button onclick="appr(\''+u.id+'\')">Approve</button>';return '<tr><td>'+(u.email||u.id)+'</td><td>'+(u.is_admin?'admin':(u.approved?'member':'pending'))+'</td><td>'+act+'</td></tr>';}).join("");
   h('<div class="top"><div class="t">Manage users</div><div class="r"><button class="alt" onclick="boot()">Back</button><button onclick="out()">Sign out</button></div></div>'+
-    '<p class="sub">Approve who can see the dashboard. New sign-ups appear here as â€œpendingâ€.</p>'+
+    '<p class="sub">Approve who can see the dashboard. New sign-ups appear here as "pending".</p>'+
     '<div class="panel"><table><thead><tr><th>User</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>');
 }
 async function appr(id){ await sb.from("app_user").update({approved:true}).eq("id",id); adminView(); }
