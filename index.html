@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cal Sameday - Sales Intelligence</title>
+<title>Cal Sameday - Prospect Pipeline</title>
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -14,7 +14,6 @@ body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
 input { display:block; width:100%; padding:10px; margin:8px 0; border:1px solid #e2e8f0; border-radius:8px; font:inherit; }
 button { padding:9px 14px; border:1px solid #2563eb; background:#2563eb; color:#fff; border-radius:8px; cursor:pointer; font:inherit; }
 button.alt { background:#fff; color:#2563eb; }
-button.link { background:none; border:none; color:#2563eb; padding:4px; cursor:pointer; }
 .row { display:flex; gap:8px; margin-top:8px; } .msg { color:#b91c1c; font-size:13px; margin-top:10px; min-height:16px; }
 .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:8px; }
 .top .t { font-size:18px; font-weight:650; } .top .r button { margin-left:8px; }
@@ -28,13 +27,13 @@ table { width:100%; border-collapse:collapse; font-size:12.5px; } th,td { text-a
 th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,th.num { text-align:right; }
 .company-cell { white-space:normal; font-weight:550; } .muted { color:#94a3b8; }
 .badge { display:inline-block; padding:1px 7px; border-radius:20px; font-size:10.5px; font-weight:600; }
-.b-cust { background:#dcfce7; color:#15803d; } .b-pros { background:#dbeafe; color:#1d4ed8; } .b-new { background:#f1f5f9; color:#64748b; } .b-src { background:#faf5ff; color:#7c3aed; }
+.b-cust { background:#fee2e2; color:#b91c1c; } .b-pros { background:#dbeafe; color:#1d4ed8; } .b-new { background:#f1f5f9; color:#64748b; }
+.b-two { background:#dcfce7; color:#15803d; } .b-out { background:#fef9c3; color:#854d0e; } .b-src { background:#faf5ff; color:#7c3aed; }
 .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
 input#search { flex:1; min-width:160px; margin:0; }
 .chip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer; }
 .chip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; font-weight:600; }
 .count { font-size:11.5px; color:#64748b; margin:6px 0 8px; }
-.bar { height:6px; background:#eff2f7; border-radius:4px; overflow:hidden; display:inline-block; width:56px; vertical-align:middle; margin-right:6px; } .bar > i { display:block; height:100%; background:#2563eb; }
 .foot { font-size:11px; color:#94a3b8; margin-top:8px; line-height:1.6; }
 .err { color:#b91c1c; font-size:13px; }
 </style>
@@ -48,7 +47,7 @@ var KEY_="sb_publishable_ayYFZV0wGJ-dM8VHpbaJiQ_ogINqgTH";
 var DATA_=URL_+"/functions/v1/activity-data";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
-var DATA=[], sortK="emails", sortDir=-1, filter="all", maxAct=1;
+var DATA=[], sortK="emails", sortDir=-1, filter="all";
 function h(x){app.innerHTML=x;}
 function val(id){var e=document.getElementById(id);return e?e.value:"";}
 function setMsg(m){var e=document.getElementById("msg");if(e)e.textContent=m||"";}
@@ -62,64 +61,67 @@ async function boot(){
   if(!sess){return login();}
   app.innerHTML='<p class="sub">Loading your data...</p>';
   var res;
-  try{
-    res=await fetch(DATA_,{headers:{Authorization:"Bearer "+sess.access_token,apikey:KEY_}});
-  }catch(e){ return errScreen("Could not reach the data service."); }
+  try{ res=await fetch(DATA_,{headers:{Authorization:"Bearer "+sess.access_token,apikey:KEY_}}); }
+  catch(e){ return errScreen("Could not reach the data service."); }
   if(res.status===401){ await sb.auth.signOut(); return login(); }
   if(res.status===403){ var p=await res.json().catch(function(){return{};}); return pending(p.email||sess.user.email); }
   if(!res.ok){ return errScreen("Server error ("+res.status+")."); }
   var payload=await res.json();
   if(!payload.ok){ return errScreen(payload.error||"Unknown error."); }
-  renderDash(payload, sess);
+  renderDash(payload);
 }
 function login(){
-  h('<div class="card"><h2>Cal Sameday</h2><p>Sales intelligence - sign in to continue.</p>'+
+  h('<div class="card"><h2>Cal Sameday</h2><p>Prospect pipeline - sign in to continue.</p>'+
     '<input id="em" placeholder="Work email"><input id="pw" type="password" placeholder="Password">'+
     '<div class="row"><button onclick="doIn()">Sign in</button><button class="alt" onclick="doUp()">Request access</button></div>'+
     '<div id="msg" class="msg"></div></div>');
 }
 async function doIn(){ setMsg(""); var r=await sb.auth.signInWithPassword({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { boot(); } }
-async function doUp(){ setMsg(""); var r=await sb.auth.signUp({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { setMsg("Request sent. Once an admin approves you, sign in."); } }
-function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin has not approved access yet. You will see the dashboard as soon as you are approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
+async function doUp(){ setMsg(""); var r=await sb.auth.signUp({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { setMsg("Request sent. An admin will approve you, then sign in."); } }
+function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin has not approved access yet. You will see the pipeline as soon as you are approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+'</p><div class="row"><button onclick="boot()">Retry</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 async function out(){ await sb.auth.signOut(); boot(); }
 
 function kpi(l,v,hh){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(hh?'<div class="h">'+hh+'</div>':'')+'</div>'; }
-function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"prospect"; return"new"; }
-function badge(d){ if(d.is_customer)return'<span class="badge b-cust">Customer</span>'; if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">Net-new</span>'; }
+function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"scored"; return"new"; }
+function typeBadge(d){ if(d.is_customer)return'<span class="badge b-cust">Customer</span>'; if(d.is_prospect)return'<span class="badge b-pros">Scored'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New</span>'; }
+function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 
-function renderDash(p, sess){
+function renderDash(p){
   var s=p.summary;
   var adminBtn=p.is_admin?'<button class="alt" onclick="adminView()">Manage users</button>':'';
-  var kpis=kpi("Companies engaged",nf(s.companies),"email/phone")+
-    kpi("Customers",nf(s.customers),"matched")+
-    kpi("Prospects",nf(s.prospects),"scored")+
-    kpi("Net-new",nf(s.net_new),"not in list")+
-    kpi("Both channels",nf(s.both),"emailed & called")+
+  var kpis=kpi("Prospects",nf(s.prospects),"reps emailed them")+
+    kpi("Two-way",nf(s.two_way),"prospect replied")+
+    kpi("Outbound only",nf(s.outbound_only),"awaiting reply")+
+    kpi("Scored",nf(s.scored),"matched in Apollo")+
+    kpi("Customers",nf(s.customers),"existing - flagged")+
     kpi("Calls",nf(s.calls),"linked to a co.");
   var reps='<table><thead><tr><th>Rep</th><th class="num">Emails</th><th class="num">Calls</th><th class="num">Answered</th><th class="num">Companies emailed</th><th>Last active</th></tr></thead><tbody>'+
     (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'-')+'</td></tr>';}).join("")+'</tbody></table>';
-  h('<div class="top"><div class="t">Cal Sameday - Company Activity 360</div><div class="r">'+adminBtn+'<button onclick="out()">Sign out</button></div></div>'+
-    '<p class="sub">Live - who your team actually emails &amp; calls, stitched across Front + Aircall - updated '+fmtDate(p.generated_at)+'</p>'+
+  h('<div class="top"><div class="t">Cal Sameday - Prospect Pipeline</div><div class="r">'+adminBtn+'<button onclick="out()">Sign out</button></div></div>'+
+    '<p class="sub">Companies your reps have emailed (outbound), across Front + Aircall - updated '+fmtDate(p.generated_at)+'</p>'+
     '<div class="kpis">'+kpis+'</div>'+
-    '<div class="panel"><h2>Rep activity - email &amp; phone</h2>'+reps+'</div>'+
-    '<div class="panel"><h2>Companies engaged</h2>'+
+    '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
+    '<div class="panel"><h2>Prospects</h2>'+
       '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="flt()">'+
       '<span class="chip active" data-f="all" onclick="setF(this)">All</span>'+
-      '<span class="chip" data-f="customer" onclick="setF(this)">Customers</span>'+
-      '<span class="chip" data-f="prospect" onclick="setF(this)">Prospects</span>'+
-      '<span class="chip" data-f="new" onclick="setF(this)">Net-new</span></div>'+
+      '<span class="chip" data-f="two" onclick="setF(this)">Two-way</span>'+
+      '<span class="chip" data-f="outbound" onclick="setF(this)">Outbound only</span>'+
+      '<span class="chip" data-f="scored" onclick="setF(this)">Scored</span>'+
+      '<span class="chip" data-f="customer" onclick="setF(this)">Customers</span></div>'+
       '<div class="count" id="count"></div>'+
       '<table><thead><tr>'+
-        '<th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'type\')">Type</th>'+
-        '<th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th>'+
-        '<th class="num" onclick="setSort(\'contacts\')">Contacts</th><th onclick="setSort(\'rep_list\')">Reps</th>'+
+        '<th onclick="setSort(\'company\')">Company</th>'+
+        '<th onclick="setSort(\'two_way\')">Status</th>'+
+        '<th onclick="setSort(\'type\')">Type</th>'+
+        '<th class="num" onclick="setSort(\'emails\')">Emails</th>'+
+        '<th class="num" onclick="setSort(\'calls\')">Calls</th>'+
+        '<th onclick="setSort(\'rep_list\')">Reps</th>'+
         '<th onclick="setSort(\'last_activity\')">Last activity</th>'+
       '</tr></thead><tbody id="rows"></tbody></table>'+
-      '<div class="foot">Source: <span class="badge b-src">Front email</span> (rep inboxes, by recipient domain) + <span class="badge b-src">Aircall</span> (by company main number). Calls to numbers not in HubSpot stay rep-level. "Customer" = name matched to a domain; some net-new are customers awaiting domain matching.</div>'+
+      '<div class="foot">A company appears only if a rep sent it an outbound email. <span class="badge b-two">Two-way</span> = the prospect replied; <span class="badge b-out">Outbound</span> = sent, awaiting reply. Inbound-only senders (software systems, notifications) are excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
     '</div>');
   DATA=p.companies||[];
-  maxAct=Math.max.apply(null,[1].concat(DATA.map(function(d){return (Number(d.emails)||0)+(Number(d.calls)||0);})));
   flt();
 }
 function setF(el){ filter=el.getAttribute("data-f"); var cs=document.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){cs[i].classList.toggle("active",cs[i]===el);} flt(); }
@@ -127,27 +129,29 @@ function setSort(k){ if(sortK===k)sortDir*=-1; else {sortK=k; sortDir=(k==="comp
 function flt(){
   var term=(val("search")||"").toLowerCase();
   var rows=DATA.filter(function(d){
-    if(filter!=="all" && typeOf(d)!==filter) return false;
+    if(filter==="two" && !d.two_way) return false;
+    if(filter==="outbound" && d.two_way) return false;
+    if(filter==="scored" && !d.is_prospect) return false;
+    if(filter==="customer" && !d.is_customer) return false;
     if(term && !((d.company||"").toLowerCase().indexOf(term)>=0 || (d.domain||"").toLowerCase().indexOf(term)>=0)) return false;
     return true;
   });
   rows.sort(function(a,b){
     var x,y;
-    if(sortK==="type"){x=typeOf(a);y=typeOf(b);}
+    if(sortK==="two_way"){x=a.two_way?1:0;y=b.two_way?1:0;}
+    else if(sortK==="type"){x=typeOf(a);y=typeOf(b);}
     else if(sortK==="company"||sortK==="rep_list"){x=(a[sortK]||"").toLowerCase();y=(b[sortK]||"").toLowerCase();}
     else if(sortK==="last_activity"){x=a.last_activity||"";y=b.last_activity||"";}
     else {x=Number(a[sortK])||0;y=Number(b[sortK])||0;}
     if(x<y)return -sortDir; if(x>y)return sortDir; return 0;
   });
   document.getElementById("count").textContent=rows.length+" companies";
-  document.getElementById("rows").innerHTML=rows.slice(0,400).map(function(d){
-    var em=Number(d.emails)||0, ca=Number(d.calls)||0;
-    var w=Math.max(2,Math.round(100*(em+ca)/maxAct));
+  document.getElementById("rows").innerHTML=rows.slice(0,500).map(function(d){
     return '<tr><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td>'+
-      '<td>'+badge(d)+'</td>'+
-      '<td class="num"><span class="bar"><i style="width:'+w+'%"></i></span>'+nf(em)+'</td>'+
-      '<td class="num">'+(ca?nf(ca):'<span class="muted">-</span>')+'</td>'+
-      '<td class="num">'+(d.contacts?nf(d.contacts):'<span class="muted">-</span>')+'</td>'+
+      '<td>'+statusBadge(d)+'</td>'+
+      '<td>'+typeBadge(d)+'</td>'+
+      '<td class="num">'+nf(d.emails)+'</td>'+
+      '<td class="num">'+(Number(d.calls)?nf(d.calls):'<span class="muted">-</span>')+'</td>'+
       '<td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td>'+
       '<td>'+fmtDate(d.last_activity)+'</td></tr>';
   }).join("");
@@ -156,7 +160,7 @@ async function adminView(){
   var us=(await sb.from("app_user").select("id,email,approved,is_admin")).data||[];
   var rows=us.map(function(u){var act=u.approved?'<span class="muted">approved</span>':'<button onclick="appr(\''+u.id+'\')">Approve</button>';return '<tr><td>'+(u.email||u.id)+'</td><td>'+(u.is_admin?'admin':(u.approved?'member':'pending'))+'</td><td>'+act+'</td></tr>';}).join("");
   h('<div class="top"><div class="t">Manage users</div><div class="r"><button class="alt" onclick="boot()">Back</button><button onclick="out()">Sign out</button></div></div>'+
-    '<p class="sub">Approve who can see the dashboard. New sign-ups appear here as "pending".</p>'+
+    '<p class="sub">Approve who can see the pipeline. New sign-ups appear here as pending.</p>'+
     '<div class="panel"><table><thead><tr><th>User</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>');
 }
 async function appr(id){ await sb.from("app_user").update({approved:true}).eq("id",id); adminView(); }
