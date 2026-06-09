@@ -61,6 +61,10 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .uspk { display:inline-block; min-width:16px; text-align:center; font-weight:700; font-size:10px; color:#fff; padding:1px 6px; border-radius:10px; margin-right:6px; background:#94a3b8; }
 .spk-A { background:#2563eb; } .spk-B { background:#7c3aed; } .spk-C { background:#15803d; } .spk-D { background:#b45309; }
 .cstats { font-size:12px; color:#475569; margin-bottom:8px; }
+.sentby { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:12px; }
+.sblbl { font-size:11px; text-transform:uppercase; color:#64748b; letter-spacing:.04em; }
+.sbchip { font-size:12px; background:#f1f5f9; border-radius:20px; padding:4px 11px; color:#334155; }
+.sbchip b { color:#0f172a; }
 .seqstep { border:1px solid #eef2f7; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
 .seqh { font-size:10.5px; text-transform:uppercase; color:#94a3b8; letter-spacing:.04em; }
 .seqsub { font-weight:600; font-size:13px; margin:3px 0 8px; }
@@ -186,10 +190,11 @@ function renderCampaign(p){
   CAMP=p; cLeadTab="all"; var c=p.campaign||{};
   var bp=Number(c.emails_sent)?Math.round(100*Number(c.bounced)/Number(c.emails_sent)):0;
   var stats='<div class="cstats">Leads '+nf(c.leads)+' &middot; Sent '+nf(c.emails_sent)+' &middot; Opens '+nf(c.opens_unique)+' &middot; Replies '+nf(c.replies)+' &middot; Bounce '+bp+'%</div>';
+  var sentRow=(p.sent_breakdown&&p.sent_breakdown.length)?'<div class="sentby"><span class="sblbl">Sent by</span>'+p.sent_breakdown.map(function(x){ return '<span class="sbchip">'+esc(x.name)+' <b>'+nf(x.count)+'</b></span>'; }).join("")+'</div>':"";
   var seq=(p.sequence||[]).map(function(st){ return '<div class="seqstep"><div class="seqh">Step '+st.step+(st.delay?' &middot; after '+st.delay+' days':'')+'</div><div class="seqsub">'+esc(st.subject||"(no subject)")+'</div><div class="seqbody">'+(st.body||"")+'</div></div>'; }).join("") || '<p class="muted">No sequence steps.</p>';
   var leads=p.leads||[]; var nB=leads.filter(bouncedLead).length, nR=leads.filter(repliedLead).length;
   var chips='<span class="lt active" data-t="all" onclick="setCTab(\'all\')">All ('+leads.length+')</span><span class="lt" data-t="bounced" onclick="setCTab(\'bounced\')">Bounced ('+nB+')</span><span class="lt" data-t="replied" onclick="setCTab(\'replied\')">Replied ('+nR+')</span>';
-  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(c.name||"Campaign")+'</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+stats+'<h3 class="msec">Recipients</h3><div class="controls">'+chips+'</div><table><thead><tr><th>Contact</th><th>Company</th><th>Job title</th><th>Status</th></tr></thead><tbody id="cleadrows"></tbody></table><details class="ctr" style="margin-top:14px"><summary>Email sequence ('+(p.sequence||[]).length+' step) - view the emails being sent</summary>'+seq+'</details></div></div>';
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(c.name||"Campaign")+'</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+stats+sentRow+'<h3 class="msec">Recipients</h3><div class="controls">'+chips+'</div><table><thead><tr><th>Contact</th><th>Company</th><th>Job title</th><th>Status</th></tr></thead><tbody id="cleadrows"></tbody></table><details class="ctr" style="margin-top:14px"><summary>Email sequence ('+(p.sequence||[]).length+' step) - view the emails being sent</summary>'+seq+'</details></div></div>';
   m.scrollTop=0;
   renderCampaignLeads();
 }
