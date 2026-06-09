@@ -17,7 +17,13 @@ button.alt { background:#fff; color:#2563eb; }
 .row { display:flex; gap:8px; margin-top:8px; } .msg { color:#b91c1c; font-size:13px; margin-top:10px; min-height:16px; }
 .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:8px; }
 .top .t { font-size:18px; font-weight:650; } .top .r button { margin-left:8px; }
-.sub { font-size:12px; color:#64748b; margin:0 0 16px; }
+.sub { font-size:12px; color:#64748b; margin:0 0 14px; }
+.daterow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:#fff; border:1px solid #e6e9ef; border-radius:12px; padding:10px 12px; margin-bottom:16px; }
+.daterow .lbl { font-size:12px; color:#64748b; font-weight:600; margin-right:2px; }
+.dchip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:5px 12px; font-size:12px; cursor:pointer; }
+.dchip.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; font-weight:600; }
+.daterow input[type=date]{ width:auto; margin:0; padding:6px 8px; font-size:12.5px; }
+.daterow .spacer{ flex:1; }
 .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:10px; margin-bottom:18px; }
 .kpi { background:#fff; border:1px solid #e6e9ef; border-radius:11px; padding:12px 14px; }
 .kpi .l { font-size:11.5px; color:#64748b; } .kpi .v { font-size:21px; font-weight:650; margin-top:3px; } .kpi .h { font-size:11px; color:#94a3b8; margin-top:2px; }
@@ -48,23 +54,31 @@ var DATA_=URL_+"/functions/v1/activity-data";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="emails", sortDir=-1, filter="all";
+var RANGE={from:null,to:null,preset:7};
 function h(x){app.innerHTML=x;}
 function val(id){var e=document.getElementById(id);return e?e.value:"";}
 function setMsg(m){var e=document.getElementById("msg");if(e)e.textContent=m||"";}
 var nf=function(v){return (Number(v)||0).toLocaleString();};
 function pct(a,b){return b>0?Math.round(100*a/b)+"%":"-";}
+function isoDay(d){return d.toISOString().slice(0,10);}
 function fmtDate(s){if(!s)return"-";var d=new Date(s);return isNaN(d)?"-":d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});}
-
+function defaultRange(){var to=new Date();var from=new Date(Date.now()-7*86400000);RANGE={from:isoDay(from),to:isoDay(to),preset:7};}
 async function boot(){
   var s=await sb.auth.getSession();
-  var sess=s.data.session;
-  if(!sess){return login();}
-  app.innerHTML='<p class="sub">Loading your data...</p>';
+  if(!s.data.session){return login();}
+  if(!RANGE.from) defaultRange();
+  loadData();
+}
+async function loadData(){
+  var s=await sb.auth.getSession();
+  if(!s.data.session){return login();}
+  app.innerHTML='<p class="sub">Loading...</p>';
+  var url=DATA_+"?from="+RANGE.from+"&to="+RANGE.to;
   var res;
-  try{ res=await fetch(DATA_,{headers:{Authorization:"Bearer "+sess.access_token,apikey:KEY_}}); }
+  try{ res=await fetch(url,{headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_}}); }
   catch(e){ return errScreen("Could not reach the data service."); }
   if(res.status===401){ await sb.auth.signOut(); return login(); }
-  if(res.status===403){ var p=await res.json().catch(function(){return{};}); return pending(p.email||sess.user.email); }
+  if(res.status===403){ var p=await res.json().catch(function(){return{};}); return pending(p.email||s.data.session.user.email); }
   if(!res.ok){ return errScreen("Server error ("+res.status+")."); }
   var payload=await res.json();
   if(!payload.ok){ return errScreen(payload.error||"Unknown error."); }
@@ -78,29 +92,36 @@ function login(){
 }
 async function doIn(){ setMsg(""); var r=await sb.auth.signInWithPassword({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { boot(); } }
 async function doUp(){ setMsg(""); var r=await sb.auth.signUp({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { setMsg("Request sent. An admin will approve you, then sign in."); } }
-function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin has not approved access yet. You will see the pipeline as soon as you are approved.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
+function pending(email){ h('<div class="card"><h2>Awaiting approval</h2><p><b>'+email+'</b> is signed in, but an admin has not approved access yet.</p><div class="row"><button onclick="boot()">Check again</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+'</p><div class="row"><button onclick="boot()">Retry</button><button class="alt" onclick="out()">Sign out</button></div></div>'); }
 async function out(){ await sb.auth.signOut(); boot(); }
-
 function kpi(l,v,hh){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(hh?'<div class="h">'+hh+'</div>':'')+'</div>'; }
 function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"scored"; return"new"; }
 function typeBadge(d){ if(d.is_customer)return'<span class="badge b-cust">Customer</span>'; if(d.is_prospect)return'<span class="badge b-pros">Scored'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New</span>'; }
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
-
+function setPreset(days){
+  var to=new Date();
+  var from = days>=99999 ? new Date("2020-01-01") : new Date(Date.now()-days*86400000);
+  RANGE={from:isoDay(from),to:isoDay(to),preset:days};
+  loadData();
+}
+function applyCustom(){ var f=val("d_from"), t=val("d_to"); if(f&&t){ RANGE={from:f,to:t,preset:0}; loadData(); } }
+function dateBar(){
+  function c(days,label){ return '<span class="dchip'+(RANGE.preset===days?" active":"")+'" onclick="setPreset('+days+')">'+label+'</span>'; }
+  return '<div class="daterow"><span class="lbl">Range</span>'+c(7,"7 days")+c(30,"30 days")+c(90,"90 days")+c(99999,"All time")+
+    '<span class="spacer"></span><span class="lbl">From</span><input type="date" id="d_from" value="'+RANGE.from+'" onchange="applyCustom()">'+
+    '<span class="lbl">To</span><input type="date" id="d_to" value="'+RANGE.to+'" onchange="applyCustom()"></div>';
+}
 function renderDash(p){
   var s=p.summary;
   var adminBtn=p.is_admin?'<button class="alt" onclick="adminView()">Manage users</button>':'';
-  var kpis=kpi("Prospects",nf(s.prospects),"reps emailed them")+
-    kpi("Two-way",nf(s.two_way),"prospect replied")+
-    kpi("Outbound only",nf(s.outbound_only),"awaiting reply")+
-    kpi("Scored",nf(s.scored),"matched in Apollo")+
-    kpi("Customers",nf(s.customers),"existing - flagged")+
-    kpi("Calls",nf(s.calls),"linked to a co.");
+  var kpis=kpi("Prospects active",nf(s.prospects),"in this range")+kpi("Two-way",nf(s.two_way),"replied")+kpi("Outbound only",nf(s.outbound_only),"no reply yet")+kpi("Emails",nf(s.emails),"in range")+kpi("Customers",nf(s.customers),"existing - flagged")+kpi("Calls",nf(s.calls),"in range");
   var reps='<table><thead><tr><th>Rep</th><th class="num">Emails</th><th class="num">Calls</th><th class="num">Answered</th><th class="num">Companies emailed</th><th>Last active</th></tr></thead><tbody>'+
     (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'-')+'</td></tr>';}).join("")+'</tbody></table>';
+  if(!(p.reps&&p.reps.length)) reps='<p class="muted" style="font-size:12.5px">No rep activity in this range.</p>';
   h('<div class="top"><div class="t">Cal Sameday - Prospect Pipeline</div><div class="r">'+adminBtn+'<button onclick="out()">Sign out</button></div></div>'+
-    '<p class="sub">Companies your reps have emailed (outbound), across Front + Aircall - updated '+fmtDate(p.generated_at)+'</p>'+
-    '<div class="kpis">'+kpis+'</div>'+
+    '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
+    dateBar()+'<div class="kpis">'+kpis+'</div>'+
     '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
     '<div class="panel"><h2>Prospects</h2>'+
       '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="flt()">'+
@@ -110,16 +131,8 @@ function renderDash(p){
       '<span class="chip" data-f="scored" onclick="setF(this)">Scored</span>'+
       '<span class="chip" data-f="customer" onclick="setF(this)">Customers</span></div>'+
       '<div class="count" id="count"></div>'+
-      '<table><thead><tr>'+
-        '<th onclick="setSort(\'company\')">Company</th>'+
-        '<th onclick="setSort(\'two_way\')">Status</th>'+
-        '<th onclick="setSort(\'type\')">Type</th>'+
-        '<th class="num" onclick="setSort(\'emails\')">Emails</th>'+
-        '<th class="num" onclick="setSort(\'calls\')">Calls</th>'+
-        '<th onclick="setSort(\'rep_list\')">Reps</th>'+
-        '<th onclick="setSort(\'last_activity\')">Last activity</th>'+
-      '</tr></thead><tbody id="rows"></tbody></table>'+
-      '<div class="foot">A company appears only if a rep sent it an outbound email. <span class="badge b-two">Two-way</span> = the prospect replied; <span class="badge b-out">Outbound</span> = sent, awaiting reply. Inbound-only senders (software systems, notifications) are excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
+      '<table><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table>'+
+      '<div class="foot">A company appears if a rep emailed it (outbound) with activity in the selected range. <span class="badge b-two">Two-way</span> = replied; <span class="badge b-out">Outbound</span> = no reply yet. Inbound-only senders excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
     '</div>');
   DATA=p.companies||[];
   flt();
@@ -145,23 +158,16 @@ function flt(){
     else {x=Number(a[sortK])||0;y=Number(b[sortK])||0;}
     if(x<y)return -sortDir; if(x>y)return sortDir; return 0;
   });
-  document.getElementById("count").textContent=rows.length+" companies";
-  document.getElementById("rows").innerHTML=rows.slice(0,500).map(function(d){
-    return '<tr><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td>'+
-      '<td>'+statusBadge(d)+'</td>'+
-      '<td>'+typeBadge(d)+'</td>'+
-      '<td class="num">'+nf(d.emails)+'</td>'+
-      '<td class="num">'+(Number(d.calls)?nf(d.calls):'<span class="muted">-</span>')+'</td>'+
-      '<td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td>'+
-      '<td>'+fmtDate(d.last_activity)+'</td></tr>';
+  var cnt=document.getElementById("count"); if(cnt) cnt.textContent=rows.length+" companies";
+  var tb=document.getElementById("rows"); if(!tb) return;
+  tb.innerHTML=rows.slice(0,600).map(function(d){
+    return '<tr><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td><td>'+statusBadge(d)+'</td><td>'+typeBadge(d)+'</td><td class="num">'+nf(d.emails)+'</td><td class="num">'+(Number(d.calls)?nf(d.calls):'<span class="muted">-</span>')+'</td><td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td><td>'+fmtDate(d.last_activity)+'</td></tr>';
   }).join("");
 }
 async function adminView(){
   var us=(await sb.from("app_user").select("id,email,approved,is_admin")).data||[];
   var rows=us.map(function(u){var act=u.approved?'<span class="muted">approved</span>':'<button onclick="appr(\''+u.id+'\')">Approve</button>';return '<tr><td>'+(u.email||u.id)+'</td><td>'+(u.is_admin?'admin':(u.approved?'member':'pending'))+'</td><td>'+act+'</td></tr>';}).join("");
-  h('<div class="top"><div class="t">Manage users</div><div class="r"><button class="alt" onclick="boot()">Back</button><button onclick="out()">Sign out</button></div></div>'+
-    '<p class="sub">Approve who can see the pipeline. New sign-ups appear here as pending.</p>'+
-    '<div class="panel"><table><thead><tr><th>User</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>');
+  h('<div class="top"><div class="t">Manage users</div><div class="r"><button class="alt" onclick="boot()">Back</button><button onclick="out()">Sign out</button></div></div><div class="panel"><table><thead><tr><th>User</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>');
 }
 async function appr(id){ await sb.from("app_user").update({approved:true}).eq("id",id); adminView(); }
 boot();
