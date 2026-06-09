@@ -35,6 +35,7 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .badge { display:inline-block; padding:1px 7px; border-radius:20px; font-size:10.5px; font-weight:600; }
 .b-cust { background:#fee2e2; color:#b91c1c; } .b-pros { background:#dbeafe; color:#1d4ed8; } .b-new { background:#f1f5f9; color:#64748b; }
 .b-two { background:#dcfce7; color:#15803d; } .b-out { background:#fef9c3; color:#854d0e; } .b-src { background:#faf5ff; color:#7c3aed; }
+.b-dev { background:#f3e8ff; color:#7c3aed; } .badge + .badge { margin-left:4px; }
 .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
 input#search { flex:1; min-width:160px; margin:0; }
 .chip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer; }
@@ -97,7 +98,7 @@ function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+
 async function out(){ await sb.auth.signOut(); boot(); }
 function kpi(l,v,hh){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(hh?'<div class="h">'+hh+'</div>':'')+'</div>'; }
 function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"scored"; return"new"; }
-function typeBadge(d){ if(d.is_customer)return'<span class="badge b-cust">Customer</span>'; if(d.is_prospect)return'<span class="badge b-pros">Scored'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New</span>'; }
+function typeBadge(d){ if(d.is_customer)return'<span class="badge b-cust">Customer</span><span class="badge b-dev">Development</span>'; if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New prospect</span>'; }
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 function setPreset(days){
   var to=new Date();
@@ -128,8 +129,8 @@ function renderDash(p){
       '<span class="chip active" data-f="all" onclick="setF(this)">All</span>'+
       '<span class="chip" data-f="two" onclick="setF(this)">Two-way</span>'+
       '<span class="chip" data-f="outbound" onclick="setF(this)">Outbound only</span>'+
-      '<span class="chip" data-f="scored" onclick="setF(this)">Scored</span>'+
-      '<span class="chip" data-f="customer" onclick="setF(this)">Customers</span></div>'+
+      '<span class="chip" data-f="dev" onclick="setF(this)">Development</span>'+
+      '<span class="chip" data-f="new" onclick="setF(this)">Net-new</span></div>'+
       '<div class="count" id="count"></div>'+
       '<table><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table>'+
       '<div class="foot">A company appears if a rep emailed it (outbound) with activity in the selected range. <span class="badge b-two">Two-way</span> = replied; <span class="badge b-out">Outbound</span> = no reply yet. Inbound-only senders excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
@@ -144,8 +145,8 @@ function flt(){
   var rows=DATA.filter(function(d){
     if(filter==="two" && !d.two_way) return false;
     if(filter==="outbound" && d.two_way) return false;
-    if(filter==="scored" && !d.is_prospect) return false;
-    if(filter==="customer" && !d.is_customer) return false;
+    if(filter==="dev" && !d.is_customer) return false;
+    if(filter==="new" && d.is_customer) return false;
     if(term && !((d.company||"").toLowerCase().indexOf(term)>=0 || (d.domain||"").toLowerCase().indexOf(term)>=0)) return false;
     return true;
   });
