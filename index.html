@@ -65,6 +65,15 @@ input#search { flex:1; min-width:160px; margin:0; }
 .count { font-size:11.5px; color:#64748b; margin:6px 0 8px; }
 .foot { font-size:11px; color:#94a3b8; margin-top:8px; line-height:1.6; }
 .err { color:#b91c1c; font-size:13px; }
+.shell { display:flex; align-items:flex-start; gap:0; }
+.side { width:172px; flex:0 0 172px; position:sticky; top:18px; align-self:flex-start; }
+.sbrand { font-weight:650; font-size:15px; margin:2px 6px 12px; }
+.navi { display:block; width:100%; text-align:left; background:#fff; border:1px solid #e6e9ef; color:#334155; border-radius:9px; padding:9px 12px; margin-bottom:6px; font:inherit; font-size:13px; cursor:pointer; }
+.navi.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; font-weight:600; }
+.sfoot { margin-top:16px; border-top:1px solid #eef2f7; padding-top:12px; display:flex; flex-direction:column; gap:6px; }
+.sfoot button { width:100%; }
+.main { flex:1; min-width:0; padding-left:20px; }
+@media (max-width:760px){ .shell{flex-direction:column;} .side{width:auto;flex:none;position:static;display:flex;flex-wrap:wrap;gap:6px;align-items:center;} .sbrand{margin:0 8px 0 0;} .navi{width:auto;margin:0;} .sfoot{flex-direction:row;margin:0 0 0 auto;border:0;padding:0;width:auto;} .sfoot button{width:auto;} .main{padding-left:0;padding-top:12px;} }
 </style>
 </head>
 <body>
@@ -203,6 +212,7 @@ function dateBar(){
     '<span class="spacer"></span><span class="lbl">From</span><input type="date" id="d_from" value="'+RANGE.from+'" onchange="applyCustom()">'+
     '<span class="lbl">To</span><input type="date" id="d_to" value="'+RANGE.to+'" onchange="applyCustom()"></div>';
 }
+function setView(el){ var v=el.getAttribute("data-v"); var b=document.querySelectorAll(".side .navi"); for(var i=0;i<b.length;i++) b[i].classList.toggle("active", b[i]===el); var vp=document.getElementById("view-pipeline"), vc=document.getElementById("view-cold"); if(vp) vp.style.display=(v==="pipeline"?"":"none"); if(vc) vc.style.display=(v==="cold"?"":"none"); }
 function renderDash(p){
   var s=p.summary;
   var adminBtn=p.is_admin?'<button class="alt" onclick="adminView()">Manage users</button>':'';
@@ -210,11 +220,22 @@ function renderDash(p){
   var reps='<table><thead><tr><th>Rep</th><th class="num">Emails</th><th class="num">Calls</th><th class="num">Answered</th><th class="num">Companies emailed</th><th>Last active</th></tr></thead><tbody>'+
     (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'-')+'</td></tr>';}).join("")+'</tbody></table>';
   if(!(p.reps&&p.reps.length)) reps='<p class="muted" style="font-size:12.5px">No rep activity in this range.</p>';
-  h('<div class="top"><div class="t">Cal Sameday - Prospect Pipeline</div><div class="r">'+adminBtn+'<button onclick="out()">Sign out</button></div></div>'+
+  h('<div class="shell">'+
+    '<aside class="side"><div class="sbrand">Cal Sameday</div>'+
+      '<button class="navi active" data-v="pipeline" onclick="setView(this)">Pipeline</button>'+
+      '<button class="navi" data-v="cold" onclick="setView(this)">Cold outreach</button>'+
+      '<div class="sfoot">'+adminBtn+'<button onclick="out()">Sign out</button></div></aside>'+
+    '<main class="main">'+
+    '<div id="view-cold" class="view" style="display:none">'+
+      '<div class="top"><div class="t">Cold outreach - Instantly</div></div>'+
+      '<p class="sub">Your cold-email engine - sending health and campaign performance, synced from Instantly every 2 hours.</p>'+
+      coldPanel(p.instantly)+
+    '</div>'+
+    '<div id="view-pipeline" class="view">'+
+    '<div class="top"><div class="t">Prospect Pipeline</div></div>'+
     '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
     dateBar()+'<div class="kpis">'+kpis+'</div>'+
     '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
-    coldPanel(p.instantly)+
     worklistPanel()+
     '<div class="panel"><h2>Prospects</h2>'+
       '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="PAGE=1;flt()">'+
@@ -226,7 +247,8 @@ function renderDash(p){
       '<div class="count" id="count"></div>'+
       '<table><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table>'+'<div id="pager"></div>'+
       '<div class="foot">A company appears if a rep emailed it (outbound) with activity in the selected range. <span class="badge b-two">Two-way</span> = replied; <span class="badge b-out">Outbound</span> = no reply yet. Inbound-only senders excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
-    '</div>');
+    '</div>'+
+    '</div></main></div>');
   ACTIONS=p.actions||[];
   DATA=p.companies||[];
   flt();
