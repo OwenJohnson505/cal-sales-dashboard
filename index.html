@@ -128,6 +128,15 @@ function rankExcite(d){ var t=d.is_development?"dev":(d.is_customer?"cust":(d.is
 function typeBadge(d){ if(d.is_customer){var t='<span class="badge b-cust">Customer</span>'; if(d.is_development) t+='<span class="badge b-dev">Development</span>'; return t;} if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New prospect</span>'; }
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 function fmtWait(h){ h=Number(h)||0; if(h>=48)return Math.round(h/24)+" days"; if(h>=24)return "1 day"; return h+"h"; }
+function warmDot(s){ var v=Number(s); var c=v>=95?"#15803d":v>=80?"#b45309":"#b91c1c"; return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c+';margin-right:5px;vertical-align:middle"></span>'; }
+function coldPanel(inst){
+  if(!inst) return "";
+  var accts=inst.accounts||[], camps=inst.campaigns||[];
+  if(!accts.length && !camps.length) return "";
+  var ah = accts.length ? '<table><thead><tr><th>Sending mailbox</th><th class="num">Warmup</th><th class="num">Daily limit</th><th>Status</th></tr></thead><tbody>'+accts.map(function(a){ return '<tr><td>'+esc(a.email)+'</td><td class="num">'+warmDot(a.warmup_score)+(a.warmup_score!=null?a.warmup_score:"-")+'</td><td class="num">'+(a.daily_limit||"-")+'</td><td>'+(Number(a.status)===1?"Active":"Paused")+'</td></tr>'; }).join("")+'</tbody></table>' : '<p class="muted" style="font-size:12.5px">No sending mailboxes.</p>';
+  var ch = camps.length ? '<table><thead><tr><th>Campaign</th><th class="num">Leads</th><th class="num">Sent</th><th class="num">Opens</th><th class="num">Replies</th><th class="num">Bounce</th></tr></thead><tbody>'+camps.map(function(c){ var bp=Number(c.emails_sent)?Math.round(100*Number(c.bounced)/Number(c.emails_sent)):0; var bs=bp>=8?' style="color:#b91c1c;font-weight:600"':""; return '<tr><td>'+esc(c.name||c.id)+'</td><td class="num">'+nf(c.leads)+'</td><td class="num">'+nf(c.emails_sent)+'</td><td class="num">'+nf(c.opens_unique)+'</td><td class="num">'+nf(c.replies)+'</td><td class="num"'+bs+'>'+bp+'%</td></tr>'; }).join("")+'</tbody></table>' : '<p class="muted" style="font-size:12.5px">No campaigns running yet.</p>';
+  return '<div class="panel"><h2>Cold outreach - Instantly</h2><h3 class="msec">Sending mailboxes &amp; warmup health</h3>'+ah+'<h3 class="msec">Campaigns</h3>'+ch+'</div>';
+}
 function reasonBadge(r){ var c="b-overdue"; if(r==="Urgent")c="b-urgent"; else if(r==="Contract run")c="b-dev"; else if(r==="Quote / pricing")c="b-pros"; return '<span class="badge '+c+'">'+r+'</span>'; }
 function actionBadge(a){ return a==="Reply" ? '<span class="badge b-urgent">Reply now</span>' : '<span class="badge b-overdue">Nudge</span>'; }
 function wlReps(){ var m={}; for(var i=0;i<ACTIONS.length;i++){ var r=ACTIONS[i].rep; if(r) m[r]=(m[r]||0)+1; } return m; }
@@ -205,6 +214,7 @@ function renderDash(p){
     '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
     dateBar()+'<div class="kpis">'+kpis+'</div>'+
     '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
+    coldPanel(p.instantly)+
     worklistPanel()+
     '<div class="panel"><h2>Prospects</h2>'+
       '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="PAGE=1;flt()">'+
