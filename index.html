@@ -50,6 +50,11 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .bub.in { background:#eff6ff; } .bub.out { background:#f1f5f9; margin-left:auto; }
 .bmeta { font-size:10.5px; color:#94a3b8; margin-bottom:3px; }
 .ctab td,.ctab th { font-size:12px; }
+.callcard { border:1px solid #eef2f7; border-radius:9px; padding:8px 10px; margin-bottom:8px; }
+.cmeta { font-size:12px; color:#475569; }
+.csum { font-size:12px; margin-top:5px; white-space:pre-wrap; color:#0f172a; }
+.ctr { margin-top:5px; } .ctr summary { font-size:11.5px; color:#2563eb; cursor:pointer; }
+.trtext { font-size:11.5px; color:#475569; white-space:pre-wrap; margin-top:5px; max-height:240px; overflow:auto; }
 .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
 input#search { flex:1; min-width:160px; margin:0; }
 .chip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer; }
@@ -163,9 +168,12 @@ function renderDetail(p){
     var msgs=t.messages.map(function(mm){ return '<div class="bub '+(mm.inbound?"in":"out")+'"><div class="bmeta">'+esc(mm.who)+' &middot; '+fmtDT(mm.date)+'</div>'+esc(mm.text)+'</div>'; }).join("");
     return '<div class="thread"><div class="tsub">'+esc(t.subject)+'</div>'+msgs+'</div>';
   }).join("") : '<p class="muted">No email threads found for this company.</p>';
-  var cl = calls.length ? '<table class="ctab"><thead><tr><th>When</th><th>Dir</th><th>Dur</th><th>Answered</th><th>Agent</th><th>Recording</th></tr></thead><tbody>'+
-    calls.map(function(c){ return '<tr><td>'+fmtDT(c.started_at)+'</td><td>'+esc(c.direction||"")+'</td><td>'+(c.duration?Math.round(c.duration)+"s":"-")+'</td><td>'+(c.answered?"Yes":"No")+'</td><td>'+esc(c.agent||"-")+'</td><td>'+(c.recording?'<a href="'+esc(c.recording)+'" target="_blank" rel="noopener">Listen</a>':'<span class="muted">-</span>')+'</td></tr>'; }).join("")+'</tbody></table>'
-    : '<p class="muted">No calls linked to this company.</p>';
+  var cl = calls.length ? calls.map(function(c){
+    var head='<div class="cmeta"><b>'+fmtDT(c.started_at)+'</b> &middot; '+esc(c.direction||"")+' &middot; '+(c.duration?Math.round(c.duration)+"s":"-")+' &middot; '+(c.answered?"answered":"missed")+' &middot; '+esc(c.agent||"-")+(c.recording?' &middot; <a href="'+esc(c.recording)+'" target="_blank" rel="noopener">Listen</a>':"")+'</div>';
+    var sum=c.summary?'<div class="csum">'+esc(c.summary)+'</div>':(c.tstatus==="processing"?'<div class="muted" style="font-size:11.5px">Transcribing...</div>':"");
+    var tr=c.transcript?'<details class="ctr"><summary>Transcript</summary><div class="trtext">'+esc(c.transcript)+'</div></details>':"";
+    return '<div class="callcard">'+head+sum+tr+'</div>';
+  }).join("") : '<p class="muted">No calls linked to this company.</p>';
   m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(p.company||p.domain)+'</b> <span class="muted">'+esc(p.domain)+'</span><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><h3 class="msec">Email threads</h3>'+th+'<h3 class="msec">Calls</h3>'+cl+'</div></div>';
 }
 function setPreset(days){
