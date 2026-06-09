@@ -38,6 +38,18 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .b-dev { background:#f3e8ff; color:#7c3aed; } .badge + .badge { margin-left:4px; }
 .b-urgent { background:#fee2e2; color:#b91c1c; } .b-overdue { background:#fef3c7; color:#b45309; }
 .panel.alert { border-color:#fca5a5; background:#fff7f7; } .qwait { font-variant-numeric:tabular-nums; color:#b45309; font-weight:600; }
+.crow { cursor:pointer; } .crow:hover { background:#f8fafc; }
+.modalbg { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:flex-start; justify-content:center; z-index:50; padding:28px 14px; overflow:auto; }
+.mcard { background:#fff; border-radius:14px; max-width:760px; width:100%; box-shadow:0 18px 50px rgba(0,0,0,.25); }
+.mhead { display:flex; align-items:center; gap:8px; padding:14px 18px; border-bottom:1px solid #eef2f7; position:sticky; top:0; background:#fff; border-radius:14px 14px 0 0; }
+.mhead b { font-size:15px; } .mx { margin-left:auto; cursor:pointer; font-size:22px; color:#94a3b8; line-height:1; }
+.mbody { padding:14px 18px; } .msec { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#64748b; margin:14px 0 8px; }
+.thread { border:1px solid #eef2f7; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+.tsub { font-weight:600; font-size:13px; margin-bottom:8px; }
+.bub { font-size:12.5px; padding:7px 10px; border-radius:9px; margin:5px 0; max-width:88%; white-space:pre-wrap; line-height:1.45; }
+.bub.in { background:#eff6ff; } .bub.out { background:#f1f5f9; margin-left:auto; }
+.bmeta { font-size:10.5px; color:#94a3b8; margin-bottom:3px; }
+.ctab td,.ctab th { font-size:12px; }
 .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
 input#search { flex:1; min-width:160px; margin:0; }
 .chip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer; }
@@ -49,11 +61,13 @@ input#search { flex:1; min-width:160px; margin:0; }
 </head>
 <body>
 <div id="app" class="wrap">Loading...</div>
+<div id="cmodal" class="modalbg" onclick="if(event.target===this)closeModal()"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 var URL_="https://bbklqpmojvfoqsmxbtfv.supabase.co";
 var KEY_="sb_publishable_ayYFZV0wGJ-dM8VHpbaJiQ_ogINqgTH";
 var DATA_=URL_+"/functions/v1/activity-data";
+var DETAIL_=URL_+"/functions/v1/company-detail";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="rank", sortDir=-1, filter="all";
@@ -128,6 +142,32 @@ function renderWorklist(){
   }).join("") || '<tr><td colspan="6" class="muted">Nothing for this rep.</td></tr>';
 }
 function setWlRep(r){ wlRep=r; var cs=document.querySelectorAll(".panel.alert .chip"); for(var i=0;i<cs.length;i++){ cs[i].classList.toggle("active", cs[i].getAttribute("data-r")===r); } renderWorklist(); }
+function esc(t){ return (t||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function fmtDT(s){ if(!s) return ""; var d=new Date(s); if(isNaN(d)) return ""; return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}); }
+function closeModal(){ var m=document.getElementById("cmodal"); if(m){ m.style.display="none"; m.innerHTML=""; } }
+async function openCompany(dom){
+  if(!dom) return;
+  var m=document.getElementById("cmodal"); m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(dom)+'</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><p class="muted">Loading email threads and calls...</p></div></div>';
+  var s=await sb.auth.getSession(); if(!s.data.session) return;
+  try{
+    var res=await fetch(DETAIL_+"?domain="+encodeURIComponent(dom),{headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_}});
+    var p=await res.json(); renderDetail(p);
+  }catch(e){ var b=document.querySelector("#cmodal .mbody"); if(b) b.innerHTML='<p class="err">Could not load details.</p>'; }
+}
+function renderDetail(p){
+  var m=document.getElementById("cmodal");
+  if(!p||!p.ok){ m.innerHTML='<div class="mcard"><div class="mhead"><b>Details</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><p class="err">No detail available.</p></div></div>'; return; }
+  var threads=p.threads||[], calls=p.calls||[];
+  var th = threads.length ? threads.map(function(t){
+    var msgs=t.messages.map(function(mm){ return '<div class="bub '+(mm.inbound?"in":"out")+'"><div class="bmeta">'+esc(mm.who)+' &middot; '+fmtDT(mm.date)+'</div>'+esc(mm.text)+'</div>'; }).join("");
+    return '<div class="thread"><div class="tsub">'+esc(t.subject)+'</div>'+msgs+'</div>';
+  }).join("") : '<p class="muted">No email threads found for this company.</p>';
+  var cl = calls.length ? '<table class="ctab"><thead><tr><th>When</th><th>Dir</th><th>Dur</th><th>Answered</th><th>Agent</th><th>Recording</th></tr></thead><tbody>'+
+    calls.map(function(c){ return '<tr><td>'+fmtDT(c.started_at)+'</td><td>'+esc(c.direction||"")+'</td><td>'+(c.duration?Math.round(c.duration)+"s":"-")+'</td><td>'+(c.answered?"Yes":"No")+'</td><td>'+esc(c.agent||"-")+'</td><td>'+(c.recording?'<a href="'+esc(c.recording)+'" target="_blank" rel="noopener">Listen</a>':'<span class="muted">-</span>')+'</td></tr>'; }).join("")+'</tbody></table>'
+    : '<p class="muted">No calls linked to this company.</p>';
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(p.company||p.domain)+'</b> <span class="muted">'+esc(p.domain)+'</span><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><h3 class="msec">Email threads</h3>'+th+'<h3 class="msec">Calls</h3>'+cl+'</div></div>';
+}
 function setPreset(days){
   var to=new Date();
   var from = days>=99999 ? new Date("2020-01-01") : new Date(Date.now()-days*86400000);
@@ -144,7 +184,7 @@ function dateBar(){
 function renderDash(p){
   var s=p.summary;
   var adminBtn=p.is_admin?'<button class="alt" onclick="adminView()">Manage users</button>':'';
-  var kpis=kpi("Reply due",nf(s.followups_due),"24h SLA")+kpi("Prospects active",nf(s.prospects),"in this range")+kpi("Two-way",nf(s.two_way),"replied")+kpi("Outbound only",nf(s.outbound_only),"no reply yet")+kpi("Emails",nf(s.emails),"in range")+kpi("Customers",nf(s.customers),"existing - flagged")+kpi("Calls",nf(s.calls),"in range");
+  var kpis=kpi("Reply due",nf(s.followups_due),"24h SLA")+kpi("Prospects active",nf(s.prospects),"in this range")+kpi("Two-way",nf(s.two_way),"replied")+kpi("Outbound only",nf(s.outbound_only),"no reply yet")+kpi("Emails",nf(s.emails),"in range")+kpi("Customers",nf(s.customers),"existing - flagged")+kpi("Calls",nf(s.calls),(s.companies_called||0)+" companies, "+(s.avg_calls||0)+" avg");
   var reps='<table><thead><tr><th>Rep</th><th class="num">Emails</th><th class="num">Calls</th><th class="num">Answered</th><th class="num">Companies emailed</th><th>Last active</th></tr></thead><tbody>'+
     (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'-')+'</td></tr>';}).join("")+'</tbody></table>';
   if(!(p.reps&&p.reps.length)) reps='<p class="muted" style="font-size:12.5px">No rep activity in this range.</p>';
@@ -199,7 +239,7 @@ function flt(){
   var cnt=document.getElementById("count"); if(cnt) cnt.textContent= total ? ("Showing "+(startI+1)+"-"+endI+" of "+total+" companies") : "0 companies";
   var tb=document.getElementById("rows"); if(!tb) return;
   tb.innerHTML=rows.slice(startI,endI).map(function(d){
-    return '<tr><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td><td>'+statusBadge(d)+'</td><td>'+typeBadge(d)+'</td><td class="num">'+nf(d.emails)+'</td><td class="num">'+(Number(d.calls)?nf(d.calls):'<span class="muted">-</span>')+'</td><td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td><td>'+fmtDate(d.last_activity)+'</td></tr>';
+    return '<tr class="crow" data-dom="'+(d.domain||"")+'" onclick="openCompany(this.getAttribute(\'data-dom\'))"><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td><td>'+statusBadge(d)+'</td><td>'+typeBadge(d)+'</td><td class="num">'+nf(d.emails)+'</td><td class="num">'+(Number(d.calls)?nf(d.calls):'<span class="muted">-</span>')+'</td><td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td><td>'+fmtDate(d.last_activity)+'</td></tr>';
   }).join("");
   var pg=document.getElementById("pager");
   if(pg){ if(pages<=1){ pg.innerHTML=""; } else { pg.innerHTML='<div style="display:flex;gap:10px;align-items:center;justify-content:center;margin:12px 0;font-size:12.5px"><button class="alt" '+(PAGE<=1?"disabled":"")+' onclick="pageGo(-1)">Prev</button><span>Page '+PAGE+' of '+pages+'</span><button class="alt" '+(PAGE>=pages?"disabled":"")+' onclick="pageGo(1)">Next</button></div>'; } }
