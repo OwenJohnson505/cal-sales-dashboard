@@ -54,7 +54,7 @@ var KEY_="sb_publishable_ayYFZV0wGJ-dM8VHpbaJiQ_ogINqgTH";
 var DATA_=URL_+"/functions/v1/activity-data";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
-var DATA=[], sortK="emails", sortDir=-1, filter="all";
+var DATA=[], sortK="rank", sortDir=-1, filter="all";
 var PAGE=1, PAGE_SIZE=100;
 var RANGE={from:null,to:null,preset:7};
 function h(x){app.innerHTML=x;}
@@ -99,6 +99,7 @@ function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+
 async function out(){ await sb.auth.signOut(); boot(); }
 function kpi(l,v,hh){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(hh?'<div class="h">'+hh+'</div>':'')+'</div>'; }
 function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"scored"; return"new"; }
+function rankExcite(d){ var t=d.is_development?"dev":(d.is_customer?"cust":(d.is_prospect?"pros":"new")); if(d.two_way){ if(t==="new")return 1; if(t==="dev")return 2; if(t==="pros")return 3; return 7; } if(t==="dev")return 4; if(t==="pros")return 5; if(t==="new")return 6; return 8; }
 function typeBadge(d){ if(d.is_customer){var t='<span class="badge b-cust">Customer</span>'; if(d.is_development) t+='<span class="badge b-dev">Development</span>'; return t;} if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New prospect</span>'; }
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 function setPreset(days){
@@ -153,6 +154,7 @@ function flt(){
     return true;
   });
   rows.sort(function(a,b){
+    if(sortK==="rank"){ var ra=rankExcite(a), rb=rankExcite(b); if(ra!==rb) return ra-rb; var ea=Number(a.emails)||0, eb=Number(b.emails)||0; if(ea!==eb) return eb-ea; return (b.last_activity||"").localeCompare(a.last_activity||""); }
     var x,y;
     if(sortK==="two_way"){x=a.two_way?1:0;y=b.two_way?1:0;}
     else if(sortK==="type"){x=typeOf(a);y=typeOf(b);}
