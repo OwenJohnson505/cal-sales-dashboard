@@ -55,6 +55,7 @@ var DATA_=URL_+"/functions/v1/activity-data";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="emails", sortDir=-1, filter="all";
+var PAGE=1, PAGE_SIZE=100;
 var RANGE={from:null,to:null,preset:7};
 function h(x){app.innerHTML=x;}
 function val(id){var e=document.getElementById(id);return e?e.value:"";}
@@ -125,21 +126,22 @@ function renderDash(p){
     dateBar()+'<div class="kpis">'+kpis+'</div>'+
     '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
     '<div class="panel"><h2>Prospects</h2>'+
-      '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="flt()">'+
+      '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="PAGE=1;flt()">'+
       '<span class="chip active" data-f="all" onclick="setF(this)">All</span>'+
       '<span class="chip" data-f="two" onclick="setF(this)">Two-way</span>'+
       '<span class="chip" data-f="outbound" onclick="setF(this)">Outbound only</span>'+
       '<span class="chip" data-f="dev" onclick="setF(this)">Development</span>'+
       '<span class="chip" data-f="new" onclick="setF(this)">Net-new</span></div>'+
       '<div class="count" id="count"></div>'+
-      '<table><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table>'+
+      '<table><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table>'+'<div id="pager"></div>'+
       '<div class="foot">A company appears if a rep emailed it (outbound) with activity in the selected range. <span class="badge b-two">Two-way</span> = replied; <span class="badge b-out">Outbound</span> = no reply yet. Inbound-only senders excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
     '</div>');
   DATA=p.companies||[];
   flt();
 }
-function setF(el){ filter=el.getAttribute("data-f"); var cs=document.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){cs[i].classList.toggle("active",cs[i]===el);} flt(); }
-function setSort(k){ if(sortK===k)sortDir*=-1; else {sortK=k; sortDir=(k==="company"||k==="rep_list"||k==="type")?1:-1;} flt(); }
+function setF(el){ filter=el.getAttribute("data-f"); var cs=document.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){cs[i].classList.toggle("active",cs[i]===el);} PAGE=1; flt(); }
+function setSort(k){ if(sortK===k)sortDir*=-1; else {sortK=k; sortDir=(k==="company"||k==="rep_list"||k==="type")?1:-1;} PAGE=1; flt(); }
+function pageGo(delta){ PAGE+=delta; flt(); var t=document.getElementById("search"); if(t) t.scrollIntoView({block:"start"}); }
 function flt(){
   var term=(val("search")||"").toLowerCase();
   var rows=DATA.filter(function(d){
@@ -159,11 +161,17 @@ function flt(){
     else {x=Number(a[sortK])||0;y=Number(b[sortK])||0;}
     if(x<y)return -sortDir; if(x>y)return sortDir; return 0;
   });
-  var cnt=document.getElementById("count"); if(cnt) cnt.textContent=rows.length+" companies";
+  var total=rows.length;
+  var pages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(PAGE>pages)PAGE=pages; if(PAGE<1)PAGE=1;
+  var startI=(PAGE-1)*PAGE_SIZE, endI=Math.min(startI+PAGE_SIZE,total);
+  var cnt=document.getElementById("count"); if(cnt) cnt.textContent= total ? ("Showing "+(startI+1)+"-"+endI+" of "+total+" companies") : "0 companies";
   var tb=document.getElementById("rows"); if(!tb) return;
-  tb.innerHTML=rows.slice(0,600).map(function(d){
+  tb.innerHTML=rows.slice(startI,endI).map(function(d){
     return '<tr><td class="company-cell">'+(d.company||d.domain)+'<div class="muted" style="font-weight:400">'+(d.domain||"")+'</div></td><td>'+statusBadge(d)+'</td><td>'+typeBadge(d)+'</td><td class="num">'+nf(d.emails)+'</td><td class="num">'+(Number(d.calls)?nf(d.calls):'<span class="muted">-</span>')+'</td><td>'+((d.rep_list||"").replace(/,/g,", ")||'<span class="muted">-</span>')+'</td><td>'+fmtDate(d.last_activity)+'</td></tr>';
   }).join("");
+  var pg=document.getElementById("pager");
+  if(pg){ if(pages<=1){ pg.innerHTML=""; } else { pg.innerHTML='<div style="display:flex;gap:10px;align-items:center;justify-content:center;margin:12px 0;font-size:12.5px"><button class="alt" '+(PAGE<=1?"disabled":"")+' onclick="pageGo(-1)">Prev</button><span>Page '+PAGE+' of '+pages+'</span><button class="alt" '+(PAGE>=pages?"disabled":"")+' onclick="pageGo(1)">Next</button></div>'; } }
 }
 async function adminView(){
   var us=(await sb.from("app_user").select("id,email,approved,is_admin")).data||[];
