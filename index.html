@@ -36,6 +36,8 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .b-cust { background:#fee2e2; color:#b91c1c; } .b-pros { background:#dbeafe; color:#1d4ed8; } .b-new { background:#f1f5f9; color:#64748b; }
 .b-two { background:#dcfce7; color:#15803d; } .b-out { background:#fef9c3; color:#854d0e; } .b-src { background:#faf5ff; color:#7c3aed; }
 .b-dev { background:#f3e8ff; color:#7c3aed; } .badge + .badge { margin-left:4px; }
+.b-urgent { background:#fee2e2; color:#b91c1c; } .b-overdue { background:#fef3c7; color:#b45309; }
+.panel.alert { border-color:#fca5a5; background:#fff7f7; } .qwait { font-variant-numeric:tabular-nums; color:#b45309; font-weight:600; }
 .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
 input#search { flex:1; min-width:160px; margin:0; }
 .chip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer; }
@@ -102,6 +104,13 @@ function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"s
 function rankExcite(d){ var t=d.is_development?"dev":(d.is_customer?"cust":(d.is_prospect?"pros":"new")); if(d.two_way){ if(t==="new")return 1; if(t==="dev")return 2; if(t==="pros")return 3; return 7; } if(t==="dev")return 4; if(t==="pros")return 5; if(t==="new")return 6; return 8; }
 function typeBadge(d){ if(d.is_customer){var t='<span class="badge b-cust">Customer</span>'; if(d.is_development) t+='<span class="badge b-dev">Development</span>'; return t;} if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New prospect</span>'; }
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
+function fmtWait(h){ h=Number(h)||0; if(h>=48)return Math.round(h/24)+" days"; if(h>=24)return "1 day"; return h+"h"; }
+function reasonBadge(r){ var c="b-overdue"; if(r==="Urgent")c="b-urgent"; else if(r==="Contract run")c="b-dev"; else if(r==="Quote / pricing")c="b-pros"; return '<span class="badge '+c+'">'+r+'</span>'; }
+function actionQueue(fu){
+  if(!fu||!fu.length) return '<div class="panel"><h2>Action queue - reply due</h2><p class="muted" style="font-size:12.5px">Nothing waiting on a reply right now.</p></div>';
+  var rows=fu.map(function(f){ return '<tr><td class="company-cell">'+(f.company||f.domain)+'<div class="muted" style="font-weight:400">'+(f.domain||"")+'</div></td><td>'+reasonBadge(f.reason)+'</td><td class="qwait">'+fmtWait(f.hrs_waiting)+' waiting</td><td>'+(f.rep||'<span class="muted">-</span>')+'</td><td class="muted">'+(Number(f.threads)>1?(f.threads+' threads'):'1 thread')+'</td></tr>'; }).join("");
+  return '<div class="panel alert"><h2>Action queue - reply due (24h SLA)</h2><p class="sub" style="margin:0 0 8px">Customers and prospects who replied and are waiting on us. Chase these first.</p><table><thead><tr><th>Company</th><th>Why</th><th>Waiting</th><th>Rep</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 function setPreset(days){
   var to=new Date();
   var from = days>=99999 ? new Date("2020-01-01") : new Date(Date.now()-days*86400000);
@@ -118,7 +127,7 @@ function dateBar(){
 function renderDash(p){
   var s=p.summary;
   var adminBtn=p.is_admin?'<button class="alt" onclick="adminView()">Manage users</button>':'';
-  var kpis=kpi("Prospects active",nf(s.prospects),"in this range")+kpi("Two-way",nf(s.two_way),"replied")+kpi("Outbound only",nf(s.outbound_only),"no reply yet")+kpi("Emails",nf(s.emails),"in range")+kpi("Customers",nf(s.customers),"existing - flagged")+kpi("Calls",nf(s.calls),"in range");
+  var kpis=kpi("Reply due",nf(s.followups_due),"24h SLA")+kpi("Prospects active",nf(s.prospects),"in this range")+kpi("Two-way",nf(s.two_way),"replied")+kpi("Outbound only",nf(s.outbound_only),"no reply yet")+kpi("Emails",nf(s.emails),"in range")+kpi("Customers",nf(s.customers),"existing - flagged")+kpi("Calls",nf(s.calls),"in range");
   var reps='<table><thead><tr><th>Rep</th><th class="num">Emails</th><th class="num">Calls</th><th class="num">Answered</th><th class="num">Companies emailed</th><th>Last active</th></tr></thead><tbody>'+
     (p.reps||[]).map(function(r){return '<tr><td style="font-weight:550">'+r.rep+'</td><td class="num">'+nf(r.emails)+'</td><td class="num">'+(r.calls?nf(r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+(r.calls?pct(r.calls_answered,r.calls):'<span class="muted">-</span>')+'</td><td class="num">'+nf(r.companies_emailed)+'</td><td>'+(r.last_active?fmtDate(r.last_active):'-')+'</td></tr>';}).join("")+'</tbody></table>';
   if(!(p.reps&&p.reps.length)) reps='<p class="muted" style="font-size:12.5px">No rep activity in this range.</p>';
@@ -126,6 +135,7 @@ function renderDash(p){
     '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
     dateBar()+'<div class="kpis">'+kpis+'</div>'+
     '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
+    actionQueue(p.followups||[])+
     '<div class="panel"><h2>Prospects</h2>'+
       '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="PAGE=1;flt()">'+
       '<span class="chip active" data-f="all" onclick="setF(this)">All</span>'+
