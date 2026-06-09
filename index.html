@@ -58,6 +58,15 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .uturn { margin:6px 0; font-size:11.5px; line-height:1.5; white-space:normal; }
 .uspk { display:inline-block; min-width:16px; text-align:center; font-weight:700; font-size:10px; color:#fff; padding:1px 6px; border-radius:10px; margin-right:6px; background:#94a3b8; }
 .spk-A { background:#2563eb; } .spk-B { background:#7c3aed; } .spk-C { background:#15803d; } .spk-D { background:#b45309; }
+.cstats { font-size:12px; color:#475569; margin-bottom:8px; }
+.seqstep { border:1px solid #eef2f7; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
+.seqh { font-size:10.5px; text-transform:uppercase; color:#94a3b8; letter-spacing:.04em; }
+.seqsub { font-weight:600; font-size:13px; margin:3px 0 8px; }
+.seqbody { font-size:12.5px; color:#334155; max-height:300px; overflow:auto; border-top:1px solid #f1f5f9; padding-top:8px; }
+.seqbody * { max-width:100% !important; height:auto !important; }
+.lt { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:5px 12px; font-size:12px; cursor:pointer; }
+.lt.active { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; font-weight:600; }
+.replybox { margin-top:6px; background:#eff6ff; border-radius:8px; padding:7px 10px; font-size:11.5px; white-space:pre-wrap; color:#0f172a; }
 .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
 input#search { flex:1; min-width:160px; margin:0; }
 .chip { border:1px solid #e2e8f0; background:#fff; border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer; }
@@ -85,6 +94,7 @@ var URL_="https://bbklqpmojvfoqsmxbtfv.supabase.co";
 var KEY_="sb_publishable_ayYFZV0wGJ-dM8VHpbaJiQ_ogINqgTH";
 var DATA_=URL_+"/functions/v1/activity-data";
 var DETAIL_=URL_+"/functions/v1/company-detail";
+var CDET_=URL_+"/functions/v1/campaign-detail";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="rank", sortDir=-1, filter="all";
@@ -138,12 +148,44 @@ function typeBadge(d){ if(d.is_customer){var t='<span class="badge b-cust">Custo
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 function fmtWait(h){ h=Number(h)||0; if(h>=48)return Math.round(h/24)+" days"; if(h>=24)return "1 day"; return h+"h"; }
 function warmDot(s){ var v=Number(s); var c=v>=95?"#15803d":v>=80?"#b45309":"#b91c1c"; return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c+';margin-right:5px;vertical-align:middle"></span>'; }
+var CAMP=null, cLeadTab="all";
+function bouncedLead(l){ return Number(l.status)===-1; }
+function repliedLead(l){ return Number(l.replies)>0; }
+function openCampaign(id){
+  if(!id) return; var m=document.getElementById("cmodal"); m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>Loading campaign...</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><p class="muted">Fetching sequence, recipients and replies...</p></div></div>';
+  sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(CDET_+"?id="+encodeURIComponent(id),{headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_}}).then(function(r){return r.json();}).then(renderCampaign).catch(function(){ var b=document.querySelector("#cmodal .mbody"); if(b)b.innerHTML='<p class="err">Could not load campaign.</p>'; }); });
+}
+function setCTab(t){ cLeadTab=t; var cs=document.querySelectorAll("#cmodal .lt"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i].getAttribute("data-t")===t); renderCampaignLeads(); }
+function renderCampaignLeads(){
+  var tb=document.getElementById("cleadrows"); if(!tb||!CAMP) return;
+  var leads=CAMP.leads||[]; var rows=leads.filter(function(l){ if(cLeadTab==="bounced")return bouncedLead(l); if(cLeadTab==="replied")return repliedLead(l); return true; });
+  var rep={}; (CAMP.replies||[]).forEach(function(r){ rep[(r.lead_email||"").toLowerCase()]=r; });
+  tb.innerHTML=rows.slice(0,400).map(function(l){
+    var nm=((l.first_name||"")+" "+(l.last_name||"")).trim()||l.email;
+    var st=bouncedLead(l)?'<span class="badge b-urgent">Bounced</span>':(repliedLead(l)?'<span class="badge b-two">Replied</span>':'<span class="badge b-out">Sent</span>');
+    var rb=(repliedLead(l)&&rep[(l.email||"").toLowerCase()])?'<div class="replybox">'+esc(rep[(l.email||"").toLowerCase()].body_text||"")+'</div>':"";
+    return '<tr><td class="company-cell">'+esc(nm)+'<div class="muted" style="font-weight:400">'+esc(l.email||"")+'</div>'+rb+'</td><td>'+esc(l.company||"")+'</td><td>'+esc(l.job_title||"")+'</td><td>'+st+'</td></tr>';
+  }).join("") || '<tr><td colspan="4" class="muted">None.</td></tr>';
+}
+function renderCampaign(p){
+  var m=document.getElementById("cmodal");
+  if(!p||!p.ok){ m.innerHTML='<div class="mcard"><div class="mhead"><b>Campaign</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><p class="err">No detail.</p></div></div>'; return; }
+  CAMP=p; cLeadTab="all"; var c=p.campaign||{};
+  var bp=Number(c.emails_sent)?Math.round(100*Number(c.bounced)/Number(c.emails_sent)):0;
+  var stats='<div class="cstats">Leads '+nf(c.leads)+' &middot; Sent '+nf(c.emails_sent)+' &middot; Opens '+nf(c.opens_unique)+' &middot; Replies '+nf(c.replies)+' &middot; Bounce '+bp+'%</div>';
+  var seq=(p.sequence||[]).map(function(st){ return '<div class="seqstep"><div class="seqh">Step '+st.step+(st.delay?' &middot; after '+st.delay+' days':'')+'</div><div class="seqsub">'+esc(st.subject||"(no subject)")+'</div><div class="seqbody">'+(st.body||"")+'</div></div>'; }).join("") || '<p class="muted">No sequence steps.</p>';
+  var leads=p.leads||[]; var nB=leads.filter(bouncedLead).length, nR=leads.filter(repliedLead).length;
+  var chips='<span class="lt active" data-t="all" onclick="setCTab(\'all\')">All ('+leads.length+')</span><span class="lt" data-t="bounced" onclick="setCTab(\'bounced\')">Bounced ('+nB+')</span><span class="lt" data-t="replied" onclick="setCTab(\'replied\')">Replied ('+nR+')</span>';
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(c.name||"Campaign")+'</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+stats+'<h3 class="msec">Email sequence</h3>'+seq+'<h3 class="msec">Recipients</h3><div class="controls">'+chips+'</div><table><thead><tr><th>Contact</th><th>Company</th><th>Job title</th><th>Status</th></tr></thead><tbody id="cleadrows"></tbody></table></div></div>';
+  renderCampaignLeads();
+}
 function coldPanel(inst){
   if(!inst) return "";
   var accts=inst.accounts||[], camps=inst.campaigns||[];
   if(!accts.length && !camps.length) return "";
   var ah = accts.length ? '<table><thead><tr><th>Sending mailbox</th><th class="num">Warmup</th><th class="num">Daily limit</th><th>Status</th></tr></thead><tbody>'+accts.map(function(a){ return '<tr><td>'+esc(a.email)+'</td><td class="num">'+warmDot(a.warmup_score)+(a.warmup_score!=null?a.warmup_score:"-")+'</td><td class="num">'+(a.daily_limit||"-")+'</td><td>'+(Number(a.status)===1?"Active":"Paused")+'</td></tr>'; }).join("")+'</tbody></table>' : '<p class="muted" style="font-size:12.5px">No sending mailboxes.</p>';
-  var ch = camps.length ? '<table><thead><tr><th>Campaign</th><th class="num">Leads</th><th class="num">Sent</th><th class="num">Opens</th><th class="num">Replies</th><th class="num">Bounce</th></tr></thead><tbody>'+camps.map(function(c){ var bp=Number(c.emails_sent)?Math.round(100*Number(c.bounced)/Number(c.emails_sent)):0; var bs=bp>=8?' style="color:#b91c1c;font-weight:600"':""; return '<tr><td>'+esc(c.name||c.id)+'</td><td class="num">'+nf(c.leads)+'</td><td class="num">'+nf(c.emails_sent)+'</td><td class="num">'+nf(c.opens_unique)+'</td><td class="num">'+nf(c.replies)+'</td><td class="num"'+bs+'>'+bp+'%</td></tr>'; }).join("")+'</tbody></table>' : '<p class="muted" style="font-size:12.5px">No campaigns running yet.</p>';
+  var ch = camps.length ? '<table><thead><tr><th>Campaign</th><th class="num">Leads</th><th class="num">Sent</th><th class="num">Opens</th><th class="num">Replies</th><th class="num">Bounce</th></tr></thead><tbody>'+camps.map(function(c){ var bp=Number(c.emails_sent)?Math.round(100*Number(c.bounced)/Number(c.emails_sent)):0; var bs=bp>=8?' style="color:#b91c1c;font-weight:600"':""; return '<tr class="crow" data-cid="'+esc(c.id)+'" onclick="openCampaign(this.getAttribute(\'data-cid\'))"><td>'+esc(c.name||c.id)+'</td><td class="num">'+nf(c.leads)+'</td><td class="num">'+nf(c.emails_sent)+'</td><td class="num">'+nf(c.opens_unique)+'</td><td class="num">'+nf(c.replies)+'</td><td class="num"'+bs+'>'+bp+'%</td></tr>'; }).join("")+'</tbody></table>' : '<p class="muted" style="font-size:12.5px">No campaigns running yet.</p>';
   return '<div class="panel"><h2>Cold outreach - Instantly</h2><h3 class="msec">Sending mailboxes &amp; warmup health</h3>'+ah+'<h3 class="msec">Campaigns</h3>'+ch+'</div>';
 }
 function reasonBadge(r){ var c="b-overdue"; if(r==="Urgent")c="b-urgent"; else if(r==="Contract run")c="b-dev"; else if(r==="Quote / pricing")c="b-pros"; return '<span class="badge '+c+'">'+r+'</span>'; }
