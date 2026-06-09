@@ -68,6 +68,9 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .leadnote { width:100%; min-height:80px; padding:9px; border:1px solid #e2e8f0; border-radius:8px; font:inherit; margin:0; }
 .leadbtns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
 #leadmsg { color:#15803d; }
+.dismissrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px solid #eef2f7; }
+.dismissrow select { width:auto; padding:7px 8px; border:1px solid #e2e8f0; border-radius:8px; font:inherit; margin:0; background:#fff; }
+.dimbtn { background:#fff; color:#b91c1c; border:1px solid #fca5a5; }
 .seqstep { border:1px solid #eef2f7; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
 .seqh { font-size:10.5px; text-transform:uppercase; color:#94a3b8; letter-spacing:.04em; }
 .seqsub { font-weight:600; font-size:13px; margin:3px 0 8px; }
@@ -115,7 +118,7 @@ var DATA_=URL_+"/functions/v1/activity-data";
 var DETAIL_=URL_+"/functions/v1/company-detail";
 var CDET_=URL_+"/functions/v1/campaign-detail";
 var LEADS_=URL_+"/functions/v1/leads";
-var LEADS=[], LEADSloaded=false, leadFilter="all", MEEMAIL="";
+var LEADS=[], LEADSloaded=false, leadFilter="new", MEEMAIL="";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="rank", sortDir=-1, filter="all";
@@ -319,13 +322,14 @@ function setLeadFilter(t){ leadFilter=t; var cs=document.querySelectorAll("#lead
 function renderLeadBoard(){
   var lb=document.getElementById("leadboard"); if(!lb) return;
   var nNew=LEADS.filter(function(l){return l.status==="new";}).length;
-  var nMine=LEADS.filter(function(l){return (l.assigned_to||"").toLowerCase()===MEEMAIL && MEEMAIL;}).length;
+  var nMine=LEADS.filter(function(l){return MEEMAIL && (l.assigned_to||"").toLowerCase()===MEEMAIL && l.status!=="dismissed";}).length;
   var nPush=LEADS.filter(function(l){return l.status==="pushed";}).length;
+  var nDis=LEADS.filter(function(l){return l.status==="dismissed";}).length;
   lb.innerHTML='<div class="controls"><input id="leadsearch" placeholder="Search company or domain..." oninput="renderLeadRows()">'+
-    '<span class="chip active" data-f="all" onclick="setLeadFilter(\'all\')">All ('+LEADS.length+')</span>'+
-    '<span class="chip" data-f="new" onclick="setLeadFilter(\'new\')">New ('+nNew+')</span>'+
+    '<span class="chip active" data-f="new" onclick="setLeadFilter(\'new\')">New ('+nNew+')</span>'+
     '<span class="chip" data-f="mine" onclick="setLeadFilter(\'mine\')">Mine ('+nMine+')</span>'+
-    '<span class="chip" data-f="pushed" onclick="setLeadFilter(\'pushed\')">In HubSpot ('+nPush+')</span></div>'+
+    '<span class="chip" data-f="pushed" onclick="setLeadFilter(\'pushed\')">In HubSpot ('+nPush+')</span>'+
+    '<span class="chip" data-f="dismissed" onclick="setLeadFilter(\'dismissed\')">Dismissed ('+nDis+')</span></div>'+
     '<div class="count" id="leadcount"></div>'+
     '<table><thead><tr><th>Company</th><th>Segment</th><th class="num">Score</th><th>Assigned</th><th>Status</th></tr></thead><tbody id="leadrows"></tbody></table>';
   renderLeadRows();
@@ -336,7 +340,8 @@ function renderLeadRows(){
   var rows=LEADS.filter(function(l){
     if(leadFilter==="new"&&l.status!=="new")return false;
     if(leadFilter==="pushed"&&l.status!=="pushed")return false;
-    if(leadFilter==="mine"&&(l.assigned_to||"").toLowerCase()!==MEEMAIL)return false;
+    if(leadFilter==="dismissed"&&l.status!=="dismissed")return false;
+    if(leadFilter==="mine"&&((l.assigned_to||"").toLowerCase()!==MEEMAIL||l.status==="dismissed"))return false;
     if(term&&!((l.name||"").toLowerCase().indexOf(term)>=0||(l.domain||"").toLowerCase().indexOf(term)>=0))return false;
     return true;
   });
@@ -347,6 +352,8 @@ function renderLeadRows(){
   }).join("") || '<tr><td colspan="5" class="muted">No leads match.</td></tr>';
 }
 function leadByDom(d){ for(var i=0;i<LEADS.length;i++) if(LEADS[i].domain===d) return LEADS[i]; return null; }
+function dismissLead(d){ var reason=val("dismissReason")||"Not a fit"; leadPost({action:"dismiss",domain:d,reason:reason}, function(){ leadPost({action:"list"},function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); closeModal(); }); }); }
+function restoreLead(d){ leadPost({action:"restore",domain:d}, function(){ leadPost({action:"list"},function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); }); }
 function openLead(d){
   var l=leadByDom(d); if(!l) return; var m=document.getElementById("cmodal"); m.style.display="flex";
   var assigned=l.assigned_to?('Assigned to <b>'+esc(l.assigned_name||l.assigned_to)+'</b>'):'Unassigned';
@@ -356,10 +363,14 @@ function openLead(d){
     '<div class="cstats">'+assigned+(pushed?' &middot; <span class="badge b-two">In HubSpot</span>':'')+'</div>'+
     '<div class="flabel">Note (saved to the HubSpot record)</div><textarea id="leadnote" class="leadnote" placeholder="Add a note...">'+esc(l.note||"")+'</textarea>'+
     '<div class="leadbtns">'+
-      (l.assigned_to?'':'<button onclick="assignLead(\''+esc(d)+'\')">Assign to me</button>')+
+      (l.status==="dismissed"?'':(l.assigned_to?'':'<button onclick="assignLead(\''+esc(d)+'\')">Assign to me</button>'))+
       '<button class="alt" onclick="saveNote(\''+esc(d)+'\')">Save note</button>'+
-      (pushed?'<button class="alt" disabled>Already in HubSpot</button>':'<button onclick="pushLead(\''+esc(d)+'\')">Push to HubSpot</button>')+
-    '</div><div id="leadmsg" class="msg"></div></div></div>';
+      (l.status==="dismissed"?'':(pushed?'<button class="alt" disabled>Already in HubSpot</button>':'<button onclick="pushLead(\''+esc(d)+'\')">Push to HubSpot</button>'))+
+    '</div>'+
+    (l.status==="dismissed"
+      ? '<div class="dismissrow"><span class="badge b-new">Dismissed</span><span class="muted">'+esc(l.reason||"")+'</span><button class="alt" onclick="restoreLead(\''+esc(d)+'\')">Restore to leads</button></div>'
+      : '<div class="dismissrow"><span class="muted" style="font-size:11.5px">Not a fit?</span><select id="dismissReason"><option>Competitor</option><option>Existing customer</option><option>Wrong segment</option><option>Not relevant</option></select><button class="dimbtn" onclick="dismissLead(\''+esc(d)+'\')">Dismiss</button></div>')+
+    '<div id="leadmsg" class="msg"></div></div></div>';
   m.scrollTop=0;
 }
 function assignLead(d){ leadPost({action:"assign", domain:d}, function(){ leadPost({action:"list"}, function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); }); }
