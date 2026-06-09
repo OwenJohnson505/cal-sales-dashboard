@@ -99,7 +99,7 @@ function errScreen(m){ h('<div class="card"><h2>Something went wrong</h2><p>'+m+
 async function out(){ await sb.auth.signOut(); boot(); }
 function kpi(l,v,hh){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(hh?'<div class="h">'+hh+'</div>':'')+'</div>'; }
 function typeOf(d){ if(d.is_customer)return"customer"; if(d.is_prospect)return"scored"; return"new"; }
-function typeBadge(d){ if(d.is_customer)return'<span class="badge b-cust">Customer</span><span class="badge b-dev">Development</span>'; if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New prospect</span>'; }
+function typeBadge(d){ if(d.is_customer){var t='<span class="badge b-cust">Customer</span>'; if(d.is_development) t+='<span class="badge b-dev">Development</span>'; return t;} if(d.is_prospect)return'<span class="badge b-pros">Prospect'+(d.score?" "+Math.round(d.score):"")+'</span>'; return'<span class="badge b-new">New prospect</span>'; }
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 function setPreset(days){
   var to=new Date();
@@ -147,7 +147,7 @@ function flt(){
   var rows=DATA.filter(function(d){
     if(filter==="two" && !d.two_way) return false;
     if(filter==="outbound" && d.two_way) return false;
-    if(filter==="dev" && !d.is_customer) return false;
+    if(filter==="dev" && !d.is_development) return false;
     if(filter==="new" && d.is_customer) return false;
     if(term && !((d.company||"").toLowerCase().indexOf(term)>=0 || (d.domain||"").toLowerCase().indexOf(term)>=0)) return false;
     return true;
