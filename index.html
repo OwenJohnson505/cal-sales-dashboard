@@ -57,6 +57,7 @@ var DATA_=URL_+"/functions/v1/activity-data";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="rank", sortDir=-1, filter="all";
+var ACTIONS=[], wlRep="all";
 var PAGE=1, PAGE_SIZE=100;
 var RANGE={from:null,to:null,preset:7};
 function h(x){app.innerHTML=x;}
@@ -106,11 +107,27 @@ function typeBadge(d){ if(d.is_customer){var t='<span class="badge b-cust">Custo
 function statusBadge(d){ return d.two_way?'<span class="badge b-two">Two-way</span>':'<span class="badge b-out">Outbound</span>'; }
 function fmtWait(h){ h=Number(h)||0; if(h>=48)return Math.round(h/24)+" days"; if(h>=24)return "1 day"; return h+"h"; }
 function reasonBadge(r){ var c="b-overdue"; if(r==="Urgent")c="b-urgent"; else if(r==="Contract run")c="b-dev"; else if(r==="Quote / pricing")c="b-pros"; return '<span class="badge '+c+'">'+r+'</span>'; }
-function actionQueue(fu){
-  if(!fu||!fu.length) return '<div class="panel"><h2>Action queue - reply due</h2><p class="muted" style="font-size:12.5px">Nothing waiting on a reply right now.</p></div>';
-  var rows=fu.map(function(f){ return '<tr><td class="company-cell">'+(f.company||f.domain)+'<div class="muted" style="font-weight:400">'+(f.domain||"")+'</div></td><td>'+reasonBadge(f.reason)+'</td><td class="qwait">'+fmtWait(f.hrs_waiting)+' waiting</td><td>'+(f.rep||'<span class="muted">-</span>')+'</td><td class="muted">'+(Number(f.threads)>1?(f.threads+' threads'):'1 thread')+'</td></tr>'; }).join("");
-  return '<div class="panel alert"><h2>Action queue - reply due (24h SLA)</h2><p class="sub" style="margin:0 0 8px">Customers and prospects who replied and are waiting on us. Chase these first.</p><table><thead><tr><th>Company</th><th>Why</th><th>Waiting</th><th>Rep</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+function actionBadge(a){ return a==="Reply" ? '<span class="badge b-urgent">Reply now</span>' : '<span class="badge b-overdue">Nudge</span>'; }
+function wlReps(){ var m={}; for(var i=0;i<ACTIONS.length;i++){ var r=ACTIONS[i].rep; if(r) m[r]=(m[r]||0)+1; } return m; }
+function worklistPanel(){
+  if(!ACTIONS.length) return '<div class="panel"><h2>Worklist - next actions</h2><p class="muted" style="font-size:12.5px">Nothing waiting right now.</p></div>';
+  var reps=wlReps();
+  var chips='<span class="chip'+(wlRep==="all"?" active":"")+'" data-r="all" onclick="setWlRep(this.getAttribute(\'data-r\'))">All ('+ACTIONS.length+')</span>';
+  var ks=Object.keys(reps).sort();
+  for(var i=0;i<ks.length;i++){ chips+='<span class="chip'+(wlRep===ks[i]?" active":"")+'" data-r="'+ks[i]+'" onclick="setWlRep(this.getAttribute(\'data-r\'))">'+ks[i]+' ('+reps[ks[i]]+')</span>'; }
+  return '<div class="panel alert"><h2>Worklist - next actions (per rep)</h2>'+
+    '<p class="sub" style="margin:0 0 8px">Ranked by urgency then account value. Reply now = a customer is waiting on us; Nudge = we spoke last and it has gone quiet.</p>'+
+    '<div class="controls">'+chips+'</div>'+
+    '<table><thead><tr><th>Do</th><th>Why</th><th>Company</th><th>Value</th><th>Waiting</th><th>Rep</th></tr></thead><tbody id="wlrows"></tbody></table></div>';
 }
+function renderWorklist(){
+  var tb=document.getElementById("wlrows"); if(!tb) return;
+  var rows=ACTIONS.filter(function(a){ return wlRep==="all" || a.rep===wlRep; });
+  tb.innerHTML=rows.map(function(a){
+    return '<tr><td>'+actionBadge(a.action)+'</td><td>'+reasonBadge(a.reason)+'</td><td class="company-cell">'+(a.company||a.domain)+'<div class="muted" style="font-weight:400">'+(a.domain||"")+'</div></td><td>'+(a.value_label||"-")+(Number(a.value_score)?' <span class="muted">'+a.value_score+'</span>':'')+'</td><td class="qwait">'+fmtWait(a.hrs_waiting)+'</td><td>'+(a.rep||'<span class="muted">-</span>')+'</td></tr>';
+  }).join("") || '<tr><td colspan="6" class="muted">Nothing for this rep.</td></tr>';
+}
+function setWlRep(r){ wlRep=r; var cs=document.querySelectorAll(".panel.alert .chip"); for(var i=0;i<cs.length;i++){ cs[i].classList.toggle("active", cs[i].getAttribute("data-r")===r); } renderWorklist(); }
 function setPreset(days){
   var to=new Date();
   var from = days>=99999 ? new Date("2020-01-01") : new Date(Date.now()-days*86400000);
@@ -135,7 +152,7 @@ function renderDash(p){
     '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
     dateBar()+'<div class="kpis">'+kpis+'</div>'+
     '<div class="panel"><h2>Rep activity - email and phone</h2>'+reps+'</div>'+
-    actionQueue(p.followups||[])+
+    worklistPanel()+
     '<div class="panel"><h2>Prospects</h2>'+
       '<div class="controls"><input id="search" placeholder="Search company or domain..." oninput="PAGE=1;flt()">'+
       '<span class="chip active" data-f="all" onclick="setF(this)">All</span>'+
@@ -147,8 +164,10 @@ function renderDash(p){
       '<table><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table>'+'<div id="pager"></div>'+
       '<div class="foot">A company appears if a rep emailed it (outbound) with activity in the selected range. <span class="badge b-two">Two-way</span> = replied; <span class="badge b-out">Outbound</span> = no reply yet. Inbound-only senders excluded. Source: <span class="badge b-src">Front</span> + <span class="badge b-src">Aircall</span>.</div>'+
     '</div>');
+  ACTIONS=p.actions||[];
   DATA=p.companies||[];
   flt();
+  renderWorklist();
 }
 function setF(el){ filter=el.getAttribute("data-f"); var cs=document.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){cs[i].classList.toggle("active",cs[i]===el);} PAGE=1; flt(); }
 function setSort(k){ if(sortK===k)sortDir*=-1; else {sortK=k; sortDir=(k==="company"||k==="rep_list"||k==="type")?1:-1;} PAGE=1; flt(); }
