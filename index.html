@@ -65,6 +65,9 @@ th { color:#64748b; font-weight:550; cursor:pointer; user-select:none; } td.num,
 .sblbl { font-size:11px; text-transform:uppercase; color:#64748b; letter-spacing:.04em; }
 .sbchip { font-size:12px; background:#f1f5f9; border-radius:20px; padding:4px 11px; color:#334155; }
 .sbchip b { color:#0f172a; }
+.leadnote { width:100%; min-height:80px; padding:9px; border:1px solid #e2e8f0; border-radius:8px; font:inherit; margin:0; }
+.leadbtns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+#leadmsg { color:#15803d; }
 .seqstep { border:1px solid #eef2f7; border-radius:10px; padding:10px 12px; margin-bottom:10px; }
 .seqh { font-size:10.5px; text-transform:uppercase; color:#94a3b8; letter-spacing:.04em; }
 .seqsub { font-weight:600; font-size:13px; margin:3px 0 8px; }
@@ -111,6 +114,8 @@ var KEY_="sb_publishable_ayYFZV0wGJ-dM8VHpbaJiQ_ogINqgTH";
 var DATA_=URL_+"/functions/v1/activity-data";
 var DETAIL_=URL_+"/functions/v1/company-detail";
 var CDET_=URL_+"/functions/v1/campaign-detail";
+var LEADS_=URL_+"/functions/v1/leads";
+var LEADS=[], LEADSloaded=false, leadFilter="all", MEEMAIL="";
 var sb=supabase.createClient(URL_,KEY_);
 var app=document.getElementById("app");
 var DATA=[], sortK="rank", sortDir=-1, filter="all";
@@ -307,7 +312,59 @@ function automationsPanel(inst){
     '<div style="margin-top:10px"><button onclick="saveRule()">Save automation</button></div></div></details>';
   return '<div class="panel"><h2>Automations</h2><p class="sub" style="margin:0 0 10px">Rules that auto-enrol matching new leads into a campaign. A lead is added when it matches any chosen segment and a job title. Sending still respects the campaign - nothing goes out from a paused one.</p>'+rl+'<div style="margin-top:10px">'+form+'</div></div>';
 }
-function setView(el){ var v=el.getAttribute("data-v"); var b=document.querySelectorAll(".side .navi"); for(var i=0;i<b.length;i++) b[i].classList.toggle("active", b[i]===el); var vp=document.getElementById("view-pipeline"), vc=document.getElementById("view-cold"); if(vp) vp.style.display=(v==="pipeline"?"":"none"); if(vc) vc.style.display=(v==="cold"?"":"none"); }
+function setView(el){ var v=el.getAttribute("data-v"); var b=document.querySelectorAll(".side .navi"); for(var i=0;i<b.length;i++) b[i].classList.toggle("active", b[i]===el); var ids={pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads"}; for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); } if(v==="leads" && !LEADSloaded) loadLeads(); }
+function leadPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(LEADS_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
+function loadLeads(){ var lb=document.getElementById("leadboard"); if(lb) lb.innerHTML='<p class="sub">Loading leads...</p>'; leadPost({action:"list"}, function(d){ if(!d||!d.ok){ if(lb)lb.innerHTML='<p class="err">Could not load leads.</p>'; return; } LEADS=d.leads||[]; MEEMAIL=((d.me&&d.me.email)||"").toLowerCase(); LEADSloaded=true; renderLeadBoard(); }); }
+function setLeadFilter(t){ leadFilter=t; var cs=document.querySelectorAll("#leadboard .chip"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i].getAttribute("data-f")===t); renderLeadRows(); }
+function renderLeadBoard(){
+  var lb=document.getElementById("leadboard"); if(!lb) return;
+  var nNew=LEADS.filter(function(l){return l.status==="new";}).length;
+  var nMine=LEADS.filter(function(l){return (l.assigned_to||"").toLowerCase()===MEEMAIL && MEEMAIL;}).length;
+  var nPush=LEADS.filter(function(l){return l.status==="pushed";}).length;
+  lb.innerHTML='<div class="controls"><input id="leadsearch" placeholder="Search company or domain..." oninput="renderLeadRows()">'+
+    '<span class="chip active" data-f="all" onclick="setLeadFilter(\'all\')">All ('+LEADS.length+')</span>'+
+    '<span class="chip" data-f="new" onclick="setLeadFilter(\'new\')">New ('+nNew+')</span>'+
+    '<span class="chip" data-f="mine" onclick="setLeadFilter(\'mine\')">Mine ('+nMine+')</span>'+
+    '<span class="chip" data-f="pushed" onclick="setLeadFilter(\'pushed\')">In HubSpot ('+nPush+')</span></div>'+
+    '<div class="count" id="leadcount"></div>'+
+    '<table><thead><tr><th>Company</th><th>Segment</th><th class="num">Score</th><th>Assigned</th><th>Status</th></tr></thead><tbody id="leadrows"></tbody></table>';
+  renderLeadRows();
+}
+function renderLeadRows(){
+  var tb=document.getElementById("leadrows"); if(!tb) return;
+  var term=(val("leadsearch")||"").toLowerCase();
+  var rows=LEADS.filter(function(l){
+    if(leadFilter==="new"&&l.status!=="new")return false;
+    if(leadFilter==="pushed"&&l.status!=="pushed")return false;
+    if(leadFilter==="mine"&&(l.assigned_to||"").toLowerCase()!==MEEMAIL)return false;
+    if(term&&!((l.name||"").toLowerCase().indexOf(term)>=0||(l.domain||"").toLowerCase().indexOf(term)>=0))return false;
+    return true;
+  });
+  var lc=document.getElementById("leadcount"); if(lc) lc.textContent=rows.length+" leads";
+  tb.innerHTML=rows.slice(0,500).map(function(l){
+    var stb=l.status==="pushed"?'<span class="badge b-two">In HubSpot</span>':(l.status==="assigned"?'<span class="badge b-pros">Assigned</span>':'<span class="badge b-new">New</span>');
+    return '<tr class="crow" data-dom="'+esc(l.domain)+'" onclick="openLead(this.getAttribute(\'data-dom\'))"><td class="company-cell">'+esc(l.name||l.domain)+'<div class="muted" style="font-weight:400">'+esc(l.domain||"")+'</div></td><td>'+esc(l.segment||"")+'</td><td class="num">'+(l.score!=null?l.score:"-")+'</td><td>'+esc(l.assigned_name||"")+'</td><td>'+stb+'</td></tr>';
+  }).join("") || '<tr><td colspan="5" class="muted">No leads match.</td></tr>';
+}
+function leadByDom(d){ for(var i=0;i<LEADS.length;i++) if(LEADS[i].domain===d) return LEADS[i]; return null; }
+function openLead(d){
+  var l=leadByDom(d); if(!l) return; var m=document.getElementById("cmodal"); m.style.display="flex";
+  var assigned=l.assigned_to?('Assigned to <b>'+esc(l.assigned_name||l.assigned_to)+'</b>'):'Unassigned';
+  var pushed=l.status==="pushed";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(l.name||l.domain)+'</b> <span class="muted">'+esc(l.domain)+'</span><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+
+    '<div class="cstats">'+esc(l.segment||"")+(l.score!=null?' &middot; fit score '+l.score:'')+(l.website?' &middot; <a href="'+esc(l.website)+'" target="_blank" rel="noopener">website</a>':'')+'</div>'+
+    '<div class="cstats">'+assigned+(pushed?' &middot; <span class="badge b-two">In HubSpot</span>':'')+'</div>'+
+    '<div class="flabel">Note (saved to the HubSpot record)</div><textarea id="leadnote" class="leadnote" placeholder="Add a note...">'+esc(l.note||"")+'</textarea>'+
+    '<div class="leadbtns">'+
+      (l.assigned_to?'':'<button onclick="assignLead(\''+esc(d)+'\')">Assign to me</button>')+
+      '<button class="alt" onclick="saveNote(\''+esc(d)+'\')">Save note</button>'+
+      (pushed?'<button class="alt" disabled>Already in HubSpot</button>':'<button onclick="pushLead(\''+esc(d)+'\')">Push to HubSpot</button>')+
+    '</div><div id="leadmsg" class="msg"></div></div></div>';
+  m.scrollTop=0;
+}
+function assignLead(d){ leadPost({action:"assign", domain:d}, function(){ leadPost({action:"list"}, function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); }); }
+function saveNote(d){ var n=val("leadnote"); var l=leadByDom(d); if(l)l.note=n; leadPost({action:"note", domain:d, note:n}, function(){ var lm=document.getElementById("leadmsg"); if(lm)lm.textContent="Note saved."; }); }
+function pushLead(d){ var lm=document.getElementById("leadmsg"); if(lm)lm.textContent="Pushing to HubSpot..."; var n=val("leadnote"); leadPost({action:"note", domain:d, note:n}, function(){ leadPost({action:"push", domain:d}, function(r){ if(r&&r.ok){ if(lm)lm.textContent="Created in HubSpot"+(r.already?" (already existed)":"")+"."; leadPost({action:"list"}, function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); } else { if(lm)lm.textContent="Push failed: "+((r&&r.error)||"error"); } }); }); }
 function renderDash(p){
   var s=p.summary;
   var adminBtn=p.is_admin?'<button class="alt" onclick="adminView()">Manage users</button>':'';
@@ -319,6 +376,7 @@ function renderDash(p){
     '<aside class="side"><div class="sbrand">Cal Sameday</div>'+
       '<button class="navi active" data-v="pipeline" onclick="setView(this)">Pipeline</button>'+
       '<button class="navi" data-v="cold" onclick="setView(this)">Cold outreach</button>'+
+      '<button class="navi" data-v="leads" onclick="setView(this)">Leads</button>'+
       '<div class="sfoot">'+adminBtn+'<button onclick="out()">Sign out</button></div></aside>'+
     '<main class="main">'+
     '<div id="view-cold" class="view" style="display:none">'+
@@ -326,6 +384,7 @@ function renderDash(p){
       '<p class="sub">Your cold-email engine - sending health and campaign performance, synced from Instantly every 2 hours.</p>'+
       coldPanel(p.instantly)+
     '</div>'+
+    '<div id="view-leads" class="view" style="display:none"><div class="top"><div class="t">New leads</div></div><p class="sub">Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot as a company with you as the owner.</p><div id="leadboard"><p class="sub">Loading...</p></div></div>'+
     '<div id="view-pipeline" class="view">'+
     '<div class="top"><div class="t">Prospect Pipeline</div></div>'+
     '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
