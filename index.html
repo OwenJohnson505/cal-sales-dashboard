@@ -118,6 +118,7 @@ var DATA_=URL_+"/functions/v1/activity-data";
 var DETAIL_=URL_+"/functions/v1/company-detail";
 var CDET_=URL_+"/functions/v1/campaign-detail";
 var CAMP_=URL_+"/functions/v1/campaign-tools";
+var MON_=URL_+"/functions/v1/monitor"; var MONloaded=false;
 var LEADS_=URL_+"/functions/v1/leads";
 var LEADS=[], LEADSloaded=false, leadFilter="new", MEEMAIL="";
 var sb=supabase.createClient(URL_,KEY_);
@@ -316,11 +317,23 @@ function automationsPanel(inst){
     '<div style="margin-top:10px"><button onclick="saveRule()">Save automation</button></div></div></details>';
   return '<div class="panel"><h2>Automations</h2><p class="sub" style="margin:0 0 10px">Rules that auto-enrol matching new leads into a campaign. A lead is added when it matches any chosen segment and a job title. Sending still respects the campaign - nothing goes out from a paused one.</p>'+rl+'<div style="margin-top:10px">'+form+'</div></div>';
 }
-function setView(el){ var v=el.getAttribute("data-v"); var b=document.querySelectorAll(".side .navi"); for(var i=0;i<b.length;i++) b[i].classList.toggle("active", b[i]===el); var ids={pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads"}; for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); } if(v==="leads" && !LEADSloaded) loadLeads(); }
+function setView(el){ var v=el.getAttribute("data-v"); var b=document.querySelectorAll(".side .navi"); for(var i=0;i<b.length;i++) b[i].classList.toggle("active", b[i]===el); var ids={pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor"}; for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); } if(v==="leads" && !LEADSloaded) loadLeads(); if(v==="monitor" && !MONloaded) loadMonitor(); }
 function leadPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(LEADS_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
 function campPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(CAMP_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
 function loadCampaignBox(d){ var el=document.getElementById("campqueue"); if(!el) return; campPost({action:"campaigns"}, function(r){ if(!r||!r.ok){ el.innerHTML='<span class="muted">Could not load campaigns.</span>'; return; } var q=(r.campaigns||[]).filter(function(c){return c.status_label==="draft"||c.status_label==="paused";}); if(!q.length){ el.innerHTML='<div class="flabel" style="margin-top:10px">Add to campaign</div><span class="muted" style="font-size:11.5px">No draft/paused campaign yet. Create one in Instantly (Ricky/Luke as senders) and it appears here. Nothing sends until you launch it.</span>'; return; } var opts=q.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+' ('+c.status_label+')</option>';}).join(""); el.innerHTML='<div class="flabel" style="margin-top:10px">Add emailable contacts to campaign</div><div style="display:flex;gap:8px;align-items:center"><select id="campsel" style="flex:1">'+opts+'</select><button onclick="queueToCampaign(\''+esc(d)+'\')">Queue</button></div><div id="campmsg" class="muted" style="font-size:11.5px;margin-top:4px">Stages contacts in the campaign for review. Nothing sends until you launch it.</div>'; }); }
 function queueToCampaign(d){ var sel=document.getElementById("campsel"); if(!sel||!sel.value) return; var msg=document.getElementById("campmsg"); if(msg)msg.textContent="Queueing..."; campPost({action:"enqueue",campaign_id:sel.value,domain:d}, function(r){ if(!msg) return; if(r&&r.ok){ msg.textContent="Queued "+r.queued+" of "+r.total+" contact(s) into "+(r.campaign||"campaign")+" - still "+(r.status_label||"draft")+", nothing sent."; } else { msg.textContent="Could not queue: "+((r&&r.error)||(r&&r.code)||"error"); } }); }
+function monPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(MON_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload||{})}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
+function loadMonitor(){ MONloaded=true; var el=document.getElementById("monboard"); monPost({}, function(r){ if(!el) return; el.innerHTML=(r&&r.ok)?renderMonitor(r):'<p class="err">Could not load monitor.</p>'; }); }
+function renderMonitor(r){
+  var mb=r.mailboxes||[], camps=r.campaigns||[], f=r.funnel||{};
+  var mrows=mb.map(function(m){ var ready=m.ready?'<span class="badge b-two">ready</span>':'<span class="badge b-new">warming</span>'; var st=(String(m.status)==="1")?"active":(String(m.status)==="2"?"paused":("status "+m.status)); return '<tr><td>'+esc(m.email)+'</td><td class="num">'+(m.warmup_score!=null?m.warmup_score:"-")+'</td><td>'+ready+'</td><td class="num">'+(m.daily_limit!=null?m.daily_limit:"-")+'</td><td>'+st+'</td></tr>'; }).join("")||'<tr><td colspan="5" class="muted">No mailboxes.</td></tr>';
+  var mailPanel='<div class="panel"><h2>Sending health - mailboxes</h2><table><thead><tr><th>Mailbox</th><th class="num">Warmup</th><th>Status</th><th class="num">Daily cap</th><th>State</th></tr></thead><tbody>'+mrows+'</tbody></table></div>';
+  var crows=camps.map(function(c){ var bf=(c.bounce_rate>=5)?' style="color:#c0392b;font-weight:600"':''; return '<tr><td>'+esc(c.name)+'</td><td class="num">'+c.emails_sent+'</td><td class="num">'+c.open_rate+'%</td><td class="num">'+c.reply_rate+'%</td><td class="num"'+bf+'>'+c.bounce_rate+'%</td><td class="num">'+(c.opportunities||0)+'</td></tr>'; }).join("")||'<tr><td colspan="6" class="muted">No campaigns.</td></tr>';
+  var campPanel='<div class="panel"><h2>Campaign performance</h2><table><thead><tr><th>Campaign</th><th class="num">Sent</th><th class="num">Open</th><th class="num">Reply</th><th class="num">Bounce</th><th class="num">Opps</th></tr></thead><tbody>'+crows+'</tbody></table><p class="muted" style="font-size:11.5px;margin-top:6px">Bounce over 5% flagged red - clean the list before sending.</p></div>';
+  function chip(l,v){ return '<div style="background:var(--card,#fff);border:1px solid var(--line,#e3e8f0);border-radius:10px;padding:10px 14px;min-width:108px"><div style="font-size:22px;font-weight:700">'+(v!=null?v:0)+'</div><div class="muted" style="font-size:11.5px">'+l+'</div></div>'; }
+  var funnel='<div class="panel"><h2>Pipeline funnel</h2><div style="display:flex;gap:10px;flex-wrap:wrap">'+chip("Companies hunted",f.companies_hunted)+chip("Promoted leads",f.candidates_promoted)+chip("Contacts found",f.contacts_discovered)+chip("Enriched",f.contacts_enriched)+chip("Role intel",f.role_intel_done)+chip("Queued to campaign",f.queued_to_campaign)+chip("In HubSpot",f.pushed_to_hubspot)+'</div></div>';
+  return mailPanel+campPanel+funnel;
+}
 function loadLeads(){ var lb=document.getElementById("leadboard"); if(lb) lb.innerHTML='<p class="sub">Loading leads...</p>'; leadPost({action:"list"}, function(d){ if(!d||!d.ok){ if(lb)lb.innerHTML='<p class="err">Could not load leads.</p>'; return; } LEADS=d.leads||[]; MEEMAIL=((d.me&&d.me.email)||"").toLowerCase(); LEADSloaded=true; renderLeadBoard(); }); }
 function setLeadFilter(t){ leadFilter=t; var cs=document.querySelectorAll("#leadboard .chip"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i].getAttribute("data-f")===t); renderLeadRows(); }
 function renderLeadBoard(){
@@ -410,6 +423,7 @@ function renderDash(p){
       '<button class="navi active" data-v="pipeline" onclick="setView(this)">Pipeline</button>'+
       '<button class="navi" data-v="cold" onclick="setView(this)">Cold outreach</button>'+
       '<button class="navi" data-v="leads" onclick="setView(this)">Leads</button>'+
+      '<button class="navi" data-v="monitor" onclick="setView(this)">Monitor</button>'+
       '<div class="sfoot">'+adminBtn+'<button onclick="out()">Sign out</button></div></aside>'+
     '<main class="main">'+
     '<div id="view-cold" class="view" style="display:none">'+
@@ -418,6 +432,7 @@ function renderDash(p){
       coldPanel(p.instantly)+
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="top"><div class="t">New leads</div></div><p class="sub">Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot as a company with you as the owner.</p><div id="leadboard"><p class="sub">Loading...</p></div></div>'+
+    '<div id="view-monitor" class="view" style="display:none"><div class="top"><div class="t">Monitor</div></div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p><div id="monboard"><p class="sub">Loading...</p></div></div>'+
     '<div id="view-pipeline" class="view">'+
     '<div class="top"><div class="t">Prospect Pipeline</div></div>'+
     '<p class="sub">Companies your reps emailed (outbound), across Front + Aircall. Showing '+(p.range?p.range.from+" to "+p.range.to:"")+'.</p>'+
