@@ -354,6 +354,21 @@ function renderLeadRows(){
 function leadByDom(d){ for(var i=0;i<LEADS.length;i++) if(LEADS[i].domain===d) return LEADS[i]; return null; }
 function dismissLead(d){ var reason=val("dismissReason")||"Not a fit"; leadPost({action:"dismiss",domain:d,reason:reason}, function(){ leadPost({action:"list"},function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); closeModal(); }); }); }
 function restoreLead(d){ leadPost({action:"restore",domain:d}, function(){ leadPost({action:"list"},function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); }); }
+function renderContacts(list){
+  if(!list||!list.length) return '<span class="muted">No contacts discovered yet for this company.</span>';
+  return list.map(function(c){
+    var loc=c.location_raw||c.city||"";
+    var head='<div><b>'+esc(c.full_name||"(name locked)")+'</b> <span class="muted">'+esc(c.title||"")+(loc?' &middot; '+esc(loc):'')+'</span>'+(c.email?' &middot; '+esc(c.email):(c.email_status==="locked"?' &middot; <span class="muted">email locked</span>':''))+'</div>';
+    var rows=[];
+    if(c.best_call_window) rows.push('<div><b>Call:</b> '+esc(c.best_call_window)+(c.working_hours?' <span class="muted">('+esc(c.working_hours)+')</span>':'')+'</div>');
+    if(c.work_location_guess||c.nearest_office) rows.push('<div><b>Ring:</b> '+esc(c.work_location_guess||c.nearest_office)+(c.work_mode?' <span class="muted">&middot; '+esc(c.work_mode)+'</span>':'')+'</div>');
+    if(c.pitch_angle) rows.push('<div><b>Angle:</b> '+esc(c.pitch_angle)+'</div>');
+    if(c.role_goals) rows.push('<div class="muted" style="margin-top:2px">'+esc(c.role_goals)+'</div>');
+    if(!rows.length) rows.push('<div class="muted" style="font-size:11.5px">Role intelligence pending (runs when enriched).</div>');
+    return '<div style="border:1px solid var(--line,#e3e8f0);border-radius:8px;padding:8px 10px;margin:6px 0;background:#00000003">'+head+rows.join("")+'</div>';
+  }).join("");
+}
+function loadContacts(d){ leadPost({action:"contacts",domain:d}, function(r){ var el=document.getElementById("leadcontacts"); if(!el) return; el.innerHTML=(r&&r.ok)?renderContacts(r.contacts||[]):'<span class="muted">Could not load contacts.</span>'; }); }
 function openLead(d){
   var l=leadByDom(d); if(!l) return; var m=document.getElementById("cmodal"); m.style.display="flex";
   var assigned=l.assigned_to?('Assigned to <b>'+esc(l.assigned_name||l.assigned_to)+'</b>'):'Unassigned';
@@ -371,8 +386,9 @@ function openLead(d){
     (l.status==="dismissed"
       ? '<div class="dismissrow"><span class="badge b-new">Dismissed</span><span class="muted">'+esc(l.reason||"")+'</span><button class="alt" onclick="restoreLead(\''+esc(d)+'\')">Restore to leads</button></div>'
       : '<div class="dismissrow"><span class="muted" style="font-size:11.5px">Not a fit?</span><select id="dismissReason"><option>Competitor</option><option>Existing customer</option><option>Wrong segment</option><option>Not relevant</option></select><button class="dimbtn" onclick="dismissLead(\''+esc(d)+'\')">Dismiss</button></div>')+
-    '<div id="leadmsg" class="msg"></div></div></div>';
+    '<div class="flabel" style="margin-top:10px">Contacts</div><div id="leadcontacts" style="font-size:13px">Loading contacts...</div><div id="leadmsg" class="msg"></div></div></div>';
   m.scrollTop=0;
+  loadContacts(d);
 }
 function assignLead(d){ leadPost({action:"assign", domain:d}, function(){ leadPost({action:"list"}, function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); }); }
 function saveNote(d){ var n=val("leadnote"); var l=leadByDom(d); if(l)l.note=n; leadPost({action:"note", domain:d, note:n}, function(){ var lm=document.getElementById("leadmsg"); if(lm)lm.textContent="Note saved."; }); }
