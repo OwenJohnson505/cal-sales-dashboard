@@ -348,7 +348,7 @@ function renderLeadRows(){
   var lc=document.getElementById("leadcount"); if(lc) lc.textContent=rows.length+" leads";
   tb.innerHTML=rows.slice(0,500).map(function(l){
     var stb=l.status==="pushed"?'<span class="badge b-two">In HubSpot</span>':(l.status==="assigned"?'<span class="badge b-pros">Assigned</span>':'<span class="badge b-new">New</span>');
-    return '<tr class="crow" data-dom="'+esc(l.domain)+'" onclick="openLead(this.getAttribute(\'data-dom\'))"><td class="company-cell">'+esc(l.name||l.domain)+'<div class="muted" style="font-weight:400">'+esc(l.domain||"")+'</div></td><td>'+esc(l.segment||"")+'</td><td class="num">'+(l.score!=null?l.score:"-")+'</td><td>'+esc(l.assigned_name||"")+'</td><td>'+stb+'</td></tr>';
+    return '<tr class="crow" data-dom="'+esc(l.domain)+'" onclick="openLead(this.getAttribute(\'data-dom\'))"><td class="company-cell">'+esc(l.name||l.domain)+(l.source==='gemini_hunt'?' <span class="badge b-pros" title="Found and scored by AI">AI</span>':'')+'<div class="muted" style="font-weight:400">'+esc(l.domain||"")+'</div></td><td>'+esc(l.segment||"")+'</td><td class="num">'+(l.score!=null?l.score:"-")+'</td><td>'+esc(l.assigned_name||"")+'</td><td>'+stb+'</td></tr>';
   }).join("") || '<tr><td colspan="5" class="muted">No leads match.</td></tr>';
 }
 function leadByDom(d){ for(var i=0;i<LEADS.length;i++) if(LEADS[i].domain===d) return LEADS[i]; return null; }
@@ -360,6 +360,7 @@ function openLead(d){
   var pushed=l.status==="pushed";
   m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(l.name||l.domain)+'</b> <span class="muted">'+esc(l.domain)+'</span><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+
     '<div class="cstats">'+esc(l.segment||"")+(l.score!=null?' &middot; fit score '+l.score:'')+(l.website?' &middot; <a href="'+esc(l.website)+'" target="_blank" rel="noopener">website</a>':'')+'</div>'+
+    (l.rationale?'<div class="flabel">Why this lead'+(l.source==='gemini_hunt'?' &middot; AI-scored':'')+'</div><div class="cstats" style="border-left:3px solid #3a6df0;padding-left:10px">'+esc(l.rationale)+(l.evidence?'<div class="muted" style="margin-top:6px;font-style:italic">&ldquo;'+esc(l.evidence)+'&rdquo;</div>':'')+'</div>':'')+
     '<div class="cstats">'+assigned+(pushed?' &middot; <span class="badge b-two">In HubSpot</span>':'')+'</div>'+
     '<div class="flabel">Note (saved to the HubSpot record)</div><textarea id="leadnote" class="leadnote" placeholder="Add a note...">'+esc(l.note||"")+'</textarea>'+
     '<div class="leadbtns">'+
