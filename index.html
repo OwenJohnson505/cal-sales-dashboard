@@ -254,21 +254,22 @@ async function openCompany(dom){
 function renderDetail(p){
   var m=document.getElementById("cmodal");
   if(!p||!p.ok){ m.innerHTML='<div class="mcard"><div class="mhead"><b>Details</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><p class="err">No detail available.</p></div></div>'; return; }
-  var threads=p.threads||[], calls=p.calls||[];
+  var threads=p.threads||[], calls=p.calls||[]; window.DETAIL_CALLS=calls; window.DETAIL_DOM=p.domain;
   var th = threads.length ? threads.map(function(t){
     var msgs=t.messages.map(function(mm){ return '<div class="bub '+(mm.inbound?"in":"out")+'"><div class="bmeta">'+esc(mm.who)+' &middot; '+fmtDT(mm.date)+'</div>'+esc(mm.text)+'</div>'; }).join("");
     return '<div class="thread"><div class="tsub">'+esc(t.subject)+'</div>'+msgs+'</div>';
   }).join("") : '<p class="muted">No email threads found for this company.</p>';
-  var cl = calls.length ? calls.map(function(c){
+  var cl = calls.length ? calls.map(function(c,i){
     var head='<div class="cmeta"><b>'+fmtDT(c.started_at)+'</b> &middot; '+esc(c.direction||"")+' &middot; '+(c.duration?Math.round(c.duration)+"s":"-")+' &middot; '+(c.answered?"answered":"missed")+' &middot; '+esc(c.agent||"-")+(c.recording?' &middot; <a href="'+esc(c.recording)+'" target="_blank" rel="noopener">Listen</a>':"")+'</div>';
     var sum=c.summary?'<div class="csum">'+esc(c.summary)+'</div>':(c.tstatus==="processing"?'<div class="muted" style="font-size:11.5px">Transcribing...</div>':"");
     var tr="";
     if(c.utterances&&c.utterances.length){ var conv=c.utterances.map(function(u){ var sp=(u.s||"?"); return '<div class="uturn"><span class="uspk spk-'+sp+'">'+sp+'</span>'+esc(u.t)+'</div>'; }).join(""); tr='<details class="ctr"><summary>Transcript (by speaker)</summary><div class="trtext">'+conv+'</div></details>'; }
     else if(c.transcript){ tr='<details class="ctr"><summary>Transcript</summary><div class="trtext">'+esc(c.transcript)+'</div></details>'; }
-    return '<div class="callcard">'+head+sum+tr+'</div>';
+    return '<div class="callcard">'+head+sum+tr+(c.summary?'<div style="margin-top:6px"><button class="alt" onclick="logCallNote('+i+')">Log summary to HubSpot</button> <span id="cn'+i+'" class="muted" style="font-size:11.5px"></span></div>':"")+'</div>';
   }).join("") : '<p class="muted">No calls linked to this company.</p>';
   m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(p.company||p.domain)+'</b> <span class="muted">'+esc(p.domain)+'</span><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody"><h3 class="msec">Email threads</h3>'+th+'<h3 class="msec">Calls</h3>'+cl+'</div></div>';
 }
+function logCallNote(i){ var c=(window.DETAIL_CALLS||[])[i]; if(!c||!c.summary) return; var s=document.getElementById("cn"+i); if(s)s.textContent="Logging..."; leadPost({action:"call_note", domain:window.DETAIL_DOM, summary:c.summary, meta:{when:fmtDT(c.started_at), agent:c.agent, direction:c.direction}}, function(r){ if(s)s.textContent=(r&&r.ok)?"Logged to HubSpot.":"Failed: "+((r&&r.error)||"error"); }); }
 function setPreset(days){
   var to=new Date();
   var from = days>=99999 ? new Date("2020-01-01") : new Date(Date.now()-days*86400000);
