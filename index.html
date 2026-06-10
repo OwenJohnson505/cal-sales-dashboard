@@ -117,6 +117,7 @@ var KEY_="sb_publishable_ayYFZV0wGJ-dM8VHpbaJiQ_ogINqgTH";
 var DATA_=URL_+"/functions/v1/activity-data";
 var DETAIL_=URL_+"/functions/v1/company-detail";
 var CDET_=URL_+"/functions/v1/campaign-detail";
+var CAMP_=URL_+"/functions/v1/campaign-tools";
 var LEADS_=URL_+"/functions/v1/leads";
 var LEADS=[], LEADSloaded=false, leadFilter="new", MEEMAIL="";
 var sb=supabase.createClient(URL_,KEY_);
@@ -317,6 +318,9 @@ function automationsPanel(inst){
 }
 function setView(el){ var v=el.getAttribute("data-v"); var b=document.querySelectorAll(".side .navi"); for(var i=0;i<b.length;i++) b[i].classList.toggle("active", b[i]===el); var ids={pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads"}; for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); } if(v==="leads" && !LEADSloaded) loadLeads(); }
 function leadPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(LEADS_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
+function campPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(CAMP_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
+function loadCampaignBox(d){ var el=document.getElementById("campqueue"); if(!el) return; campPost({action:"campaigns"}, function(r){ if(!r||!r.ok){ el.innerHTML='<span class="muted">Could not load campaigns.</span>'; return; } var q=(r.campaigns||[]).filter(function(c){return c.status_label==="draft"||c.status_label==="paused";}); if(!q.length){ el.innerHTML='<div class="flabel" style="margin-top:10px">Add to campaign</div><span class="muted" style="font-size:11.5px">No draft/paused campaign yet. Create one in Instantly (Ricky/Luke as senders) and it appears here. Nothing sends until you launch it.</span>'; return; } var opts=q.map(function(c){return '<option value="'+esc(c.id)+'">'+esc(c.name)+' ('+c.status_label+')</option>';}).join(""); el.innerHTML='<div class="flabel" style="margin-top:10px">Add emailable contacts to campaign</div><div style="display:flex;gap:8px;align-items:center"><select id="campsel" style="flex:1">'+opts+'</select><button onclick="queueToCampaign(\''+esc(d)+'\')">Queue</button></div><div id="campmsg" class="muted" style="font-size:11.5px;margin-top:4px">Stages contacts in the campaign for review. Nothing sends until you launch it.</div>'; }); }
+function queueToCampaign(d){ var sel=document.getElementById("campsel"); if(!sel||!sel.value) return; var msg=document.getElementById("campmsg"); if(msg)msg.textContent="Queueing..."; campPost({action:"enqueue",campaign_id:sel.value,domain:d}, function(r){ if(!msg) return; if(r&&r.ok){ msg.textContent="Queued "+r.queued+" of "+r.total+" contact(s) into "+(r.campaign||"campaign")+" - still "+(r.status_label||"draft")+", nothing sent."; } else { msg.textContent="Could not queue: "+((r&&r.error)||(r&&r.code)||"error"); } }); }
 function loadLeads(){ var lb=document.getElementById("leadboard"); if(lb) lb.innerHTML='<p class="sub">Loading leads...</p>'; leadPost({action:"list"}, function(d){ if(!d||!d.ok){ if(lb)lb.innerHTML='<p class="err">Could not load leads.</p>'; return; } LEADS=d.leads||[]; MEEMAIL=((d.me&&d.me.email)||"").toLowerCase(); LEADSloaded=true; renderLeadBoard(); }); }
 function setLeadFilter(t){ leadFilter=t; var cs=document.querySelectorAll("#leadboard .chip"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i].getAttribute("data-f")===t); renderLeadRows(); }
 function renderLeadBoard(){
@@ -386,9 +390,10 @@ function openLead(d){
     (l.status==="dismissed"
       ? '<div class="dismissrow"><span class="badge b-new">Dismissed</span><span class="muted">'+esc(l.reason||"")+'</span><button class="alt" onclick="restoreLead(\''+esc(d)+'\')">Restore to leads</button></div>'
       : '<div class="dismissrow"><span class="muted" style="font-size:11.5px">Not a fit?</span><select id="dismissReason"><option>Competitor</option><option>Existing customer</option><option>Wrong segment</option><option>Not relevant</option></select><button class="dimbtn" onclick="dismissLead(\''+esc(d)+'\')">Dismiss</button></div>')+
-    '<div class="flabel" style="margin-top:10px">Contacts</div><div id="leadcontacts" style="font-size:13px">Loading contacts...</div><div id="leadmsg" class="msg"></div></div></div>';
+    '<div class="flabel" style="margin-top:10px">Contacts</div><div id="leadcontacts" style="font-size:13px">Loading contacts...</div><div id="campqueue"></div><div id="leadmsg" class="msg"></div></div></div>';
   m.scrollTop=0;
   loadContacts(d);
+  loadCampaignBox(d);
 }
 function assignLead(d){ leadPost({action:"assign", domain:d}, function(){ leadPost({action:"list"}, function(dd){ if(dd&&dd.ok)LEADS=dd.leads||LEADS; renderLeadBoard(); openLead(d); }); }); }
 function saveNote(d){ var n=val("leadnote"); var l=leadByDom(d); if(l)l.note=n; leadPost({action:"note", domain:d, note:n}, function(){ var lm=document.getElementById("leadmsg"); if(lm)lm.textContent="Note saved."; }); }
