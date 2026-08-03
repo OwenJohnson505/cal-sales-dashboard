@@ -388,6 +388,10 @@ function assistantView(){
     '<div id="askout"></div>'+
   '</div>';
 }
+// The function replies with NDJSON (one JSON object per line): status lines
+// while it works, then a final result line. It cannot be read with r.json() -
+// research runs for minutes and the platform kills a connection that sits idle,
+// so the stream is what keeps it alive.
 function runAsk(){
   if(ASKING) return;
   var q=(val("askq")||"").trim();
@@ -395,25 +399,55 @@ function runAsk(){
   if(!q){ outEl.innerHTML='<div class="think"><div class="row">Enter an email, website or company name first.</div></div>'; return; }
   ASKING=true;
   var btn=document.getElementById("askbtn"); if(btn){ btn.disabled=true; btn.textContent="Researching..."; }
-  var i=0, t0=Date.now();
-  outEl.innerHTML='<div class="think"><div class="row"><span class="loading loading-spinner loading-sm"></span><span id="thinkmsg">'+STEPS[0]+'</span></div>'+
-    '<div class="bar"><i></i></div><div class="steps" id="thinksub">Researching '+esc(q)+' - this usually takes 30-60 seconds.</div></div>';
+  var t0=Date.now(), done=false;
+  outEl.innerHTML='<div class="think"><div class="row"><span class="loading loading-spinner loading-sm"></span><span id="thinkmsg">Starting research</span></div>'+
+    '<div class="bar"><i></i></div><div class="steps" id="thinksub">Researching '+esc(q)+'</div></div>';
   ASKTIMER=setInterval(function(){
-    i++; var m=document.getElementById("thinkmsg"); if(m&&STEPS[i%STEPS.length]) m.textContent=STEPS[i%STEPS.length];
-    var s=document.getElementById("thinksub"); if(s) s.textContent="Researching "+q+" - "+Math.round((Date.now()-t0)/1000)+"s elapsed.";
-  },6000);
+    var s=document.getElementById("thinksub");
+    if(s) s.textContent="Researching "+q+" · "+Math.round((Date.now()-t0)/1000)+"s · a full brief usually takes 1-3 minutes";
+  },1000);
+  function say(m){ var e=document.getElementById("thinkmsg"); if(e) e.textContent=m; }
+  function finish(result,errMsg){
+    if(done) return; done=true; stopAsk();
+    if(errMsg){ outEl.innerHTML=askError(errMsg); return; }
+    if(!result||!result.brief){ outEl.innerHTML=askError("The research finished but returned no brief."); return; }
+    outEl.innerHTML=renderBrief(result.brief,result.meta||{});
+    var b=document.querySelector(".brief"); if(b) b.scrollIntoView({behavior:"smooth",block:"start"});
+  }
   sb.auth.getSession().then(function(s){
     if(!s.data.session){ stopAsk(); return login(); }
-    fetch(ASK_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify({query:q})})
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        stopAsk();
-        if(!d||!d.ok){ outEl.innerHTML=askError(d&&d.error); return; }
-        outEl.innerHTML=renderBrief(d.brief,d.meta);
-        var b=document.querySelector(".brief"); if(b) b.scrollIntoView({behavior:"smooth",block:"start"});
-      })
-      .catch(function(){ stopAsk(); outEl.innerHTML=askError("Could not reach the research service."); });
-  });
+    return fetch(ASK_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify({query:q})})
+      .then(function(r){
+        var ct=r.headers.get("content-type")||"";
+        // Errors (401/403/400/500) still come back as a single JSON object.
+        if(!r.ok || ct.indexOf("ndjson")<0 || !r.body){
+          return r.json().then(function(d){
+            finish(null,(d&&d.error)||(d&&d.code==="login"?"Your session expired - sign in again.":"Server error ("+r.status+")."));
+          },function(){ finish(null,"Server error ("+r.status+")."); });
+        }
+        var reader=r.body.getReader(), dec=new TextDecoder(), buf="", result=null, errMsg=null;
+        function handle(line){
+          var o; try{ o=JSON.parse(line); }catch(e){ return; }
+          if(o.type==="status") say(o.msg);
+          else if(o.type==="result") result=o;
+          else if(o.type==="error") errMsg=o.error||"Research failed.";
+        }
+        function pump(){
+          return reader.read().then(function(res){
+            if(res.done){
+              if(buf.trim()) handle(buf.trim());
+              finish(result,errMsg);
+              return;
+            }
+            buf+=dec.decode(res.value,{stream:true});
+            var parts=buf.split("\n"); buf=parts.pop();
+            for(var i=0;i<parts.length;i++){ var l=parts[i].trim(); if(l) handle(l); }
+            return pump();
+          });
+        }
+        return pump();
+      });
+  }).catch(function(e){ finish(null,"Lost connection to the research service. "+String(e&&e.message||"").slice(0,120)); });
 }
 function stopAsk(){ ASKING=false; if(ASKTIMER){ clearInterval(ASKTIMER); ASKTIMER=null; } var b=document.getElementById("askbtn"); if(b){ b.disabled=false; b.textContent="Research"; } }
 function askError(m){
@@ -431,7 +465,10 @@ function renderBrief(b,meta){
   if(!b) return askError("Empty result.");
   var v=b.verdict||{}, c=b.company||{}, rel=b.relationship||{}, cov=b.coverage||{}, ap=b.approach||{}, na=b.next_action||{};
   var col=BANDCOL[v.band]||BANDCOL["Marginal"];
-  var score=Math.max(0,Math.min(10,Number(v.score)||0));
+  // Belt and braces: the schema pins the score to 0-10, but if a model ever
+  // returns a 0-100 style score, rescale rather than clamping everything to 10.
+  var raw=Number(v.score)||0;
+  var score=Math.max(0,Math.min(10, raw>10?Math.round(raw/10):Math.round(raw)));
   var head='<div class="bhead"><div class="top">'+
     '<div class="ring" style="--pct:'+(score*10)+';--rc:'+col[0]+'"><div class="v"><b>'+score+'</b><span>/ 10</span></div></div>'+
     '<div class="nm"><h2>'+esc(c.name||meta.resolved_domain||"Unknown company")+'</h2>'+
