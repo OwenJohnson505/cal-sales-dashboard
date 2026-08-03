@@ -36,7 +36,18 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .err{ color:var(--color-error); font-size:13.5px; }
 .msg{ color:var(--color-error); font-size:13.5px; margin-top:10px; min-height:16px; }
 #leadmsg{ color:var(--color-success); }
-.wfull{ width:100%; } .tblwrap{ overflow-x:auto; }
+.wfull{ width:100%; }
+/* Every table is a surface. Data sitting straight on the grey page had no edge
+   and no authority; one rule lifts Pipeline, Leads and Cold outreach too, not
+   just the screens added last. Nested tables (inside a panel or a modal) opt
+   out so the card does not double up. */
+.tblwrap{ overflow-x:auto; background:#fff; border:1px solid var(--line);
+  border-radius:var(--radius-box); box-shadow:var(--sh-2); }
+.panel .tblwrap,.mbody .tblwrap{ background:none; border:0; border-radius:0; box-shadow:none; }
+.panel.flush .tblwrap{ margin:0; }
+.tblwrap>.table thead th{ background:var(--color-base-200); }
+.tblwrap>.table thead th:first-child{ border-top-left-radius:var(--radius-box); }
+.tblwrap>.table thead th:last-child{ border-top-right-radius:var(--radius-box); }
 ::selection{ background:#D6E1FF; }
 
 /* ================================ topbar ================================ */
@@ -128,12 +139,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .miniring b{ font-size:30px; font-weight:800; letter-spacing:-.04em; line-height:1; }
 
 /* ============================ sales desk ================================ */
-/* Score badge reuses the .avi footprint so a call row lines up with the rep
-   rows elsewhere in the app. */
-.sc{ width:38px; height:38px; border-radius:11px; flex:none; display:inline-flex; align-items:center;
-  justify-content:center; font-size:14.5px; font-weight:800; font-variant-numeric:tabular-nums; }
-.sc.hi{ background:#E7F8F0; color:#0A6B4A; } .sc.mid{ background:#EEF3FF; color:#1E45B8; }
-.sc.low{ background:var(--color-base-200); color:var(--mut); }
+.callrow{ padding:14px 20px; border-radius:0; }
 .callrow .seg{ font-size:12.5px; color:var(--mut); margin-top:2px; overflow-wrap:anywhere; }
 .callrow .rt{ display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
 .tel{ font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -162,8 +168,9 @@ h1,h2,h3{ letter-spacing:-.025em; }
   .callrow .rt{ flex:none; gap:6px; }
   .callrow .rt .btn-soft{ display:none; }
   .callrow .tel .pn{ display:none; }
+  .callrow{ padding:11px 14px; }
   .callrow .pill,.callrow .waitchip{ display:none; }
-  .sc{ width:32px; height:32px; border-radius:9px; font-size:13px; }
+  .ring.sm{ --sz:38px; --rw:3.5px; }
   /* 690px of headers sat above the first row. The prose and the stat captions
      are orientation, not work - the list is the work. */
   #view-calllist .page-head .sub{ display:none; }
@@ -183,14 +190,42 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .bhead h2{ font-size:25px; font-weight:800; margin:0 0 4px; letter-spacing:-.03em; overflow-wrap:anywhere; }
 .bhead .dm{ font-size:13.5px; color:var(--mut); overflow-wrap:anywhere; }
 .bhead .hl{ font-size:16px; color:var(--ink2); margin-top:14px; line-height:1.5; }
-.ring{ width:112px; height:112px; border-radius:50%; flex:none; display:grid; place-items:center; position:relative;
+/* THE score component. One shape for a fit score everywhere in the app - the
+   brief, the call list, the lead modal - so a 9 always looks like a 9. Size is
+   driven by --sz, everything else scales off it. */
+.ring{ --sz:112px; --rw:9px;
+  width:var(--sz); height:var(--sz); border-radius:50%; flex:none; display:grid; place-items:center; position:relative;
   background:conic-gradient(var(--rc) calc(var(--pct)*1%), var(--color-base-300) 0); }
-.ring::after{ content:""; position:absolute; inset:9px; border-radius:50%; background:#fff; }
+.ring::after{ content:""; position:absolute; inset:var(--rw); border-radius:50%; background:#fff; }
 /* z-index is load-bearing: ::after is the last child, so without it the white
    inner circle paints over the score and the number is invisible. */
 .ring .v{ position:relative; z-index:1; text-align:center; line-height:1; }
-.ring .v b{ font-size:40px; font-weight:800; letter-spacing:-.05em; display:block; }
+.ring .v b{ font-size:calc(var(--sz)*.355); font-weight:800; letter-spacing:-.05em; display:block;
+  font-variant-numeric:tabular-nums; }
 .ring .v span{ display:block; font-size:10px; color:var(--faint); font-weight:700; margin-top:4px; letter-spacing:.06em; text-transform:uppercase; }
+.ring.md{ --sz:66px; --rw:6px; }
+.ring.sm{ --sz:44px; --rw:4px; }
+.ring.sm .v b,.ring.md .v b{ letter-spacing:-.03em; }
+
+/* ============================== surfaces ================================ */
+/* Content sat straight on the grey page background, so nothing read as a
+   surface and the data had no authority. Everything substantive now lives on a
+   white panel: one card, hairline dividers inside, shadow to lift it off. */
+/* .panel already exists above with its own padding - do NOT redefine it, that
+   silently removed the padding from every existing panel in the app. This is a
+   modifier for a panel whose content runs edge to edge: header, then rows or a
+   table with their own inset. */
+.panel.flush{ padding:0; overflow:hidden; box-shadow:var(--sh-2); }
+.phead{ display:flex; align-items:center; gap:10px; padding:15px 20px 14px; border-bottom:1px solid var(--line-soft); }
+.phead h3{ margin:0; font-size:14.5px; font-weight:750; letter-spacing:-.01em; }
+.phead .hint{ margin-left:auto; font-size:12.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+.plist>*{ border-top:1px solid var(--line-soft); }
+.plist>*:first-child{ border-top:0; }
+.panel.flush .table{ width:100%; }
+.panel.flush .table thead th{ background:var(--color-base-200); padding:10px 20px; border-bottom:1px solid var(--line); }
+.panel.flush .table td{ padding:13px 20px; border-bottom:1px solid var(--line-soft); }
+.panel.flush .table tbody tr:last-child td{ border-bottom:0; }
+.panel .table tbody tr:last-child td{ border-bottom:0; }
 
 /* fact pills under the company name */
 .pillrow{ display:flex; gap:7px; flex-wrap:wrap; margin-top:12px; }
@@ -669,6 +704,16 @@ function askError(m){
   return '<div class="think"><div class="row" style="color:var(--color-error)"><b>'+esc(m||"Something went wrong.")+'</b></div>'+extra+'</div>';
 }
 var BANDCOL={"Strong fit":["#0E9F6E","#E7F8F0","#0A6B4A"],"Worth a call":["#2F62F5","#EEF3FF","#1E45B8"],"Marginal":["#C2740B","#FEF6E7","#7A4E07"],"Not a fit":["#98A2B3","#F2F4F8","#5B6577"],"Competitor":["#DC2626","#FEF2F2","#8F1D1D"]};
+// A score means the same thing wherever it appears, so it gets the same colour
+// and the same shape. Bands mirror BANDCOL so the brief and the list agree.
+function scoreBand(s){ s=Number(s); if(!(s>=0)) return "Not a fit";
+  return s>=9?"Strong fit":(s>=6?"Worth a call":(s>=3?"Marginal":"Not a fit")); }
+function scoreRing(s,size,label){
+  var n=Number(s); var ok=(n>=0);
+  var col=(BANDCOL[scoreBand(n)]||BANDCOL["Not a fit"])[0];
+  return '<div class="ring'+(size?" "+size:"")+'" style="--pct:'+(ok?n*10:0)+';--rc:'+col+'">'+
+    '<div class="v"><b>'+(ok?n:"?")+'</b>'+(label?'<span>'+label+'</span>':'')+'</div></div>';
+}
 function copyLine(btn){
   var box=(btn.closest&&btn.closest(".sayblock"))||btn.parentElement;
   var q=box?box.querySelector(".quote"):null;
@@ -701,7 +746,7 @@ function renderBrief(b,meta){
     (v.confidence?'<span class="pill" style="color:var(--mut)">'+esc(v.confidence)+' confidence</span>':'')+
   '</div>';
   var head='<div class="bhead"><div class="top">'+
-    '<div class="ring" style="--pct:'+(score*10)+';--rc:'+col[0]+'"><div class="v"><b>'+score+'</b><span>out of 10</span></div></div>'+
+    scoreRing(score,"","out of 10")+
     '<div class="nm"><h2>'+esc(c.name||meta.resolved_domain||"Unknown company")+'</h2>'+
       '<div class="dm">'+esc(c.domain||meta.resolved_domain||"")+'</div>'+
       pills+
@@ -999,15 +1044,16 @@ function renderCallList(){
       '<button class="chip" onclick="setCLFilter(\'callback\',this)">Callbacks due</button>'+
       '<button class="chip" onclick="setCLFilter(\'fresh\',this)">Never tried</button>'+
       '<button class="chip" onclick="setCLFilter(\'phone\',this)">Has a number</button>'+
-    '</div><div id="clrows"></div>';
+    '</div><div class="panel flush"><div class="phead"><h3>Who to ring</h3><span class="hint" id="clcount"></span></div><div class="plist" id="clrows"></div></div>';
   renderCallRows();
 }
 function renderCallRows(){
   var box=document.getElementById("clrows"); if(!box) return;
   var rows=CL.filter(clMatch);
+  var cnt=document.getElementById("clcount");
+  if(cnt) cnt.textContent=rows.length+(rows.length===CL.length?"":" of "+CL.length);
   if(!rows.length){ box.innerHTML='<div class="empty">Nothing matches that filter.</div>'; return; }
-  box.innerHTML='<div class="count">'+rows.length+' of '+CL.length+'</div>'+rows.map(function(x){
-    var cls=x.score>=9?"hi":(x.score>=7?"mid":"low");
+  box.innerHTML=rows.map(function(x){
     var right='';
     if(x.callback_at) right+='<span class="waitchip">Call back</span>';
     if(x.attempts) right+='<span class="pill">'+x.attempts+' tried</span>';
@@ -1016,7 +1062,7 @@ function renderCallRows(){
       : '<span class="nonum">no number yet</span>';
     right+='<button class="btn btn-soft btn-sm" onclick="event.stopPropagation();openCallLead(\''+esc(x.domain)+'\')">Brief</button>';
     return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
-      '<span class="sc '+cls+'">'+esc(String(x.score))+'</span>'+
+      scoreRing(x.score,"sm")+
       '<div class="co"><b>'+esc(x.company||x.domain)+'</b><div class="dom">'+esc(x.domain)+'</div>'+
         (x.segment?'<div class="seg">'+esc(String(x.segment).slice(0,72))+'</div>':'')+'</div>'+
       '<div class="rt">'+right+'</div></div>';
@@ -1035,7 +1081,6 @@ function openCallLead(dom){
     var v=r.verdict||{}, t=r.target||{}, b=r.brief&&r.brief.brief;
     var phone=(t.phone)||(r.hubspot&&r.hubspot.phone)||"";
     var head=m.querySelector(".mhead b"); if(head) head.textContent=t.name||dom;
-    var cls=(v.fit_score>=9)?"hi":((v.fit_score>=7)?"mid":"low");
 
     var warn=r.customer
       ? '<div class="alertcard" style="background:#E7F8F0;border-color:#A9DEC6"><h4 style="color:#0A6B4A">Already a Cal customer</h4><p>Account rep '+esc(r.customer.rep||"unknown")+(r.customer.town?', '+esc(r.customer.town):'')+'. Check before pitching &mdash; this is a service call, not a cold one.</p></div>'
@@ -1063,7 +1108,7 @@ function openCallLead(dom){
 
     body.innerHTML=warn+
       '<div class="actrow" style="border:0;padding:0 0 4px">'+
-        '<span class="sc '+cls+'">'+esc(String(v.fit_score!=null?v.fit_score:"?"))+'</span>'+
+        scoreRing(v.fit_score,"md")+
         '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+'</div></div>'+
         '<div class="rt">'+(phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a>':'<span class="nonum">no number on file</span>')+'</div>'+
       '</div>'+
@@ -1125,7 +1170,8 @@ function loadTeam(){
         broken.map(function(x){ return '<p><b>'+esc(x.full_name||x.email)+'</b> &mdash; no email has reached HubSpot'+(x.last_email?' since '+esc(String(x.last_email).slice(0,10)):' at all')+', so their email count below reads zero. That is broken logging, not inactivity.</p>'; }).join("")+'</div>':'')+
       // Rep cards first: the shape of the team at a glance, using the same
       // component the Pipeline tab already uses for reps.
-      '<div class="repgrid" style="margin-bottom:18px">'+rows.map(function(x){
+      '<div class="panel flush"><div class="phead"><h3>The team</h3><span class="hint">'+rows.length+' active</span></div>'+
+      '<div class="repgrid" style="padding:16px 18px">'+rows.map(function(x){
         var nm=x.full_name||x.email;
         return '<div class="repcard'+(x.logging_ok?'':' warn')+'">'+
           '<div class="rh"><span class="avi" style="background:'+avColor(nm)+'">'+esc(initials(nm))+'</span>'+
@@ -1137,8 +1183,8 @@ function loadTeam(){
             '<div class="m"><b>'+nf(x.calls)+'</b><span>calls</span></div>'+
             '<div class="m"><b>'+(x.logging_ok?nf(x.emails_sent):'&ndash;')+'</b><span>emails</span></div>'+
           '</div></div>';
-      }).join("")+'</div>'+
-      '<h3 class="msec">Full activity</h3>'+
+      }).join("")+'</div></div>'+
+      '<div class="panel flush"><div class="phead"><h3>Full activity</h3><span class="hint">'+esc(r.from.slice(5))+' &ndash; '+esc(r.to.slice(5))+'</span></div>'+
       '<div class="tblwrap"><table class="table table-sm"><thead><tr><th>Rep</th><th class="num">Opps</th><th class="num">Callbacks</th><th class="num">Reply due</th><th class="num">Calls</th><th class="num">Connect</th><th class="num">Talk</th><th class="num">Emails</th><th class="num">Threads</th></tr></thead><tbody>'+
       rows.map(function(x){
         return '<tr><td class="company-cell">'+esc(x.full_name||x.email)+
@@ -1148,12 +1194,12 @@ function loadTeam(){
           '<td class="num">'+nf(x.calls)+'</td><td class="num">'+esc(String(x.connect_rate||0))+'%</td>'+
           '<td class="num">'+esc(String(Math.round(Number(x.talk_minutes||0)/60)))+'h</td>'+
           '<td class="num">'+(x.logging_ok?nf(x.emails_sent):'&ndash;')+'</td><td class="num">'+nf(x.front_convs)+'</td></tr>';
-      }).join("")+'</tbody></table></div>'+
-      '<div class="lcard"><h4>Add a team member</h4>'+
-        '<p class="muted">Looks them up in HubSpot, Front and Aircall and shows what it found before anything is saved.</p>'+
+      }).join("")+'</tbody></table></div></div>'+
+      '<div class="panel flush"><div class="phead"><h3>Add a team member</h3></div><div style="padding:16px 20px 18px">'+
+        '<p class="sub" style="margin:0 0 12px">Looks them up in HubSpot, Front and Aircall and shows what it found before anything is saved.</p>'+
         '<div class="row" style="gap:8px"><input id="newstaff" class="input" placeholder="name@cal.delivery" style="flex:1">'+
         '<button class="btn btn-primary btn-sm" onclick="resolveStaff()">Look up</button></div>'+
-        '<div id="staffres" style="margin-top:10px"></div></div>';
+        '<div id="staffres" style="margin-top:10px"></div></div></div>';
   });
 }
 function resolveStaff(){
