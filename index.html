@@ -47,7 +47,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .blogo{ width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center;
   font-size:13px; font-weight:800; color:#fff; background:linear-gradient(145deg,#2F62F5,#6D5AE6);
   box-shadow:0 2px 8px rgba(47,98,245,.32); }
-.navwrap{ overflow-x:auto; scrollbar-width:none; } .navwrap::-webkit-scrollbar{ display:none; }
+.navwrap{ overflow-x:auto; scrollbar-width:none; min-width:0; max-width:100%; } .navwrap::-webkit-scrollbar{ display:none; }
 .nav{ display:flex; gap:2px; }
 .nv{ border:0; background:transparent; color:var(--mut); font:inherit; font-size:13.5px; font-weight:600;
   padding:7px 13px; border-radius:9px; cursor:pointer; white-space:nowrap; transition:color .14s,background .14s; }
@@ -108,12 +108,55 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .bhead h2{ font-size:25px; font-weight:800; margin:0 0 4px; letter-spacing:-.03em; overflow-wrap:anywhere; }
 .bhead .dm{ font-size:13.5px; color:var(--mut); overflow-wrap:anywhere; }
 .bhead .hl{ font-size:16px; color:var(--ink2); margin-top:14px; line-height:1.5; }
-.ring{ width:96px; height:96px; border-radius:50%; flex:none; display:grid; place-items:center; position:relative;
+.ring{ width:112px; height:112px; border-radius:50%; flex:none; display:grid; place-items:center; position:relative;
   background:conic-gradient(var(--rc) calc(var(--pct)*1%), var(--color-base-300) 0); }
-.ring::after{ content:""; position:absolute; inset:8px; border-radius:50%; background:#fff; }
-.ring .v{ position:relative; text-align:center; line-height:1; }
-.ring .v b{ font-size:29px; font-weight:800; letter-spacing:-.04em; }
-.ring .v span{ display:block; font-size:10.5px; color:var(--faint); font-weight:600; margin-top:3px; }
+.ring::after{ content:""; position:absolute; inset:9px; border-radius:50%; background:#fff; }
+/* z-index is load-bearing: ::after is the last child, so without it the white
+   inner circle paints over the score and the number is invisible. */
+.ring .v{ position:relative; z-index:1; text-align:center; line-height:1; }
+.ring .v b{ font-size:40px; font-weight:800; letter-spacing:-.05em; display:block; }
+.ring .v span{ display:block; font-size:10px; color:var(--faint); font-weight:700; margin-top:4px; letter-spacing:.06em; text-transform:uppercase; }
+
+/* fact pills under the company name */
+.pillrow{ display:flex; gap:7px; flex-wrap:wrap; margin-top:12px; }
+.pill{ font-size:12px; font-weight:650; border-radius:999px; padding:5px 12px; background:var(--color-base-200); color:var(--ink2); white-space:nowrap; }
+
+/* one-line heads-up strip - lighter than the old red block */
+.heads{ display:flex; gap:11px; align-items:flex-start; border-radius:14px; padding:13px 16px; margin-bottom:14px; font-size:14px; line-height:1.5; }
+.heads.amber{ background:#FFFBEB; border:1px solid #F0DFB0; color:#78500A; }
+.heads.green{ background:#F0FDF6; border:1px solid #BCE7D0; color:#0A6B4A; }
+.heads.red{ background:#FEF3F2; border:1px solid #F3C7C2; color:#8E1F1F; }
+.heads .hi{ flex:none; font-size:15px; line-height:1.35; }
+.heads b{ font-weight:750; }
+
+/* the action card - what the rep actually does next */
+.action{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); box-shadow:var(--sh-2); margin-bottom:16px; overflow:hidden; }
+.action .ah{ padding:18px 22px 0; }
+.action h3{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--faint); margin:0 0 14px; }
+.who{ display:flex; align-items:center; gap:12px; padding:0 22px 16px; flex-wrap:wrap; }
+.who .wn{ font-weight:750; font-size:15.5px; }
+.who .wt{ font-size:13.5px; color:var(--mut); }
+.who .wm{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+.sayblock{ padding:0 22px 18px; }
+.saylbl{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+.nextbar{ background:linear-gradient(135deg,#0D1424,#212E4C); color:#fff; padding:15px 22px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+.nextbar .nl{ font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#8DA3D6; }
+.nextbar .nv{ font-size:16px; font-weight:750; }
+.nextbar .nd{ font-size:13.5px; color:#C3CFE6; flex:1 1 260px; min-width:0; line-height:1.45; }
+
+/* accordions - everything that is not needed at a glance */
+.acc{ background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:9px; box-shadow:var(--sh-1); }
+.acc>summary{ list-style:none; cursor:pointer; padding:14px 18px; display:flex; align-items:center; gap:10px;
+  font-weight:650; font-size:14.5px; border-radius:14px; }
+.acc>summary::-webkit-details-marker{ display:none; }
+.acc>summary:hover{ background:var(--color-base-200); }
+.acc .am{ margin-left:auto; font-size:12.5px; color:var(--faint); font-weight:500; }
+.acc .cv{ width:8px; height:8px; border-right:2px solid var(--faint); border-bottom:2px solid var(--faint);
+  transform:rotate(45deg); transition:transform .16s; flex:none; margin-left:2px; }
+.acc[open]>summary .cv{ transform:rotate(-135deg); }
+.acc[open]>summary{ border-radius:14px 14px 0 0; }
+.acc .ab{ padding:2px 18px 16px; font-size:14px; color:var(--ink2); line-height:1.6; overflow-wrap:anywhere; }
+.acc .ab p{ margin:0 0 10px; } .acc .ab p:last-child{ margin-bottom:0; }
 .bandpill{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; border-radius:999px; padding:5px 13px; }
 .metaline{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--faint); margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft); }
 /* minmax(0,1fr) so an unbreakable URL can't inflate the track's min-content width */
@@ -457,9 +500,17 @@ function askError(m){
 }
 var BANDCOL={"Strong fit":["#0E9F6E","#E7F8F0","#0A6B4A"],"Worth a call":["#2F62F5","#EEF3FF","#1E45B8"],"Marginal":["#C2740B","#FEF6E7","#7A4E07"],"Not a fit":["#98A2B3","#F2F4F8","#5B6577"],"Competitor":["#DC2626","#FEF2F2","#8F1D1D"]};
 function copyLine(btn){
-  var q=btn.parentElement.querySelector(".quote");
+  var box=(btn.closest&&btn.closest(".sayblock"))||btn.parentElement;
+  var q=box?box.querySelector(".quote"):null;
   if(!q) return;
   navigator.clipboard.writeText(q.textContent.trim()).then(function(){ btn.textContent="Copied"; setTimeout(function(){ btn.textContent="Copy"; },1600); });
+}
+// Progressive disclosure: only the verdict and the action are shown up front.
+function acc(title,meta,bodyHtml,open){
+  if(!bodyHtml) return "";
+  return '<details class="acc"'+(open?" open":"")+'><summary><span>'+title+'</span>'+
+    (meta?'<span class="am">'+esc(meta)+'</span>':'<span class="am"></span>')+'<span class="cv"></span></summary>'+
+    '<div class="ab">'+bodyHtml+'</div></details>';
 }
 function renderBrief(b,meta){
   if(!b) return askError("Empty result.");
@@ -469,69 +520,86 @@ function renderBrief(b,meta){
   // returns a 0-100 style score, rescale rather than clamping everything to 10.
   var raw=Number(v.score)||0;
   var score=Math.max(0,Math.min(10, raw>10?Math.round(raw/10):Math.round(raw)));
+  var covCol={"Core territory":"green","Strong":"green","Active":"amber","Thin coverage":"amber","Unknown":"amber"}[cov.verdict]||"amber";
+
+  // ---- 1. Verdict at a glance --------------------------------------------
+  var pills='<div class="pillrow">'+
+    '<span class="pill" style="background:'+col[1]+';color:'+col[2]+'">'+esc(v.band||"")+'</span>'+
+    (v.segment?'<span class="pill">'+esc(v.segment)+'</span>':'')+
+    (cov.verdict?'<span class="pill">'+esc(cov.verdict)+(cov.best_area?" · "+esc(cov.best_area):"")+'</span>':'')+
+    (c.size_signal?'<span class="pill">'+esc(c.size_signal)+'</span>':'')+
+    (v.confidence?'<span class="pill" style="color:var(--mut)">'+esc(v.confidence)+' confidence</span>':'')+
+  '</div>';
   var head='<div class="bhead"><div class="top">'+
-    '<div class="ring" style="--pct:'+(score*10)+';--rc:'+col[0]+'"><div class="v"><b>'+score+'</b><span>/ 10</span></div></div>'+
+    '<div class="ring" style="--pct:'+(score*10)+';--rc:'+col[0]+'"><div class="v"><b>'+score+'</b><span>out of 10</span></div></div>'+
     '<div class="nm"><h2>'+esc(c.name||meta.resolved_domain||"Unknown company")+'</h2>'+
-      '<div class="dm">'+esc(c.domain||meta.resolved_domain||"")+(c.size_signal?' &nbsp;·&nbsp; '+esc(c.size_signal):'')+'</div>'+
-      '<div style="margin-top:11px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
-        '<span class="bandpill" style="background:'+col[1]+';color:'+col[2]+'">'+esc(v.band||"")+'</span>'+
-        (v.segment?'<span class="bandpill" style="background:var(--color-base-200);color:var(--ink2)">'+esc(v.segment)+'</span>':'')+
-        (v.confidence?'<span class="bandpill" style="background:var(--color-base-200);color:var(--mut)">'+esc(v.confidence)+' confidence</span>':'')+
-      '</div>'+
+      '<div class="dm">'+esc(c.domain||meta.resolved_domain||"")+'</div>'+
+      pills+
       (v.headline?'<div class="hl">'+esc(v.headline)+'</div>':'')+
     '</div></div>'+
     '<div class="metaline"><span>'+esc(meta.model||"")+'</span><span>'+(meta.web_searches||0)+' web lookups</span><span>'+(meta.apollo_contacts||0)+' Apollo contacts</span><span>'+(meta.seconds||0)+'s</span>'+
       (meta.cal_records_found&&meta.cal_records_found.emails?'<span>'+meta.cal_records_found.emails+' emails on file</span>':'')+'</div>'+
   '</div>';
 
-  var warn="";
+  // ---- 2. One heads-up line, not a wall of red ---------------------------
   var wl=(rel.warnings||[]).filter(Boolean);
-  if(wl.length){ warn='<div class="alertbar red"><span>&#9888;</span><div><b>Before you call.</b> '+wl.map(esc).join(" ")+'</div></div>'; }
-  else if(rel.status==="Existing customer"){ warn='<div class="alertbar green"><span>&#10003;</span><div><b>Already a Cal customer.</b> '+esc(rel.summary||"")+'</div></div>'; }
+  var heads="";
+  if(rel.status==="Existing customer"){
+    heads='<div class="heads green"><span class="hi">&#10003;</span><div><b>Already a Cal customer.</b> '+esc(rel.summary||"")+'</div></div>';
+  } else if(wl.length){
+    heads='<div class="heads amber"><span class="hi">&#9888;</span><div><b>Heads up.</b> '+esc(wl[0])+
+      (wl.length>1?' <span class="muted">('+(wl.length-1)+' more in Our history below)</span>':'')+'</div></div>';
+  }
 
-  var about='<div class="bcard"><h3>What they do</h3><p>'+esc(c.what_they_do||"-")+'</p>'+
-    ((c.uk_locations||[]).length?'<p class="muted" style="font-size:13px"><b>UK sites:</b> '+(c.uk_locations||[]).map(esc).join(", ")+'</p>':'')+'</div>';
-  var why='<div class="bcard"><h3>Why this score</h3><p>'+esc(v.reasoning||"-")+'</p></div>';
+  // ---- 3. What the rep actually does -------------------------------------
+  var top=(b.contacts||[])[0];
+  var who = top
+    ? '<div class="who">'+avatar(top.name)+'<div><div class="wn">'+esc(top.name)+'</div><div class="wt">'+esc(top.title||"")+(top.location?' · '+esc(top.location):'')+'</div></div>'+
+      '<div class="wm">'+(top.best_call_window?'<span class="pill">&#9200; '+esc(top.best_call_window)+'</span>':'')+
+      (top.email?'<span class="pill">'+esc(top.email)+'</span>':(top.email_status?'<span class="pill" style="color:var(--mut)">email '+esc(top.email_status)+'</span>':''))+'</div></div>'
+    : '<div class="who"><div class="wt">No named contact found yet - try the Leads tab to run contact discovery.</div></div>';
+  var action='<div class="action">'+
+    '<div class="ah"><h3>Your call</h3></div>'+who+
+    (ap.opening_line?'<div class="sayblock"><div class="saylbl">Open with <button class="copybtn" onclick="copyLine(this)">Copy</button></div><div class="quote">'+esc(ap.opening_line)+'</div></div>':'')+
+    '<div class="nextbar"><div><div class="nl">Next</div><div class="nv">'+esc(na.action||"-")+'</div></div><div class="nd">'+esc(na.detail||"")+'</div></div>'+
+  '</div>';
 
-  var covCol={"Core territory":"green","Strong":"green","Active":"amber","Thin coverage":"amber","Unknown":"amber"}[cov.verdict]||"amber";
-  var covBox='<div class="alertbar '+covCol+'"><span>&#9873;</span><div><b>'+esc(cov.verdict||"Coverage")+(cov.best_area?" - "+esc(cov.best_area):"")+'.</b> '+esc(cov.detail||"")+'</div></div>';
+  // ---- 4. Everything else, one click away --------------------------------
+  var evHtml=(v.evidence||[]).map(function(e){ return '<div class="evid">'+esc(e.fact)+'<span class="src">'+esc(e.source)+'</span></div>'; }).join("");
+  var whyBody='<p>'+esc(v.reasoning||"-")+'</p>'+(evHtml?'<div style="margin-top:12px">'+evHtml+'</div>':'');
 
-  var relBox='<div class="bcard"><h3>Our history with them</h3><p>'+esc(rel.summary||"-")+'</p>'+
-    '<p class="muted" style="font-size:12.5px">Status: <b>'+esc(rel.status||"-")+'</b></p></div>';
+  var aboutBody='<p>'+esc(c.what_they_do||"-")+'</p>'+
+    ((c.uk_locations||[]).length?'<p class="muted" style="font-size:13px"><b>UK sites:</b> '+(c.uk_locations||[]).map(esc).join(", ")+'</p>':'')+
+    '<p class="muted" style="font-size:13px"><b>Coverage:</b> '+esc(cov.detail||"-")+'</p>';
 
-  var ev=(v.evidence||[]).length
-    ? '<div class="bcard"><h3>Evidence</h3>'+(v.evidence||[]).map(function(e){ return '<div class="evid">'+esc(e.fact)+'<span class="src">'+esc(e.source)+'</span></div>'; }).join("")+'</div>'
-    : '';
+  var tpsBody=(ap.talking_points||[]).map(function(t,i){
+    return '<div class="tp"><span class="n">'+(i+1)+'</span><div><div class="b">'+esc(t.point)+'</div>'+(t.why_it_lands?'<div class="w">'+esc(t.why_it_lands)+'</div>':'')+'</div></div>';
+  }).join("")+
+    (ap.objection?'<p style="margin-top:12px"><b>Expect:</b> '+esc(ap.objection)+'</p>':'')+
+    (ap.avoid?'<p class="muted" style="font-size:13px"><b>Don\'t lead with:</b> '+esc(ap.avoid)+'</p>':'');
 
-  var contacts=(b.contacts||[]).length
-    ? (b.contacts||[]).map(function(p){
+  var restContacts=(b.contacts||[]).slice(1);
+  var contactsBody=restContacts.length
+    ? restContacts.map(function(p){
         return '<div class="ccard"><div class="r1"><span class="nm">'+esc(p.name)+'</span><span class="ti">'+esc(p.title)+'</span></div>'+
           '<div class="r2">'+(p.location?'<span>&#128205; '+esc(p.location)+'</span>':'')+
           (p.email?'<span>&#9993; '+esc(p.email)+'</span>':(p.email_status?'<span class="faint">email '+esc(p.email_status)+'</span>':''))+
           (p.best_call_window?'<span>&#9200; '+esc(p.best_call_window)+'</span>':'')+'</div>'+
           (p.why_them?'<div class="why">'+esc(p.why_them)+'</div>':'')+'</div>';
       }).join("")
-    : '<div class="empty" style="padding:18px"><div class="ei">&#128100;</div>No named contacts found yet. Try the Leads tab to run contact discovery.</div>';
+    : "";
 
-  var tps=(ap.talking_points||[]).map(function(t,i){
-    return '<div class="tp"><span class="n">'+(i+1)+'</span><div><div class="b">'+esc(t.point)+'</div>'+(t.why_it_lands?'<div class="w">'+esc(t.why_it_lands)+'</div>':'')+'</div></div>';
-  }).join("");
+  var relBody='<p>'+esc(rel.summary||"-")+'</p>'+
+    '<p class="muted" style="font-size:13px">Status: <b>'+esc(rel.status||"-")+'</b></p>'+
+    (wl.length?'<div style="margin-top:10px">'+wl.map(function(w){ return '<div class="evid">'+esc(w)+'</div>'; }).join("")+'</div>':"");
 
-  var approach='<div class="bcard" style="margin-bottom:16px"><h3>How to open</h3>'+
-    (ap.opening_line?'<div class="quote">'+esc(ap.opening_line)+'</div><button class="copybtn" onclick="copyLine(this)">Copy</button>':'')+
-    (tps?'<div style="margin-top:14px">'+tps+'</div>':'')+
-    (ap.objection?'<p style="margin-top:14px"><b>Expect:</b> '+esc(ap.objection)+'</p>':'')+
-    (ap.avoid?'<p class="muted" style="font-size:13px"><b>Don\'t lead with:</b> '+esc(ap.avoid)+'</p>':'')+
-  '</div>';
+  var body=acc("Why "+score+" out of 10", v.confidence?v.confidence+" confidence":"", whyBody)+
+    acc("What they do", (c.uk_locations||[]).length?(c.uk_locations||[]).length+" UK sites":"", aboutBody)+
+    acc("Talking points", (ap.talking_points||[]).length?(ap.talking_points||[]).length+"":"", tpsBody)+
+    acc("Other contacts", restContacts.length?restContacts.length+"":"", contactsBody)+
+    acc("Our history with them", rel.status||"", relBody);
 
-  var next='<div class="nextact"><div><div class="lbl">Next action</div><div class="ac">'+esc(na.action||"-")+'</div><div class="dt">'+esc(na.detail||"")+'</div></div></div>';
-
-  return '<div class="brief">'+head+warn+covBox+
-    '<div class="bgrid">'+about+why+'</div>'+
-    '<div class="bgrid">'+relBox+(ev||'<div class="bcard"><h3>Evidence</h3><p class="muted">No sources captured.</p></div>')+'</div>'+
-    approach+
-    '<div class="bcard" style="margin-bottom:16px"><h3>Who to contact</h3>'+contacts+'</div>'+
-    next+'</div>';
+  return '<div class="brief">'+head+heads+action+body+'</div>';
 }
 
 /* ============================== pipeline etc ============================ */
