@@ -449,13 +449,30 @@ function runAsk(){
     var s=document.getElementById("thinksub");
     if(s) s.textContent="Researching "+q+" · "+Math.round((Date.now()-t0)/1000)+"s · a full brief usually takes 1-3 minutes";
   },1000);
+  var runId=null;
   function say(m){ var e=document.getElementById("thinkmsg"); if(e) e.textContent=m; }
-  function finish(result,errMsg){
-    if(done) return; done=true; stopAsk();
-    if(errMsg){ outEl.innerHTML=askError(errMsg); return; }
-    if(!result||!result.brief){ outEl.innerHTML=askError("The research finished but returned no brief."); return; }
+  function show(result){
     outEl.innerHTML=renderBrief(result.brief,result.meta||{});
     var b=document.querySelector(".brief"); if(b) b.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  // The research is persisted server-side, so a dropped connection never loses
+  // a finished brief - poll for it rather than reporting failure.
+  function recover(attempt){
+    attempt=attempt||0;
+    if(!runId||attempt>20){ stopAsk(); outEl.innerHTML=askError("The research did not come back. Try again."); return; }
+    say(attempt===0?"Connection dropped - recovering the brief":"Recovering the brief ("+attempt+")");
+    sb.from("research_brief").select("status,brief,meta,error").eq("id",runId).maybeSingle().then(function(r){
+      var d=r&&r.data;
+      if(d&&d.status==="done"&&d.brief){ done=true; stopAsk(); show({brief:d.brief,meta:d.meta||{}}); return; }
+      if(d&&d.status==="error"){ done=true; stopAsk(); outEl.innerHTML=askError(d.error||"Research failed."); return; }
+      setTimeout(function(){ recover(attempt+1); },3000);
+    },function(){ setTimeout(function(){ recover(attempt+1); },3000); });
+  }
+  function finish(result,errMsg){
+    if(done) return;
+    if(errMsg){ done=true; stopAsk(); outEl.innerHTML=askError(errMsg); return; }
+    if(!result||!result.brief){ recover(0); return; }
+    done=true; stopAsk(); show(result);
   }
   sb.auth.getSession().then(function(s){
     if(!s.data.session){ stopAsk(); return login(); }
@@ -471,7 +488,8 @@ function runAsk(){
         var reader=r.body.getReader(), dec=new TextDecoder(), buf="", result=null, errMsg=null;
         function handle(line){
           var o; try{ o=JSON.parse(line); }catch(e){ return; }
-          if(o.type==="status") say(o.msg);
+          if(o.type==="started") runId=o.id;
+          else if(o.type==="status") say(o.msg);
           else if(o.type==="result") result=o;
           else if(o.type==="error") errMsg=o.error||"Research failed.";
         }
@@ -490,7 +508,11 @@ function runAsk(){
         }
         return pump();
       });
-  }).catch(function(e){ finish(null,"Lost connection to the research service. "+String(e&&e.message||"").slice(0,120)); });
+  }).catch(function(e){
+    // A mid-flight network failure is recoverable if the run had already started.
+    if(runId && !done){ recover(0); return; }
+    finish(null,"Lost connection to the research service. "+String(e&&e.message||"").slice(0,120));
+  });
 }
 function stopAsk(){ ASKING=false; if(ASKTIMER){ clearInterval(ASKTIMER); ASKTIMER=null; } var b=document.getElementById("askbtn"); if(b){ b.disabled=false; b.textContent="Research"; } }
 function askError(m){
