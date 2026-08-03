@@ -127,6 +127,54 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .miniring{ display:inline-flex; align-items:center; gap:12px; }
 .miniring b{ font-size:30px; font-weight:800; letter-spacing:-.04em; line-height:1; }
 
+/* ============================ sales desk ================================ */
+/* Score badge reuses the .avi footprint so a call row lines up with the rep
+   rows elsewhere in the app. */
+.sc{ width:38px; height:38px; border-radius:11px; flex:none; display:inline-flex; align-items:center;
+  justify-content:center; font-size:14.5px; font-weight:800; font-variant-numeric:tabular-nums; }
+.sc.hi{ background:#E7F8F0; color:#0A6B4A; } .sc.mid{ background:#EEF3FF; color:#1E45B8; }
+.sc.low{ background:var(--color-base-200); color:var(--mut); }
+.callrow .seg{ font-size:12.5px; color:var(--mut); margin-top:2px; overflow-wrap:anywhere; }
+.callrow .rt{ display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+.tel{ font-variant-numeric:tabular-nums; white-space:nowrap; }
+.nonum{ font-size:12.5px; color:var(--faint); font-style:italic; white-space:nowrap; }
+/* Outcome buttons are tiered: the three that end a call sit first and look
+   like decisions; the rest are quieter so the common path is obvious. */
+.outrow{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:9px; }
+.outrow.sec .chip{ font-weight:600; }
+.chip.danger{ color:#8F1D1D; border-color:#F3C9C9; }
+.chip.danger:hover{ border-color:#DC2626; background:#FEF2F2; }
+.alertcard{ background:#FEF2F2; border:1px solid #F3C9C9; border-radius:var(--radius-box); padding:16px 19px; margin-bottom:16px; }
+.alertcard h4{ margin:0 0 8px; font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.07em; color:#8F1D1D; }
+.alertcard p{ margin:0 0 6px; font-size:13.5px; color:var(--ink2); line-height:1.55; }
+.alertcard p:last-child{ margin-bottom:0; }
+.repcard.warn{ border-color:#F3C9C9; }
+.repcard .rh .rl{ margin-left:auto; font-size:10.5px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--faint); }
+/* A rep works this list on a phone between calls, so a row has to stay one
+   thumb-sized line - at full width each row was 154px and only one fitted the
+   screen. Segment and the Brief button drop out; tapping the row still opens it. */
+@media (max-width:560px){
+  .callrow{ padding:10px 6px; gap:10px; flex-wrap:nowrap; }
+  .callrow .seg{ display:none; }
+  .callrow .co{ flex:1 1 auto; min-width:0; }
+  .callrow .co b,.callrow .co .dom{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .callrow .rt{ flex:none; gap:6px; }
+  .callrow .rt .btn-soft{ display:none; }
+  .callrow .tel .pn{ display:none; }
+  .callrow .pill,.callrow .waitchip{ display:none; }
+  .sc{ width:32px; height:32px; border-radius:9px; font-size:13px; }
+  /* 690px of headers sat above the first row. The prose and the stat captions
+     are orientation, not work - the list is the work. */
+  #view-calllist .page-head .sub{ display:none; }
+  #view-calllist .statgrid{ grid-template-columns:repeat(2,1fr); gap:8px; }
+  #view-calllist .st{ padding:9px 12px; }
+  #view-calllist .st .v{ font-size:20px; margin-top:2px; }
+  #view-calllist .st .d{ display:none; }
+  #view-calllist .statwrap{ margin-bottom:12px; }
+  #view-calllist .controls{ margin-bottom:4px; }
+}
+
 /* ============================ research brief ============================ */
 .brief{ max-width:1000px; margin:26px auto 0; }
 .bhead{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:24px 26px; box-shadow:var(--sh-2); margin-bottom:16px; }
@@ -908,64 +956,140 @@ function staffPost(payload, cb){
       .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach staff admin."}); });
   });
 }
+var CL=[], CLFILTER="all";
 function loadCallList(){
   var el=document.getElementById("clboard"); if(!el) return;
   el.innerHTML=spinner();
-  deskPost({action:"list",limit:30},function(r){
-    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
+  deskPost({action:"list",limit:40},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
     // Only the head/admin should see the Team tab; the desk tells us the role.
     if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
-    var list=r.list||[];
-    if(!list.length){ el.innerHTML='<div class="empty">Nothing to call yet. Leads appear here once they are scored 6 or better and are not already customers.</div>'; return; }
-    var withPhone=list.filter(function(x){return x.phone;}).length;
-    el.innerHTML='<div class="statwrap"><div class="statgrid">'+
-        stat("On the list",nf(list.length),"scored 6+ and not a customer")+
-        stat("Reachable now",nf(withPhone),"have a phone number",withPhone?"ok":"alarm")+
-        stat("Callbacks due",nf(list.filter(function(x){return x.callback_at;}).length),"promised, not yet made")+
-      '</div></div>'+
-      '<div class="tblwrap"><table class="tbl"><thead><tr><th>Company</th><th>Fit</th><th>Segment</th><th>Phone</th><th>Tried</th><th></th></tr></thead><tbody>'+
-      list.map(function(x){
-        return '<tr><td><b>'+esc(x.company||x.domain)+'</b><div class="muted" style="font-size:12px">'+esc(x.domain)+'</div></td>'+
-          '<td><span class="pill">'+esc(String(x.score))+'/10</span></td>'+
-          '<td style="max-width:260px">'+esc(String(x.segment||"").slice(0,60))+'</td>'+
-          '<td>'+(x.phone?'<a href="tel:'+esc(x.phone)+'">'+esc(x.phone)+'</a>':'<span class="muted">no number</span>')+'</td>'+
-          '<td>'+(x.attempts?esc(String(x.attempts))+'&times;':'<span class="muted">&ndash;</span>')+'</td>'+
-          '<td><button class="btn btn-soft btn-sm" onclick="openCallLead(\''+esc(x.domain)+'\')">Open</button></td></tr>';
-      }).join("")+'</tbody></table></div><div id="leadpane"></div>';
+    CL=r.list||[];
+    renderCallList();
   });
+}
+function setCLFilter(f,el){
+  CLFILTER=f;
+  var cs=document.querySelectorAll("#clboard .chip");
+  for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i]===el);
+  renderCallRows();
+}
+function clMatch(x){
+  if(CLFILTER==="callback") return !!x.callback_at;
+  if(CLFILTER==="fresh")    return !x.attempts;
+  if(CLFILTER==="phone")    return !!x.phone;
+  return true;
+}
+function renderCallList(){
+  var el=document.getElementById("clboard"); if(!el) return;
+  if(!CL.length){
+    el.innerHTML='<div class="empty"><div class="ei">&#128222;</div>Nothing to call yet.<br>Leads land here once they score 6 or better and are not already customers.</div>';
+    return;
+  }
+  var ph=CL.filter(function(x){return x.phone;}).length;
+  var cb=CL.filter(function(x){return x.callback_at;}).length;
+  el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+      stat("On your list",nf(CL.length),"scored 6+, not a customer")+
+      stat("Reachable now",nf(ph),"have a phone number",ph?"ok":"alarm")+
+      stat("Callbacks due",nf(cb),"you promised to ring back",cb?"alarm":"")+
+      stat("Never tried",nf(CL.filter(function(x){return !x.attempts;}).length),"no call logged yet")+
+    '</div></div>'+
+    '<div class="controls">'+
+      '<button class="chip active" onclick="setCLFilter(\'all\',this)">All</button>'+
+      '<button class="chip" onclick="setCLFilter(\'callback\',this)">Callbacks due</button>'+
+      '<button class="chip" onclick="setCLFilter(\'fresh\',this)">Never tried</button>'+
+      '<button class="chip" onclick="setCLFilter(\'phone\',this)">Has a number</button>'+
+    '</div><div id="clrows"></div>';
+  renderCallRows();
+}
+function renderCallRows(){
+  var box=document.getElementById("clrows"); if(!box) return;
+  var rows=CL.filter(clMatch);
+  if(!rows.length){ box.innerHTML='<div class="empty">Nothing matches that filter.</div>'; return; }
+  box.innerHTML='<div class="count">'+rows.length+' of '+CL.length+'</div>'+rows.map(function(x){
+    var cls=x.score>=9?"hi":(x.score>=7?"mid":"low");
+    var right='';
+    if(x.callback_at) right+='<span class="waitchip">Call back</span>';
+    if(x.attempts) right+='<span class="pill">'+x.attempts+' tried</span>';
+    right+= x.phone
+      ? '<a class="btn btn-primary btn-sm tel" href="tel:'+esc(x.phone)+'" onclick="event.stopPropagation()">Call<span class="pn"> '+esc(x.phone)+'</span></a>'
+      : '<span class="nonum">no number yet</span>';
+    right+='<button class="btn btn-soft btn-sm" onclick="event.stopPropagation();openCallLead(\''+esc(x.domain)+'\')">Brief</button>';
+    return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
+      '<span class="sc '+cls+'">'+esc(String(x.score))+'</span>'+
+      '<div class="co"><b>'+esc(x.company||x.domain)+'</b><div class="dom">'+esc(x.domain)+'</div>'+
+        (x.segment?'<div class="seg">'+esc(String(x.segment).slice(0,72))+'</div>':'')+'</div>'+
+      '<div class="rt">'+right+'</div></div>';
+  }).join("");
 }
 // NB not openLead - the Leads tab already defines a function by that name and
 // the later definition silently wins, so the panel never rendered.
+// Uses the app's existing modal so the rep keeps their place in the list.
 function openCallLead(dom){
-  var pane=document.getElementById("leadpane"); if(!pane) return;
-  pane.innerHTML='<div class="lcard">'+spinner()+'</div>';
-  pane.scrollIntoView({behavior:"smooth",block:"start"});
+  var m=document.getElementById("cmodal"); if(!m) return;
+  m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(dom)+'</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+spinner()+'</div></div>';
   deskPost({action:"profile",domain:dom},function(r){
-    if(!r||!r.ok){ pane.innerHTML='<div class="empty">Could not load that lead.</div>'; return; }
+    var body=m.querySelector(".mbody"); if(!body) return;
+    if(!r||!r.ok){ body.innerHTML='<div class="empty">Could not load that lead.</div>'; return; }
     var v=r.verdict||{}, t=r.target||{}, b=r.brief&&r.brief.brief;
     var phone=(t.phone)||(r.hubspot&&r.hubspot.phone)||"";
-    var warn=r.customer?'<div class="lcard" style="border-color:#0A6B4A"><b style="color:#0A6B4A">Already a Cal customer</b> &middot; rep '+esc(r.customer.rep||"?")+'</div>':"";
-    var hist=(r.attempts||[]).map(function(a){
-      return '<div><span class="k">'+esc(a.outcome)+'</span><span class="d">'+esc(a.note||"")+' <span class="muted">'+esc(String(a.created_at).slice(0,10))+'</span></span></div>';
-    }).join("")||'<div><span class="d muted">No call logged yet.</span></div>';
-    var cons=(r.contacts||[]).map(function(c){
-      return '<p><b>'+esc(c.full_name)+'</b>'+(c.title?' &middot; '+esc(c.title):'')+(c.email?' &middot; '+esc(c.email):'')+'</p>';
-    }).join("")||'<p class="muted">No named contact yet &mdash; ask the switchboard for the transport or logistics manager.</p>';
-    pane.innerHTML='<div class="lcard"><h4>'+esc(t.name||dom)+'<span class="t">'+esc(dom)+'</span></h4>'+
-      warn+
-      '<p><span class="pill">'+esc(String(v.fit_score||"?"))+'/10</span> '+esc(v.segment||"")+'</p>'+
-      (v.rationale?'<p>'+esc(v.rationale)+'</p>':'')+
-      (b&&b.approach&&b.approach.opening_line?'<p><b>Opening line:</b> '+esc(b.approach.opening_line)+'</p>':'')+
-      '<h4 style="margin-top:14px">Contacts</h4>'+cons+
-      '<h4 style="margin-top:14px">Call history</h4><div class="feed">'+hist+'</div>'+
-      '<h4 style="margin-top:14px">Log the outcome</h4>'+
-      '<div class="row" style="gap:8px;flex-wrap:wrap">'+
-        ["connected","gatekeeper","voicemail","no_answer","callback","opportunity","not_interested","do_not_call"].map(function(o){
-          return '<button class="btn btn-soft btn-sm" onclick="logCall(\''+esc(dom)+'\',\''+o+'\')">'+esc(o.replace(/_/g," "))+'</button>';
-        }).join("")+'</div>'+
-      '<input id="lognote" class="input wfull" placeholder="Note (optional)" style="margin-top:9px">'+
-      (phone?'<p style="margin-top:10px"><a class="btn btn-primary btn-sm" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a></p>':'')+
-      '<div id="logmsg" class="muted" style="font-size:12.5px;margin-top:8px"></div></div>';
+    var head=m.querySelector(".mhead b"); if(head) head.textContent=t.name||dom;
+    var cls=(v.fit_score>=9)?"hi":((v.fit_score>=7)?"mid":"low");
+
+    var warn=r.customer
+      ? '<div class="alertcard" style="background:#E7F8F0;border-color:#A9DEC6"><h4 style="color:#0A6B4A">Already a Cal customer</h4><p>Account rep '+esc(r.customer.rep||"unknown")+(r.customer.town?', '+esc(r.customer.town):'')+'. Check before pitching &mdash; this is a service call, not a cold one.</p></div>'
+      : "";
+
+    var cons=(r.contacts||[]).length
+      ? (r.contacts||[]).map(function(c){
+          return '<div class="actrow"><div class="co"><b>'+esc(c.full_name)+'</b>'+
+            (c.title?'<div class="dom">'+esc(c.title)+'</div>':'')+'</div>'+
+            '<div class="rt">'+(c.email?'<a class="btn btn-soft btn-sm" href="mailto:'+esc(c.email)+'">'+esc(c.email)+'</a>':'<span class="nonum">no email</span>')+'</div></div>';
+        }).join("")
+      : '<div class="empty" style="padding:16px">No named contact yet &mdash; ask the switchboard for the transport or logistics manager.</div>';
+
+    var hist=(r.attempts||[]).length
+      ? '<div class="feed">'+(r.attempts||[]).map(function(a){
+          return '<div><span class="k">'+esc(String(a.outcome).replace(/_/g," ").toUpperCase().slice(0,7))+'</span>'+
+            '<span class="d">'+esc(a.note||"&mdash;")+' <span class="faint">'+esc(String(a.created_at).slice(0,10))+(a.staff_email?' &middot; '+esc(a.staff_email.split("@")[0]):'')+'</span></span></div>';
+        }).join("")+'</div>'
+      : '<div class="empty" style="padding:16px">No call logged yet.</div>';
+
+    var pts=(b&&b.approach&&b.approach.talking_points)||[];
+    var talk=pts.length?'<h3 class="msec">Talking points</h3>'+pts.slice(0,4).map(function(p){
+      return '<div class="evid"><b>'+esc(p.point)+'</b><span class="src">'+esc(p.why_it_lands||"")+'</span></div>';
+    }).join(""):"";
+
+    body.innerHTML=warn+
+      '<div class="actrow" style="border:0;padding:0 0 4px">'+
+        '<span class="sc '+cls+'">'+esc(String(v.fit_score!=null?v.fit_score:"?"))+'</span>'+
+        '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+'</div></div>'+
+        '<div class="rt">'+(phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a>':'<span class="nonum">no number on file</span>')+'</div>'+
+      '</div>'+
+      (v.rationale?'<p class="sub" style="margin-top:10px">'+esc(v.rationale)+'</p>':'')+
+      (b&&b.approach&&b.approach.opening_line
+        ? '<h3 class="msec">Opening line</h3><div class="nextact"><div><div class="lbl">Say this</div><div class="dt">'+esc(b.approach.opening_line)+'</div></div></div>'
+        : '')+
+      talk+
+      '<h3 class="msec">Contacts</h3>'+cons+
+      '<h3 class="msec">Call history</h3>'+hist+
+      '<h3 class="msec">How did it go?</h3>'+
+      '<div class="outrow">'+
+        '<button class="btn btn-primary btn-sm" onclick="logCall(\''+esc(dom)+'\',\'connected\')">Got through</button>'+
+        '<button class="btn btn-primary btn-sm" onclick="logCall(\''+esc(dom)+'\',\'opportunity\')">Opportunity</button>'+
+        '<button class="btn btn-soft btn-sm" onclick="logCall(\''+esc(dom)+'\',\'callback\')">Call back tomorrow</button>'+
+      '</div>'+
+      '<div class="outrow sec">'+
+        ["gatekeeper","voicemail","no_answer","wrong_number"].map(function(o){
+          return '<button class="chip" onclick="logCall(\''+esc(dom)+'\',\''+o+'\')">'+esc(o.replace(/_/g," "))+'</button>';
+        }).join("")+
+        ["not_interested","do_not_call"].map(function(o){
+          return '<button class="chip danger" onclick="logCall(\''+esc(dom)+'\',\''+o+'\')">'+esc(o.replace(/_/g," "))+'</button>';
+        }).join("")+
+      '</div>'+
+      '<input id="lognote" class="input wfull" placeholder="What was said? (optional)">'+
+      '<div id="logmsg" class="foot"></div>';
   });
 }
 function logCall(dom,outcome){
@@ -974,11 +1098,12 @@ function logCall(dom,outcome){
   var payload={action:"log",domain:dom,outcome:outcome,note:note||null};
   if(outcome==="callback") payload.callback_at=new Date(Date.now()+864e5).toISOString();
   deskPost(payload,function(r){
-    if(!msg) return;
     if(r&&r.ok){
-      msg.textContent="Logged."+(r.hubspot_task&&r.hubspot_task.id?" A HubSpot task was created - it will show in Front and on your phone.":"");
+      // Close on success so the rep is returned to the list and can dial the
+      // next one, rather than being left staring at the lead they just did.
+      closeModal();
       loadCallList();
-    } else msg.textContent="Could not log that: "+esc((r&&r.error)||"error");
+    } else if(msg) msg.textContent="Could not log that: "+((r&&r.error)||"error");
   });
 }
 function loadTeam(){
@@ -989,22 +1114,40 @@ function loadTeam(){
     var rows=(r.rows||[]).filter(function(x){return x.role!=="ops";});
     var broken=rows.filter(function(x){return !x.logging_ok;});
     var sla=rows.reduce(function(a,x){return a+Number(x.sla_breaches||0);},0);
+    var totOpp=rows.reduce(function(a,x){return a+Number(x.opportunities||0);},0);
     el.innerHTML='<div class="statwrap"><div class="statgrid">'+
         stat("Reply due",nf(sla),"inbound waiting over 24h",sla>0?"alarm":"ok")+
-        stat("Opportunities",nf(rows.reduce(function(a,x){return a+Number(x.opportunities||0);},0)),"logged from the call list")+
-        stat("Talk time",nf(Math.round(rows.reduce(function(a,x){return a+Number(x.talk_minutes||0);},0)/60))+"h","connected calls, "+r.from+" to "+r.to)+
+        stat("Opportunities",nf(totOpp),"logged from the call list")+
+        stat("Talk time",nf(Math.round(rows.reduce(function(a,x){return a+Number(x.talk_minutes||0);},0)/60))+"h","connected calls")+
+        stat("Period",r.from.slice(5)+" to "+r.to.slice(5),"last 30 days")+
       '</div></div>'+
-      (broken.length?'<div class="lcard" style="border-color:#DC2626"><h4 style="color:#8F1D1D">Data integrity &mdash; these numbers are incomplete</h4>'+
-        broken.map(function(x){ return '<p><b>'+esc(x.full_name||x.email)+'</b> has no email reaching HubSpot'+(x.last_email?' since '+esc(String(x.last_email).slice(0,10)):' at all')+'. Their email activity below reads as zero because of it, not because they sent none.</p>'; }).join("")+'</div>':'')+
-      '<div class="tblwrap"><table class="tbl"><thead><tr><th>Rep</th><th>Opps</th><th>Callbacks</th><th>Reply due</th><th>Calls</th><th>Connect</th><th>Talk</th><th>Emails</th><th>Threads</th></tr></thead><tbody>'+
+      (broken.length?'<div class="alertcard"><h4>These numbers are incomplete</h4>'+
+        broken.map(function(x){ return '<p><b>'+esc(x.full_name||x.email)+'</b> &mdash; no email has reached HubSpot'+(x.last_email?' since '+esc(String(x.last_email).slice(0,10)):' at all')+', so their email count below reads zero. That is broken logging, not inactivity.</p>'; }).join("")+'</div>':'')+
+      // Rep cards first: the shape of the team at a glance, using the same
+      // component the Pipeline tab already uses for reps.
+      '<div class="repgrid" style="margin-bottom:18px">'+rows.map(function(x){
+        var nm=x.full_name||x.email;
+        return '<div class="repcard'+(x.logging_ok?'':' warn')+'">'+
+          '<div class="rh"><span class="avi" style="background:'+avColor(nm)+'">'+esc(initials(nm))+'</span>'+
+            '<div><b>'+esc(nm)+'</b>'+(x.logging_ok?'':'<div class="la" style="color:#8F1D1D">logging off</div>')+'</div>'+
+            '<span class="rl">'+esc(x.role)+'</span></div>'+
+          '<div class="repmetrics">'+
+            '<div class="m"><b>'+nf(x.opportunities)+'</b><span>opps</span></div>'+
+            '<div class="m"><b'+(Number(x.sla_breaches)>0?' style="color:var(--color-error)"':'')+'>'+nf(x.sla_breaches)+'</b><span>reply due</span></div>'+
+            '<div class="m"><b>'+nf(x.calls)+'</b><span>calls</span></div>'+
+            '<div class="m"><b>'+(x.logging_ok?nf(x.emails_sent):'&ndash;')+'</b><span>emails</span></div>'+
+          '</div></div>';
+      }).join("")+'</div>'+
+      '<h3 class="msec">Full activity</h3>'+
+      '<div class="tblwrap"><table class="table table-sm"><thead><tr><th>Rep</th><th class="num">Opps</th><th class="num">Callbacks</th><th class="num">Reply due</th><th class="num">Calls</th><th class="num">Connect</th><th class="num">Talk</th><th class="num">Emails</th><th class="num">Threads</th></tr></thead><tbody>'+
       rows.map(function(x){
-        return '<tr><td><b>'+esc(x.full_name||x.email)+'</b>'+(x.role==="head"?' <span class="pill">head</span>':'')+
+        return '<tr><td class="company-cell">'+esc(x.full_name||x.email)+
             (!x.logging_ok?' <span class="pill" style="background:#FEF2F2;color:#8F1D1D">logging off</span>':'')+'</td>'+
-          '<td>'+nf(x.opportunities)+'</td><td>'+nf(x.callbacks)+'</td>'+
-          '<td'+(Number(x.sla_breaches)>0?' style="color:#8F1D1D;font-weight:700"':'')+'>'+nf(x.sla_breaches)+'</td>'+
-          '<td>'+nf(x.calls)+'</td><td>'+esc(String(x.connect_rate||0))+'%</td>'+
-          '<td>'+esc(String(Math.round(Number(x.talk_minutes||0)/60)))+'h</td>'+
-          '<td>'+nf(x.emails_sent)+'</td><td>'+nf(x.front_convs)+'</td></tr>';
+          '<td class="num">'+nf(x.opportunities)+'</td><td class="num">'+nf(x.callbacks)+'</td>'+
+          '<td class="num"'+(Number(x.sla_breaches)>0?' style="color:var(--color-error);font-weight:700"':'')+'>'+nf(x.sla_breaches)+'</td>'+
+          '<td class="num">'+nf(x.calls)+'</td><td class="num">'+esc(String(x.connect_rate||0))+'%</td>'+
+          '<td class="num">'+esc(String(Math.round(Number(x.talk_minutes||0)/60)))+'h</td>'+
+          '<td class="num">'+(x.logging_ok?nf(x.emails_sent):'&ndash;')+'</td><td class="num">'+nf(x.front_convs)+'</td></tr>';
       }).join("")+'</tbody></table></div>'+
       '<div class="lcard"><h4>Add a team member</h4>'+
         '<p class="muted">Looks them up in HubSpot, Front and Aircall and shows what it found before anything is saved.</p>'+
