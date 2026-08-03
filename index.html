@@ -99,6 +99,33 @@ h1,h2,h3{ letter-spacing:-.025em; }
   animation:slide 1.6s ease-in-out infinite; }
 @keyframes slide{ 0%{ margin-left:-34% } 100%{ margin-left:100% } }
 .think .steps{ margin-top:14px; font-size:12.5px; color:var(--faint); }
+/* Live compile view. 99% of the wait is the web research, so the rep watches
+   findings land one at a time rather than a spinner that says nothing. */
+.live{ max-width:860px; margin:26px auto 0; }
+.livehead{ display:flex; align-items:center; gap:11px; background:#fff; border:1px solid var(--line);
+  border-radius:var(--radius-box); padding:15px 19px; box-shadow:var(--sh-1); position:sticky; top:8px; z-index:5; }
+.livehead .msg{ font-size:14px; font-weight:650; color:var(--ink); }
+.livehead .el{ margin-left:auto; font-size:12.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
+.rail{ display:flex; gap:7px; flex-wrap:wrap; margin:12px 0 4px; }
+.rail span{ font-size:11.5px; font-weight:650; padding:5px 11px; border-radius:999px;
+  background:var(--color-base-200); color:var(--faint); }
+.rail span.on{ background:#EEF3FF; color:var(--color-primary); }
+.rail span.ok{ background:#E7F8F0; color:#0A6B4A; }
+.lcard{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:16px 19px;
+  box-shadow:var(--sh-1); margin-top:12px; animation:pop .28s ease both; }
+@keyframes pop{ from{ opacity:0; transform:translateY(7px) } to{ opacity:1; transform:none } }
+.lcard h4{ margin:0 0 10px; font-size:11.5px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.09em; color:var(--faint); display:flex; align-items:center; gap:8px; }
+.lcard h4 .t{ margin-left:auto; font-weight:600; letter-spacing:0; text-transform:none; color:var(--faint); }
+.lcard p{ margin:0 0 8px; font-size:14px; color:var(--ink2); line-height:1.6; overflow-wrap:anywhere; }
+.lcard p:last-child{ margin-bottom:0; }
+.feed{ font-size:13px; color:var(--ink2); }
+.feed div{ padding:6px 0; border-top:1px solid var(--line); display:flex; gap:9px; align-items:baseline; }
+.feed div:first-child{ border-top:0; }
+.feed .k{ font-size:10.5px; font-weight:700; letter-spacing:.06em; color:var(--faint); flex:none; width:44px; }
+.feed .d{ overflow-wrap:anywhere; }
+.miniring{ display:inline-flex; align-items:center; gap:12px; }
+.miniring b{ font-size:30px; font-weight:800; letter-spacing:-.04em; line-height:1; }
 
 /* ============================ research brief ============================ */
 .brief{ max-width:1000px; margin:26px auto 0; }
@@ -443,14 +470,74 @@ function runAsk(){
   ASKING=true;
   var btn=document.getElementById("askbtn"); if(btn){ btn.disabled=true; btn.textContent="Researching..."; }
   var t0=Date.now(), done=false;
-  outEl.innerHTML='<div class="think"><div class="row"><span class="loading loading-spinner loading-sm"></span><span id="thinkmsg">Starting research</span></div>'+
-    '<div class="bar"><i></i></div><div class="steps" id="thinksub">Researching '+esc(q)+'</div></div>';
+  // Findings are shown as they land. Measured split of a typical run: Cal's own
+  // records ~0.2s, Apollo ~0.6s, then the web research is ~99% of the wait -
+  // about half of that searching and half writing the brief.
+  var LIVE={ status:"Starting research", step:"records", records:null, contacts:null, acts:[], sec:{} };
+  outEl.innerHTML='<div class="live">'+
+    '<div class="livehead"><span class="loading loading-spinner loading-sm"></span>'+
+    '<span class="msg" id="livemsg">Starting research</span><span class="el" id="liveel">0s</span></div>'+
+    '<div class="rail" id="liverail"></div><div id="livebody"></div></div>';
   ASKTIMER=setInterval(function(){
-    var s=document.getElementById("thinksub");
-    if(s) s.textContent="Researching "+q+" · "+Math.round((Date.now()-t0)/1000)+"s · a full brief usually takes 1-3 minutes";
+    var e=document.getElementById("liveel");
+    if(e) e.textContent=Math.round((Date.now()-t0)/1000)+"s";
   },1000);
   var runId=null;
-  function say(m){ var e=document.getElementById("thinkmsg"); if(e) e.textContent=m; }
+  function say(m){ LIVE.status=m; var e=document.getElementById("livemsg"); if(e) e.textContent=m; paintRail(); }
+  function paintRail(){
+    var el=document.getElementById("liverail"); if(!el) return;
+    var order=["records","apollo","web","write"], names={records:"Cal's records",apollo:"Contacts",web:"Web research",write:"Writing brief"};
+    var at=order.indexOf(LIVE.step);
+    el.innerHTML=order.map(function(k,i){
+      var cls=i<at?"ok":(i===at?"on":"");
+      return '<span class="'+cls+'">'+names[k]+'</span>';
+    }).join("");
+  }
+  function paint(){
+    var el=document.getElementById("livebody"); if(!el) return;
+    var h="";
+    var r=LIVE.records;
+    if(r){
+      var bits=[];
+      if(r.is_customer) bits.push('<p><b style="color:#0A6B4A">Already a Cal customer</b>'+(r.customer&&r.customer.rep?' &middot; account rep '+esc(r.customer.rep):'')+(r.customer&&r.customer.town?' &middot; '+esc(r.customer.town):'')+'</p>');
+      if(r.excluded) bits.push('<p><b style="color:#8F1D1D">On the exclusion list</b></p>');
+      if(r.email_count) bits.push('<p>'+r.email_count+' email'+(r.email_count===1?'':'s')+' already exchanged'+(r.threads&&r.threads.length?' &middot; latest: '+esc(String(r.threads[0].subject||"").slice(0,70)):'')+'</p>');
+      if(r.prior_ai_verdict&&r.prior_ai_verdict.fit_score!=null) bits.push('<p>Previously scored '+esc(String(r.prior_ai_verdict.fit_score))+'/10'+(r.prior_ai_verdict.segment?' &middot; '+esc(r.prior_ai_verdict.segment):'')+'</p>');
+      if(r.in_hubspot) bits.push('<p>In the HubSpot CRM</p>');
+      if(r.known_contacts&&r.known_contacts.length) bits.push('<p>'+r.known_contacts.length+' contact'+(r.known_contacts.length===1?'':'s')+' already on file</p>');
+      if(!bits.length) bits.push('<p>No prior history with this company.</p>');
+      h+='<div class="lcard"><h4>What Cal already knows<span class="t">'+r.at+'s</span></h4>'+bits.join("")+'</div>';
+    }
+    var c=LIVE.contacts;
+    if(c&&c.list&&c.list.length){
+      h+='<div class="lcard"><h4>Contacts found<span class="t">'+c.at+'s</span></h4>'+
+        c.list.slice(0,5).map(function(p){
+          return '<p><b>'+esc(p.name)+'</b>'+(p.title?' &middot; '+esc(p.title):'')+(p.city?' <span style="color:var(--faint)">&middot; '+esc(p.city)+'</span>':'')+'</p>';
+        }).join("")+'</div>';
+    }
+    if(LIVE.acts.length){
+      h+='<div class="lcard"><h4>Looking it up</h4><div class="feed">'+
+        LIVE.acts.map(function(a){
+          return '<div><span class="k">'+(a.kind==="fetch"?"READ":"SEARCH")+'</span><span class="d">'+esc(a.detail)+'</span></div>';
+        }).join("")+'</div></div>';
+    }
+    // Sections are emitted in schema order, so render in that same order - a
+    // card must only ever append, never insert above what the rep is reading.
+    var co=LIVE.sec.company;
+    if(co) h+='<div class="lcard"><h4>'+esc(co.name||"Company")+'<span class="t">'+(co._at||"")+'s</span></h4><p>'+esc(co.what_they_do||"")+'</p>'+
+      (co.uk_locations&&co.uk_locations.length?'<p style="color:var(--faint)">'+esc(co.uk_locations.slice(0,6).join(" · "))+'</p>':'')+'</div>';
+    var v=LIVE.sec.verdict;
+    if(v){
+      var col=(BANDCOL[v.band]||BANDCOL["Worth a call"]);
+      h+='<div class="lcard"><h4>Verdict<span class="t">'+(v._at||"")+'s</span></h4>'+
+        '<div class="miniring"><b style="color:'+col[0]+'">'+esc(String(v.score))+'<span style="font-size:15px;color:var(--faint);font-weight:600">/10</span></b>'+
+        '<span class="pill" style="background:'+col[1]+';color:'+col[2]+'">'+esc(v.band)+'</span></div>'+
+        (v.headline?'<p style="margin-top:10px">'+esc(v.headline)+'</p>':'')+'</div>';
+    }
+    var cv=LIVE.sec.coverage;
+    if(cv) h+='<div class="lcard"><h4>Our coverage<span class="t">'+(cv._at||"")+'s</span></h4><p><b>'+esc(cv.verdict||"")+'</b>'+(cv.best_area?' &middot; '+esc(cv.best_area):'')+'</p><p>'+esc(cv.detail||"")+'</p></div>';
+    el.innerHTML=h;
+  }
   function show(result){
     outEl.innerHTML=renderBrief(result.brief,result.meta||{});
     var b=document.querySelector(".brief"); if(b) b.scrollIntoView({behavior:"smooth",block:"start"});
@@ -489,7 +576,20 @@ function runAsk(){
         function handle(line){
           var o; try{ o=JSON.parse(line); }catch(e){ return; }
           if(o.type==="started") runId=o.id;
-          else if(o.type==="status") say(o.msg);
+          else if(o.type==="status"){ if(o.step) LIVE.step=o.step; say(o.msg); }
+          else if(o.type==="partial"){
+            if(o.section==="records"){ LIVE.records=o.data||{}; LIVE.records.at=o.at; }
+            else if(o.section==="contacts"){ LIVE.contacts={list:o.data||[],at:o.at}; }
+            paint();
+          }
+          else if(o.type==="activity"){
+            // Tool-result blocks close with no query text; only show real lookups.
+            if(o.detail){ LIVE.acts.push(o); paint(); }
+          }
+          else if(o.type==="section"){
+            var d=o.data; if(d&&typeof d==="object"&&!Array.isArray(d)) d._at=o.at;
+            LIVE.sec[o.key]=d; LIVE.step="write"; paint(); paintRail();
+          }
           else if(o.type==="result") result=o;
           else if(o.type==="error") errMsg=o.error||"Research failed.";
         }
