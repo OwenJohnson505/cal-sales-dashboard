@@ -883,12 +883,164 @@ function automationsPanel(inst){
 function setView(el){
   var v=el.getAttribute("data-v");
   var b=document.querySelectorAll(".nav .nv"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i]===el);
-  var ids={assistant:"view-assistant",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
+  if(v==="calllist") loadCallList();
+  if(v==="team") loadTeam();
   if(v==="leads" && !LEADSloaded) loadLeads();
   if(v==="monitor" && !MONloaded) loadMonitor();
   if(v==="simulation" && !SIMloaded) loadSim();
   if(v==="assistant"){ var q=document.getElementById("askq"); if(q) q.focus(); }
+}
+// ---- Sales desk: call list, lead profile, team scoreboard -------------------
+var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin";
+function deskPost(payload, cb){
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(DESK_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
+  });
+}
+function staffPost(payload, cb){
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(STAFF_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach staff admin."}); });
+  });
+}
+function loadCallList(){
+  var el=document.getElementById("clboard"); if(!el) return;
+  el.innerHTML=spinner();
+  deskPost({action:"list",limit:30},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
+    // Only the head/admin should see the Team tab; the desk tells us the role.
+    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
+    var list=r.list||[];
+    if(!list.length){ el.innerHTML='<div class="empty">Nothing to call yet. Leads appear here once they are scored 6 or better and are not already customers.</div>'; return; }
+    var withPhone=list.filter(function(x){return x.phone;}).length;
+    el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+        stat("On the list",nf(list.length),"scored 6+ and not a customer")+
+        stat("Reachable now",nf(withPhone),"have a phone number",withPhone?"ok":"alarm")+
+        stat("Callbacks due",nf(list.filter(function(x){return x.callback_at;}).length),"promised, not yet made")+
+      '</div></div>'+
+      '<div class="tblwrap"><table class="tbl"><thead><tr><th>Company</th><th>Fit</th><th>Segment</th><th>Phone</th><th>Tried</th><th></th></tr></thead><tbody>'+
+      list.map(function(x){
+        return '<tr><td><b>'+esc(x.company||x.domain)+'</b><div class="muted" style="font-size:12px">'+esc(x.domain)+'</div></td>'+
+          '<td><span class="pill">'+esc(String(x.score))+'/10</span></td>'+
+          '<td style="max-width:260px">'+esc(String(x.segment||"").slice(0,60))+'</td>'+
+          '<td>'+(x.phone?'<a href="tel:'+esc(x.phone)+'">'+esc(x.phone)+'</a>':'<span class="muted">no number</span>')+'</td>'+
+          '<td>'+(x.attempts?esc(String(x.attempts))+'&times;':'<span class="muted">&ndash;</span>')+'</td>'+
+          '<td><button class="btn btn-soft btn-sm" onclick="openCallLead(\''+esc(x.domain)+'\')">Open</button></td></tr>';
+      }).join("")+'</tbody></table></div><div id="leadpane"></div>';
+  });
+}
+// NB not openLead - the Leads tab already defines a function by that name and
+// the later definition silently wins, so the panel never rendered.
+function openCallLead(dom){
+  var pane=document.getElementById("leadpane"); if(!pane) return;
+  pane.innerHTML='<div class="lcard">'+spinner()+'</div>';
+  pane.scrollIntoView({behavior:"smooth",block:"start"});
+  deskPost({action:"profile",domain:dom},function(r){
+    if(!r||!r.ok){ pane.innerHTML='<div class="empty">Could not load that lead.</div>'; return; }
+    var v=r.verdict||{}, t=r.target||{}, b=r.brief&&r.brief.brief;
+    var phone=(t.phone)||(r.hubspot&&r.hubspot.phone)||"";
+    var warn=r.customer?'<div class="lcard" style="border-color:#0A6B4A"><b style="color:#0A6B4A">Already a Cal customer</b> &middot; rep '+esc(r.customer.rep||"?")+'</div>':"";
+    var hist=(r.attempts||[]).map(function(a){
+      return '<div><span class="k">'+esc(a.outcome)+'</span><span class="d">'+esc(a.note||"")+' <span class="muted">'+esc(String(a.created_at).slice(0,10))+'</span></span></div>';
+    }).join("")||'<div><span class="d muted">No call logged yet.</span></div>';
+    var cons=(r.contacts||[]).map(function(c){
+      return '<p><b>'+esc(c.full_name)+'</b>'+(c.title?' &middot; '+esc(c.title):'')+(c.email?' &middot; '+esc(c.email):'')+'</p>';
+    }).join("")||'<p class="muted">No named contact yet &mdash; ask the switchboard for the transport or logistics manager.</p>';
+    pane.innerHTML='<div class="lcard"><h4>'+esc(t.name||dom)+'<span class="t">'+esc(dom)+'</span></h4>'+
+      warn+
+      '<p><span class="pill">'+esc(String(v.fit_score||"?"))+'/10</span> '+esc(v.segment||"")+'</p>'+
+      (v.rationale?'<p>'+esc(v.rationale)+'</p>':'')+
+      (b&&b.approach&&b.approach.opening_line?'<p><b>Opening line:</b> '+esc(b.approach.opening_line)+'</p>':'')+
+      '<h4 style="margin-top:14px">Contacts</h4>'+cons+
+      '<h4 style="margin-top:14px">Call history</h4><div class="feed">'+hist+'</div>'+
+      '<h4 style="margin-top:14px">Log the outcome</h4>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap">'+
+        ["connected","gatekeeper","voicemail","no_answer","callback","opportunity","not_interested","do_not_call"].map(function(o){
+          return '<button class="btn btn-soft btn-sm" onclick="logCall(\''+esc(dom)+'\',\''+o+'\')">'+esc(o.replace(/_/g," "))+'</button>';
+        }).join("")+'</div>'+
+      '<input id="lognote" class="input wfull" placeholder="Note (optional)" style="margin-top:9px">'+
+      (phone?'<p style="margin-top:10px"><a class="btn btn-primary btn-sm" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a></p>':'')+
+      '<div id="logmsg" class="muted" style="font-size:12.5px;margin-top:8px"></div></div>';
+  });
+}
+function logCall(dom,outcome){
+  var note=(val("lognote")||"").trim();
+  var msg=document.getElementById("logmsg"); if(msg) msg.textContent="Saving...";
+  var payload={action:"log",domain:dom,outcome:outcome,note:note||null};
+  if(outcome==="callback") payload.callback_at=new Date(Date.now()+864e5).toISOString();
+  deskPost(payload,function(r){
+    if(!msg) return;
+    if(r&&r.ok){
+      msg.textContent="Logged."+(r.hubspot_task&&r.hubspot_task.id?" A HubSpot task was created - it will show in Front and on your phone.":"");
+      loadCallList();
+    } else msg.textContent="Could not log that: "+esc((r&&r.error)||"error");
+  });
+}
+function loadTeam(){
+  var el=document.getElementById("teamboard"); if(!el) return;
+  el.innerHTML=spinner();
+  deskPost({action:"scoreboard"},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the head of sales can see this.")+'</div>'; return; }
+    var rows=(r.rows||[]).filter(function(x){return x.role!=="ops";});
+    var broken=rows.filter(function(x){return !x.logging_ok;});
+    var sla=rows.reduce(function(a,x){return a+Number(x.sla_breaches||0);},0);
+    el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+        stat("Reply due",nf(sla),"inbound waiting over 24h",sla>0?"alarm":"ok")+
+        stat("Opportunities",nf(rows.reduce(function(a,x){return a+Number(x.opportunities||0);},0)),"logged from the call list")+
+        stat("Talk time",nf(Math.round(rows.reduce(function(a,x){return a+Number(x.talk_minutes||0);},0)/60))+"h","connected calls, "+r.from+" to "+r.to)+
+      '</div></div>'+
+      (broken.length?'<div class="lcard" style="border-color:#DC2626"><h4 style="color:#8F1D1D">Data integrity &mdash; these numbers are incomplete</h4>'+
+        broken.map(function(x){ return '<p><b>'+esc(x.full_name||x.email)+'</b> has no email reaching HubSpot'+(x.last_email?' since '+esc(String(x.last_email).slice(0,10)):' at all')+'. Their email activity below reads as zero because of it, not because they sent none.</p>'; }).join("")+'</div>':'')+
+      '<div class="tblwrap"><table class="tbl"><thead><tr><th>Rep</th><th>Opps</th><th>Callbacks</th><th>Reply due</th><th>Calls</th><th>Connect</th><th>Talk</th><th>Emails</th><th>Threads</th></tr></thead><tbody>'+
+      rows.map(function(x){
+        return '<tr><td><b>'+esc(x.full_name||x.email)+'</b>'+(x.role==="head"?' <span class="pill">head</span>':'')+
+            (!x.logging_ok?' <span class="pill" style="background:#FEF2F2;color:#8F1D1D">logging off</span>':'')+'</td>'+
+          '<td>'+nf(x.opportunities)+'</td><td>'+nf(x.callbacks)+'</td>'+
+          '<td'+(Number(x.sla_breaches)>0?' style="color:#8F1D1D;font-weight:700"':'')+'>'+nf(x.sla_breaches)+'</td>'+
+          '<td>'+nf(x.calls)+'</td><td>'+esc(String(x.connect_rate||0))+'%</td>'+
+          '<td>'+esc(String(Math.round(Number(x.talk_minutes||0)/60)))+'h</td>'+
+          '<td>'+nf(x.emails_sent)+'</td><td>'+nf(x.front_convs)+'</td></tr>';
+      }).join("")+'</tbody></table></div>'+
+      '<div class="lcard"><h4>Add a team member</h4>'+
+        '<p class="muted">Looks them up in HubSpot, Front and Aircall and shows what it found before anything is saved.</p>'+
+        '<div class="row" style="gap:8px"><input id="newstaff" class="input" placeholder="name@cal.delivery" style="flex:1">'+
+        '<button class="btn btn-primary btn-sm" onclick="resolveStaff()">Look up</button></div>'+
+        '<div id="staffres" style="margin-top:10px"></div></div>';
+  });
+}
+function resolveStaff(){
+  var em=(val("newstaff")||"").trim(); var box=document.getElementById("staffres");
+  if(!em||!box) return; box.innerHTML=spinner();
+  staffPost({action:"resolve",email:em},function(r){
+    if(!r||!r.ok){ box.innerHTML='<div class="empty">'+esc((r&&r.error)||"Lookup failed.")+'</div>'; return; }
+    var s=r.suggest||{};
+    box.innerHTML='<div class="feed">'+
+      '<div><span class="k">NAME</span><span class="d">'+esc(s.full_name||"not found")+'</span></div>'+
+      '<div><span class="k">HUBSPOT</span><span class="d">'+(s.hubspot_owner_id?'owner '+esc(s.hubspot_owner_id):'<b style="color:#8F1D1D">no seat</b>')+'</span></div>'+
+      '<div><span class="k">FRONT</span><span class="d">'+(s.front_email?esc(s.front_email):'<b style="color:#8F1D1D">not found</b>')+'</span></div>'+
+      '<div><span class="k">AIRCALL</span><span class="d">'+(s.aircall_agent?esc(s.aircall_agent):'<span class="muted">no calls logged under that name</span>')+'</span></div>'+
+      '<div><span class="k">LOGIN</span><span class="d">'+(s.app_user_id?'linked':'<span class="muted">they must sign up first, then be approved</span>')+'</span></div>'+
+      '</div>'+
+      (r.problems&&r.problems.length?'<p class="muted" style="margin-top:8px">'+r.problems.map(esc).join('<br>')+'</p>':'')+
+      '<div class="row" style="margin-top:10px;gap:8px"><select id="newrole" class="select select-sm"><option value="rep">Rep</option><option value="head">Head of sales</option><option value="ops">Ops</option><option value="admin">Admin</option></select>'+
+      '<button class="btn btn-primary btn-sm" onclick="saveStaff(\''+esc(em)+'\')">Save</button></div><div id="staffmsg" class="muted" style="font-size:12.5px;margin-top:6px"></div>';
+    window.__staffSuggest=s;
+  });
+}
+function saveStaff(em){
+  var s=window.__staffSuggest||{}; var m=document.getElementById("staffmsg");
+  if(m) m.textContent="Saving...";
+  staffPost({action:"upsert",staff:{email:em,role:val("newrole")||"rep",full_name:s.full_name||null,
+    hubspot_owner_id:s.hubspot_owner_id||null,front_email:s.front_email||null,
+    aircall_agent:s.aircall_agent||null,app_user_id:s.app_user_id||null}},function(r){
+    if(m) m.textContent=(r&&r.ok)?"Saved.":"Could not save: "+((r&&r.error)||"error");
+    if(r&&r.ok) loadTeam();
+  });
 }
 function leadPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(LEADS_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
 function campPost(payload, cb){ sb.auth.getSession().then(function(s){ if(!s.data.session) return; fetch(CAMP_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); }).catch(function(){ if(cb)cb({ok:false}); }); }); }
@@ -1031,6 +1183,8 @@ function renderDash(p){
       '<span class="sbrand"><span class="blogo">C</span>Cal Sameday</span>'+
       '<div class="navwrap"><nav class="nav">'+
         '<button class="nv on" data-v="assistant" onclick="setView(this)">Assistant</button>'+
+        '<button class="nv" data-v="calllist" onclick="setView(this)">Call list</button>'+
+        '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam" style="display:none">Team</button>'+
         '<button class="nv" data-v="pipeline" onclick="setView(this)">Pipeline</button>'+
         '<button class="nv" data-v="leads" onclick="setView(this)">Leads</button>'+
         '<button class="nv" data-v="cold" onclick="setView(this)">Cold outreach</button>'+
@@ -1046,6 +1200,8 @@ function renderDash(p){
       coldPanel(p.instantly)+
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">AI-hunted and Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot with you as the owner.</p></div></div><div id="leadboard">'+spinner()+'</div></div>'+
+    '<div id="view-calllist" class="view" style="display:none"><div class="page-head"><div><div class="t">Today&rsquo;s call list</div><p class="sub">Ranked by fit and by whether we can actually reach them. Log the outcome and a callback becomes a HubSpot task, so it reaches you in Front and on your phone.</p></div></div><div id="clboard">'+spinner()+'</div></div>'+
+    '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Team</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
     '<div id="view-monitor" class="view" style="display:none"><div class="page-head"><div><div class="t">Monitor</div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p></div></div><div id="monboard">'+spinner()+'</div></div>'+
     '<div id="view-simulation" class="view" style="display:none"><div class="page-head"><div><div class="t">Simulation</div><p class="sub">Dry-run preview of the automatic CRM updates and reminders. Nothing is written until you go live.</p></div></div><div id="simboard">'+spinner()+'</div></div>'+
     '<div id="view-pipeline" class="view" style="display:none">'+
