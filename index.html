@@ -1051,15 +1051,20 @@ function queueRow(x,m){
   var right='';
   if(x.days_since!=null) right+='<span class="pill">'+esc(String(x.days_since))+'d</span>';
   if(x.contacts) right+='<span class="pill">'+x.contacts+' contact'+(x.contacts===1?'':'s')+'</span>';
-  right+= x.phone
+  // An owed reply is answered in Front, not here - one click into the thread.
+  if(x.conv_id) right+='<a class="btn btn-primary btn-sm" target="_blank" rel="noopener" '+
+    'href="https://app.frontapp.com/open/'+esc(x.conv_id)+'" onclick="event.stopPropagation()">Open &amp; reply</a>';
+  else right+= x.phone
     ? '<a class="btn btn-primary btn-sm tel" href="tel:'+esc(x.phone)+'" onclick="event.stopPropagation()">Call<span class="pn"> '+esc(x.phone)+'</span></a>'
     : '<span class="nonum">no number</span>';
+  // For owed: the SUBJECT and WHAT THEY ACTUALLY SAID, not just "they replied".
+  var line2 = x.subject ? '<div class="dom"><b>'+esc(x.subject)+'</b></div>' : '<div class="dom">'+esc(x.reason)+'</div>';
+  var line3 = x.detail ? '<div class="seg">&ldquo;'+esc(String(x.detail).slice(0,140))+'&rdquo;</div>' : '';
   return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
     (x.score!=null?scoreRing(x.score,"sm"):'<span class="ring sm" style="--pct:0;--rc:var(--color-base-300)"><span class="v"><b>&ndash;</b></span></span>')+
     '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
       (x.relationship==="customer"?' <span class="pill" style="background:#E7F8F0;color:#0A6B4A">customer</span>':'')+
-      '<div class="dom">'+esc(x.reason)+'</div>'+
-      (x.detail?'<div class="seg">'+esc(String(x.detail).slice(0,90))+'</div>':'')+'</div>'+
+      line2+line3+'</div>'+
     '<div class="rt">'+right+'</div></div>';
 }
 // Accounts: one list, filters instead of separate tabs.
