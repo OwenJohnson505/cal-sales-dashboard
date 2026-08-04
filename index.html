@@ -983,9 +983,10 @@ function automationsPanel(inst){
 function setView(el){
   var v=el.getAttribute("data-v");
   var b=document.querySelectorAll(".nav .nv"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i]===el);
-  var ids={assistant:"view-assistant",today:"view-today",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",today:"view-today",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   if(v==="today") loadToday();
+  if(v==="accounts") loadAccounts();
   if(v==="calllist") loadCallList();
   if(v==="team") loadTeam();
   if(v==="leads" && !LEADSloaded) loadLeads();
@@ -1060,6 +1061,63 @@ function queueRow(x,m){
       '<div class="dom">'+esc(x.reason)+'</div>'+
       (x.detail?'<div class="seg">'+esc(String(x.detail).slice(0,90))+'</div>':'')+'</div>'+
     '<div class="rt">'+right+'</div></div>';
+}
+// Accounts: one list, filters instead of separate tabs.
+var ACC={rel:null, bucket:null, q:"", t:null};
+function loadAccounts(){
+  var el=document.getElementById("acctboard"); if(!el) return;
+  if(!el.querySelector("#accrows")){
+    el.innerHTML='<div class="controls">'+
+      '<input id="accq" class="input" placeholder="Search company or domain" oninput="accSearch()">'+
+      '</div>'+
+      '<div class="controls" id="accrel">'+
+        '<button class="chip active" onclick="setAcc(\'rel\',null,this)">Everyone</button>'+
+        '<button class="chip" onclick="setAcc(\'rel\',\'customer\',this)">Customers</button>'+
+        '<button class="chip" onclick="setAcc(\'rel\',\'prospect\',this)">Prospects</button>'+
+        '<button class="chip" onclick="setAcc(\'rel\',\'unknown\',this)">Unclassified</button>'+
+      '</div>'+
+      '<div class="controls" id="accbucket">'+
+        '<button class="chip active" onclick="setAcc(\'bucket\',null,this)">Any state</button>'+
+        '<button class="chip" onclick="setAcc(\'bucket\',\'owed\',this)">Waiting on us</button>'+
+        '<button class="chip" onclick="setAcc(\'bucket\',\'quiet\',this)">Gone quiet</button>'+
+        '<button class="chip" onclick="setAcc(\'bucket\',\'never\',this)">Never contacted</button>'+
+      '</div>'+
+      '<div class="panel flush"><div class="phead"><h3>Accounts</h3><span class="hint" id="acccount"></span></div>'+
+      '<div class="plist" id="accrows">'+spinner()+'</div></div>';
+  }
+  fetchAccounts();
+}
+function setAcc(k,v,btn){
+  ACC[k]=v;
+  var box=document.getElementById(k==="rel"?"accrel":"accbucket");
+  if(box){ var cs=box.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i]===btn); }
+  fetchAccounts();
+}
+function accSearch(){ clearTimeout(ACC.t); ACC.t=setTimeout(function(){ ACC.q=val("accq")||""; fetchAccounts(); },250); }
+function fetchAccounts(){
+  var box=document.getElementById("accrows"); if(!box) return;
+  deskPost({action:"accounts",q:ACC.q,rel:ACC.rel,bucket:ACC.bucket,limit:80},function(r){
+    var cnt=document.getElementById("acccount");
+    if(!r||!r.ok){ box.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load accounts.")+'</div>'; return; }
+    var rows=r.accounts||[];
+    if(cnt) cnt.textContent=rows.length>=80?"80+":String(rows.length);
+    if(!rows.length){ box.innerHTML='<div class="empty">Nothing matches.</div>'; return; }
+    box.innerHTML=rows.map(function(x){
+      var right='';
+      if(x.waiting_on_us) right+='<span class="waitchip">Waiting on us</span>';
+      if(x.relationship==="customer") right+='<span class="tag done">Customer</span>';
+      else if(x.relationship==="unknown") right+='<span class="tag new">Unclassified</span>';
+      if(x.contacts) right+='<span class="pill">'+x.contacts+'</span>';
+      right+= x.phone
+        ? '<a class="btn btn-primary btn-sm tel" href="tel:'+esc(x.phone)+'" onclick="event.stopPropagation()">Call<span class="pn"> '+esc(x.phone)+'</span></a>'
+        : '<span class="nonum">no number</span>';
+      return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
+        (x.score!=null?scoreRing(x.score,"sm"):'<span class="ring sm" style="--pct:0;--rc:var(--color-base-300)"><span class="v"><b>&ndash;</b></span></span>')+
+        '<div class="co"><b>'+esc(x.company||x.domain)+'</b><div class="dom">'+esc(x.domain)+'</div>'+
+          '<div class="seg">'+esc(x.state||"")+(x.days_since!=null?' &middot; '+x.days_since+'d ago':'')+'</div></div>'+
+        '<div class="rt">'+right+'</div></div>';
+    }).join("");
+  });
 }
 var CL=[], CLFILTER="all";
 function loadCallList(){
@@ -1281,12 +1339,32 @@ function loadTeam(){
           '<td class="num">'+esc(String(Math.round(Number(x.talk_minutes||0)/60)))+'h</td>'+
           '<td class="num">'+(x.logging_ok?nf(x.emails_sent):'&ndash;')+'</td><td class="num">'+nf(x.front_convs)+'</td></tr>';
       }).join("")+'</tbody></table></div></div>'+
+      // Monitor, Cold outreach, Pipeline and Simulation are management tools,
+      // not places a rep works. They live here rather than in the top nav.
+      '<div class="panel flush"><div class="phead"><h3>Tools</h3></div><div style="padding:14px 20px 18px">'+
+        '<p class="sub" style="margin:0 0 10px">Deliverability, campaigns and the raw activity table.</p>'+
+        '<div class="controls" style="margin:0">'+
+          '<button class="chip" onclick="openTool(\'monitor\')">Monitor</button>'+
+          '<button class="chip" onclick="openTool(\'cold\')">Cold outreach</button>'+
+          '<button class="chip" onclick="openTool(\'pipeline\')">Raw activity</button>'+
+          '<button class="chip" onclick="openTool(\'simulation\')">Simulation</button>'+
+        '</div></div></div>'+
       '<div class="panel flush"><div class="phead"><h3>Add a team member</h3></div><div style="padding:16px 20px 18px">'+
         '<p class="sub" style="margin:0 0 12px">Looks them up in HubSpot, Front and Aircall and shows what it found before anything is saved.</p>'+
         '<div class="row" style="gap:8px"><input id="newstaff" class="input" placeholder="name@cal.delivery" style="flex:1">'+
         '<button class="btn btn-primary btn-sm" onclick="resolveStaff()">Look up</button></div>'+
         '<div id="staffres" style="margin-top:10px"></div></div></div>';
   });
+}
+// The ops views still exist and still work - they are reached from Team rather
+// than competing with Today and Accounts for a rep's attention.
+function openTool(v){
+  var ids={monitor:"view-monitor",cold:"view-cold",pipeline:"view-pipeline",simulation:"view-simulation"};
+  for(var k in ids){ var e=document.getElementById(ids[k]); if(e) e.style.display=(k===v?"":"none"); }
+  var t=document.getElementById("view-team"); if(t) t.style.display="none";
+  if(v==="monitor" && !MONloaded) loadMonitor();
+  if(v==="simulation" && !SIMloaded) loadSim();
+  window.scrollTo({top:0,behavior:"smooth"});
 }
 function resolveStaff(){
   var em=(val("newstaff")||"").trim(); var box=document.getElementById("staffres");
@@ -1457,15 +1535,13 @@ function renderDash(p){
   h('<div class="topbar"><div class="topbar-inner">'+
       '<span class="sbrand"><span class="blogo">C</span>Cal Sameday</span>'+
       '<div class="navwrap"><nav class="nav">'+
-        '<button class="nv on" data-v="assistant" onclick="setView(this)">Assistant</button>'+
-        '<button class="nv" data-v="today" onclick="setView(this)">Today</button>'+
-        '<button class="nv" data-v="calllist" onclick="setView(this)">Call list</button>'+
+        // Four places, not nine. Pipeline, Leads and the cold Call list were
+        // three filters on one thing, so they are now Accounts. Monitor, Cold
+        // outreach and Simulation are management tools and live under Team.
+        '<button class="nv on" data-v="today" onclick="setView(this)">Today</button>'+
+        '<button class="nv" data-v="accounts" onclick="setView(this)">Accounts</button>'+
+        '<button class="nv" data-v="assistant" onclick="setView(this)">Assistant</button>'+
         '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam" style="display:none">Team</button>'+
-        '<button class="nv" data-v="pipeline" onclick="setView(this)">Pipeline</button>'+
-        '<button class="nv" data-v="leads" onclick="setView(this)">Leads</button>'+
-        '<button class="nv" data-v="cold" onclick="setView(this)">Cold outreach</button>'+
-        '<button class="nv" data-v="monitor" onclick="setView(this)">Monitor</button>'+
-        '<button class="nv" data-v="simulation" onclick="setView(this)">Simulation</button>'+
       '</nav></div>'+
       '<div class="topacts">'+adminBtn+'<button class="btn btn-ghost btn-sm" onclick="out()">Sign out</button></div>'+
     '</div></div>'+
@@ -1477,6 +1553,7 @@ function renderDash(p){
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">AI-hunted and Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot with you as the owner.</p></div></div><div id="leadboard">'+spinner()+'</div></div>'+
     '<div id="view-today" class="view" style="display:none"><div class="page-head"><div><div class="t">Today</div><p class="sub">Ranked by obligation, not by score &mdash; what we owe someone, then what you promised, then accounts going quiet, then fresh ground. It refills itself.</p></div></div><div id="todayboard">'+spinner()+'</div></div>'+
+    '<div id="view-accounts" class="view" style="display:none"><div class="page-head"><div><div class="t">Accounts</div><p class="sub">Every real company we know of, however it got here. Vendors, communities and one-off addresses are filtered out.</p></div></div><div id="acctboard">'+spinner()+'</div></div>'+
     '<div id="view-calllist" class="view" style="display:none"><div class="page-head"><div><div class="t">Cold list</div><p class="sub">Ranked by fit and by whether we can actually reach them. Log the outcome and a callback becomes a HubSpot task, so it reaches you in Front and on your phone.</p></div></div><div id="clboard">'+spinner()+'</div></div>'+
     '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Team</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
     '<div id="view-monitor" class="view" style="display:none"><div class="page-head"><div><div class="t">Monitor</div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p></div></div><div id="monboard">'+spinner()+'</div></div>'+
