@@ -1049,6 +1049,8 @@ function loadToday(){
 }
 function queueRow(x,m){
   var right='';
+  if(x.dropped_ball) right+='<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>';
+  if(x.potential==='high') right+='<span class="pill" style="background:#E7F8F0;color:#0A6B4A">High potential</span>';
   if(x.days_since!=null) right+='<span class="pill">'+esc(String(x.days_since))+'d</span>';
   if(x.contacts) right+='<span class="pill">'+x.contacts+' contact'+(x.contacts===1?'':'s')+'</span>';
   // An owed reply is answered in Front, not here - one click into the thread.
@@ -1226,20 +1228,47 @@ function openCallLead(dom){
         }).join("")
       : '<div class="empty" style="padding:16px">No named contact found &mdash; ask the switchboard for the transport or logistics manager.</div>';
 
-    // What we already know happened, without anyone typing it.
-    var st=r.state||{};
+    // The story so far: the AI's read of the REAL transcripts and emails -
+    // rating, how it is going, what happened, what to do next.
+    var st=r.state||{}, ins=r.insight;
     var known='';
-    if(st.state){
-      var bits=[];
-      if(st.calls) bits.push(st.calls+' call'+(st.calls===1?'':'s')+(st.calls_answered?' ('+st.calls_answered+' answered)':''));
-      if(st.emails) bits.push(st.emails+' email'+(st.emails===1?'':'s'));
-      if(st.days_since!=null) bits.push('last touch '+st.days_since+'d ago');
+    if(ins){
+      var pb={high:['#E7F8F0','#0A6B4A','High potential'],medium:['#EEF3FF','#1E45B8','Medium potential'],low:['#F2F4F8','#5B6577','Low potential']}[ins.potential]||null;
+      var eb={positive:['#E7F8F0','#0A6B4A'],mixed:['#FEF6E7','#7A4E07'],stale:['#F2F4F8','#5B6577'],negative:['#FEF2F2','#8F1D1D'],none:['#F2F4F8','#98A2B3']}[ins.engagement]||['#F2F4F8','#5B6577'];
+      known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0">'+
+        '<div class="pillrow" style="margin:0 0 10px">'+
+          (pb?'<span class="pill" style="background:'+pb[0]+';color:'+pb[1]+'">'+pb[2]+'</span>':'')+
+          '<span class="pill" style="background:'+eb[0]+';color:'+eb[1]+'">'+esc(ins.engagement)+' engagement</span>'+
+          (ins.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
+        '</div>'+
+        '<p style="margin:0 0 8px">'+esc(ins.story||ins.headline||'')+'</p>'+
+        (ins.next_step?'<div class="nextact" style="padding:13px 16px;margin-top:4px"><div><div class="lbl">Next step</div><div class="dt" style="font-size:13.5px">'+esc(ins.next_step)+'</div></div></div>':'')+
+        '</div>';
+    } else if(r.insight_pending){
+      known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0"><p class="sub" style="margin:0">'+
+        '<span class="loading loading-spinner loading-xs"></span> Assessing this account now &mdash; the website check and engagement read take about half a minute. Reopen shortly.</p></div>';
+    } else if(st.state){
       known='<h3 class="msec">What we already know</h3><div class="lcard" style="margin:0">'+
-        '<p><b>'+esc(st.state)+'</b>'+(bits.length?' &middot; '+esc(bits.join(' · ')):'')+'</p>'+
-        (st.last_spoke_to||st.last_spoke_by?'<p class="sub" style="margin:0 0 6px">Last spoke to '+esc(st.last_spoke_to||"someone")+(st.last_spoke_by?' &mdash; '+esc(st.last_spoke_by):'')+'</p>':'')+
+        '<p><b>'+esc(st.state)+'</b>'+(st.days_since!=null?' &middot; last touch '+st.days_since+'d ago':'')+'</p>'+
         (st.last_call_summary?'<p class="sub" style="margin:0">&ldquo;'+esc(String(st.last_call_summary).slice(0,300))+'&rdquo;</p>':'')+
         '</div>';
     }
+
+    // The underlying evidence, so the synthesis can be checked: real calls with
+    // their transcript summaries, and the actual email threads.
+    var ev=(ins&&ins.evidence)||{};
+    var evCalls=(ev.calls||[]).map(function(c){
+      return '<div class="evid"><b>'+esc(String(c["when"]||""))+' &middot; '+esc(c.agent||"?")+' &middot; '+esc(String(c.seconds||0))+'s</b>'+
+        '<span class="src">'+esc(String(c.summary||"(no transcript)").slice(0,260))+'</span></div>';
+    }).join("");
+    var evMails=(r.threads||[]).map(function(f){
+      return '<div class="evid"><b>'+esc(f.subject||"(no subject)")+'</b> <span class="faint">'+esc(f.rep||"")+' &middot; in '+esc(String(f.in_count))+' / out '+esc(String(f.out_count))+'</span>'+
+        (f.blurb?'<span class="src">'+esc(String(f.blurb).slice(0,220))+'</span>':'')+
+        (f.conv_id?'<span class="src"><a target="_blank" rel="noopener" href="https://app.frontapp.com/open/'+esc(f.conv_id)+'">Open thread in Front</a></span>':'')+
+        '</div>';
+    }).join("");
+    var evidence=(evCalls?'<h3 class="msec">Calls &mdash; what was said</h3>'+evCalls:'')+
+                 (evMails?'<h3 class="msec">Email threads</h3>'+evMails:'');
 
     var hist=(r.attempts||[]).length
       ? '<div class="feed">'+(r.attempts||[]).map(function(a){
@@ -1265,6 +1294,7 @@ function openCallLead(dom){
         : '')+
       talk+
       known+
+      evidence+
       '<h3 class="msec">Contacts</h3>'+cons+
       '<h3 class="msec">Call history</h3>'+hist+
       '<h3 class="msec">Anything to correct?</h3>'+
