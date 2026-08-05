@@ -983,9 +983,13 @@ function automationsPanel(inst){
 function setView(el){
   var v=el.getAttribute("data-v");
   var b=document.querySelectorAll(".nav .nv"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i]===el);
-  var ids={assistant:"view-assistant",today:"view-today",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",today:"view-today",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   if(v==="today") loadToday();
+  if(v==="customers") loadCustomers();
+  if(v==="leadsmine") loadLeadsMine();
+  if(v==="tasks") loadTasksView();
+  if(v==="calendar") loadCalendar();
   if(v==="accounts") loadAccounts();
   if(v==="calllist") loadCallList();
   if(v==="team") loadTeam();
@@ -1076,6 +1080,145 @@ function renderToday(el,got){
     :'<div class="empty">No list for today yet &mdash; it builds itself overnight at 2am.</div>')+
     '</div></div>';
   el.innerHTML=html;
+}
+// ---- Customers: mine, converted, spending ----------------------------------
+function loadCustomers(){
+  var el=document.getElementById("custboard"); if(!el) return;
+  el.innerHTML=spinner();
+  deskPost({action:"customers"},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load customers.")+'</div>'; return; }
+    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
+    var cs=r.customers||[];
+    if(!cs.length){ el.innerHTML='<div class="empty"><div class="ei">&#128101;</div>No customers are assigned to you yet.</div>'; return; }
+    var totV=cs.reduce(function(a,x){return a+Number(x.won_value||0);},0);
+    el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+      stat("Your customers",nf(cs.length),"converted and assigned to you")+
+      stat("Won value",'£'+nf(Math.round(totV)),"from HubSpot deals")+
+      stat("Quiet 30+ days",nf(cs.filter(function(x){return x.days_since!=null&&x.days_since>30;}).length),"worth a check-in call")+
+      '</div></div>'+
+      '<div class="panel flush"><div class="phead"><h3>Customers</h3><span class="hint">'+cs.length+'</span></div><div class="plist">'+
+      cs.map(function(x){
+        return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
+          '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
+          '<div class="dom">'+esc(x.town||x.domain)+(x.customer_since?' &middot; customer since '+esc(String(x.customer_since))+'':'')+'</div>'+
+          '<div class="seg">'+(x.won_deals?x.won_deals+' won deals &middot; £'+nf(Math.round(x.won_value)):'No deal history yet')+'</div></div>'+
+          '<div class="rt">'+(x.days_since!=null?'<span class="pill"'+(x.days_since>30?' style="background:#FEF6E7;color:#7A4E07"':'')+'>'+x.days_since+'d</span>':'<span class="nonum">no contact logged</span>')+'</div></div>';
+      }).join("")+'</div></div>';
+  });
+}
+// ---- Leads: mine, constructive engagement ----------------------------------
+function loadLeadsMine(){
+  var el=document.getElementById("lmboard"); if(!el) return;
+  el.innerHTML=spinner();
+  deskPost({action:"leads"},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
+    var ls=r.leads||[];
+    if(!ls.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing here yet. When a call gets through or a conversation starts, the account lands here automatically.</div>'; return; }
+    el.innerHTML='<div class="panel flush"><div class="phead"><h3>Live conversations</h3><span class="hint">'+ls.length+'</span></div><div class="plist">'+
+      ls.map(function(x){
+        var eb={positive:["#E7F8F0","#0A6B4A"],mixed:["#FEF6E7","#7A4E07"],stale:["#F2F4F8","#5B6577"]}[x.engagement]||["#F2F4F8","#5B6577"];
+        return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
+          '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
+          '<div class="dom">'+esc(x.headline||("Last touch "+(x.days_since!=null?x.days_since+"d ago":"unknown")))+'</div>'+
+          (x.next_step?'<div class="seg">Next: '+esc(String(x.next_step).slice(0,90))+'</div>':'')+'</div>'+
+          '<div class="rt">'+
+          (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
+          (x.engagement?'<span class="pill" style="background:'+eb[0]+';color:'+eb[1]+'">'+esc(x.engagement)+'</span>':'')+
+          (x.days_since!=null?'<span class="pill">'+x.days_since+'d</span>':'')+
+          '</div></div>';
+      }).join("")+'</div></div>';
+  });
+}
+// ---- Tasks: HubSpot's list + create + suggested ----------------------------
+function loadTasksView(){
+  var el=document.getElementById("taskboard"); if(!el) return;
+  el.innerHTML=spinner();
+  var got={}, need=2;
+  function fin(k,r){ got[k]=r; if(--need===0) renderTasks(el,got); }
+  deskPost({action:"hstasks"},function(r){ fin("hs",r); });
+  deskPost({action:"tasks"},function(r){ fin("sugg",r); });
+}
+function renderTasks(el,got){
+  var hs=(got.hs&&got.hs.tasks)||[], sg=(got.sugg&&got.sugg.tasks)||[];
+  var note=got.hs&&got.hs.note;
+  var html='<div id="nexttoast2"></div>'+
+    '<div class="panel flush"><div class="phead"><h3>Add a task</h3><span class="hint">goes to HubSpot</span></div>'+
+    '<div style="padding:14px 20px 16px"><div class="row" style="gap:8px;flex-wrap:wrap">'+
+    '<input id="ntsub" class="input" placeholder="What needs doing?" style="flex:2;min-width:220px">'+
+    '<input id="ntdue" class="input" type="date" style="flex:0">'+
+    '<button class="btn btn-primary" onclick="createTask()">Add</button></div>'+
+    '<div id="ntmsg" class="foot"></div></div></div>';
+  if(sg.length){
+    html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#6D5AE6"></span><h3>Suggested from your conversations</h3><span class="hint">'+sg.length+'</span></div><div class="plist">'+
+      sg.map(function(t){
+        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b><div class="dom">'+esc(t.domain)+(t.due_date?' &middot; due '+esc(t.due_date):'')+'</div>'+
+          (t.quote?'<div class="seg">&ldquo;'+esc(String(t.quote).slice(0,100))+'&rdquo;</div>':'')+'</div>'+
+          '<div class="rt"><button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
+          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
+      }).join("")+'</div></div>';
+  }
+  html+='<div class="panel flush"><div class="phead"><h3>Your HubSpot tasks</h3><span class="hint">'+(note?esc(note):hs.length)+'</span></div><div class="plist">'+
+    (hs.length?hs.map(function(t){
+      var due=t.due?new Date(Number(t.due)||t.due):null;
+      var overdue=due&&due<new Date();
+      return '<div class="actrow"><div class="co"><b>'+esc(t.subject||"(untitled)")+'</b>'+
+        '<div class="dom">'+(due?('due '+due.toISOString().slice(0,10)):'no date')+(t.priority==="HIGH"?' &middot; high priority':'')+'</div>'+
+        (t.body?'<div class="seg">'+esc(String(t.body).slice(0,100))+'</div>':'')+'</div>'+
+        '<div class="rt">'+(overdue?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">overdue</span>':'')+
+        '<button class="btn btn-soft btn-sm" onclick="hsTaskDone(\''+esc(t.id)+'\',this)">Done</button></div></div>';
+    }).join("")
+    :'<div class="empty">'+(note?esc(note):"No open tasks.")+'</div>')+'</div></div>';
+  el.innerHTML=html;
+}
+function createTask(){
+  var s=(val("ntsub")||"").trim(); var d=val("ntdue")||null;
+  var m=document.getElementById("ntmsg");
+  if(!s){ if(m) m.textContent="Give the task a name first."; return; }
+  if(m) m.textContent="Adding...";
+  deskPost({action:"hstask_create",subject:s,due:d},function(r){
+    if(m) m.textContent=(r&&r.ok)?"Added to HubSpot - it will show in Front and on your phone.":"Could not add: "+((r&&r.error)||"error");
+    if(r&&r.ok){ var i=document.getElementById("ntsub"); if(i) i.value=""; setTimeout(loadTasksView,900); }
+  });
+}
+function hsTaskDone(id,btn){
+  if(btn) btn.disabled=true;
+  deskPost({action:"hstask_done",id:id},function(r){
+    if(r&&r.ok){ var row=btn&&btn.closest(".actrow"); if(row) row.style.opacity=".35"; }
+    else if(btn) btn.disabled=false;
+  });
+}
+// ---- Calendar: what I did each day -----------------------------------------
+function loadCalendar(){
+  var el=document.getElementById("calboard"); if(!el) return;
+  el.innerHTML=spinner();
+  var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
+  deskPost({action:"calendar",month:m},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the calendar.")+'</div>'; return; }
+    var days=(r.days||[]);
+    var max=Math.max.apply(null,days.map(function(d){return d.calls+d.emails;}).concat([1]));
+    el.innerHTML='<div class="controls">'+
+      '<button class="chip" onclick="calShift(-1)">&larr; previous</button>'+
+      '<span class="pill">'+esc(r.month)+'</span>'+
+      '<button class="chip" onclick="calShift(1)">next &rarr;</button></div>'+
+      '<div class="panel flush"><div class="phead"><h3>Daily activity</h3><span class="hint">calls &middot; emails &middot; outcomes</span></div><div class="plist">'+
+      days.filter(function(d){return new Date(d.day)<=new Date();}).map(function(d){
+        var tot=d.calls+d.emails;
+        var w=Math.round(100*tot/max);
+        return '<div class="actrow"><div class="co" style="flex:0 0 110px"><b>'+esc(String(d.day).slice(5))+'</b>'+
+          '<div class="dom">'+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d.day).getDay()]+'</div></div>'+
+          '<div style="flex:1;min-width:120px"><div style="height:10px;border-radius:99px;background:var(--color-base-200);overflow:hidden">'+
+          '<i style="display:block;height:100%;width:'+w+'%;background:linear-gradient(90deg,#2F62F5,#6D5AE6)"></i></div></div>'+
+          '<div class="rt"><span class="pill">'+d.calls+' calls'+(d.answered?' ('+d.answered+' ans)':'')+'</span>'+
+          '<span class="pill">'+d.emails+' emails</span>'+
+          (d.outcomes?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.outcomes+' logged</span>':'')+'</div></div>';
+      }).join("")+'</div></div>';
+  });
+}
+function calShift(n){
+  var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
+  var d=new Date(m+"-15"); d.setMonth(d.getMonth()+n);
+  window.__calMonth=d.toISOString().slice(0,7);
+  loadCalendar();
 }
 function taskSet(id,to,btn){
   if(btn) btn.disabled=true;
@@ -1387,7 +1530,8 @@ function loadTeam(){
   var el=document.getElementById("teamboard"); if(!el) return;
   el.innerHTML=spinner();
   deskPost({action:"scoreboard"},function(r){
-    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the head of sales can see this.")+'</div>'; return; }
+    // Everyone sees the leaderboard; only head/admin get the management detail.
+    if(!r||!r.ok){ el.innerHTML=""; teamLeaderboard(el); return; }
     var rows=(r.rows||[]).filter(function(x){return x.role!=="ops";});
     var broken=rows.filter(function(x){return !x.logging_ok;});
     var sla=rows.reduce(function(a,x){return a+Number(x.sla_breaches||0);},0);
@@ -1442,6 +1586,24 @@ function loadTeam(){
         '<div class="row" style="gap:8px"><input id="newstaff" class="input" placeholder="name@cal.delivery" style="flex:1">'+
         '<button class="btn btn-primary btn-sm" onclick="resolveStaff()">Look up</button></div>'+
         '<div id="staffres" style="margin-top:10px"></div></div></div>';
+    teamLeaderboard(el);
+  });
+}
+// Leaderboard on top: revenue won and customers brought on, ranked. Visible to
+// every rep, not just the head - seeing where you rank is the point.
+function teamLeaderboard(el){
+  deskPost({action:"leaderboard",from:new Date().getFullYear()+"-01-01"},function(lb){
+    if(!lb||!lb.ok||!el) return;
+    var rows=lb.rows||[];
+    var html='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0E9F6E"></span><h3>Leaderboard</h3><span class="hint">'+esc(lb.from)+' to '+esc(lb.to)+'</span></div><div class="plist">'+
+      rows.map(function(x){
+        return '<div class="actrow"><span style="width:34px;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(x.rank_revenue==1?'#C2740B':'var(--faint)')+'">#'+x.rank_revenue+'</span>'+
+          '<span class="avi" style="background:'+avColor(x.full_name||x.email)+'">'+esc(initials(x.full_name||x.email))+'</span>'+
+          '<div class="co"><b>'+esc(x.full_name||x.email)+'</b>'+
+          '<div class="dom">'+x.won_deals+' deals won &middot; '+x.new_customers+' new customers &middot; '+x.meaningful_calls+' meaningful calls</div></div>'+
+          '<div class="rt"><b style="font-size:16px;font-variant-numeric:tabular-nums">£'+nf(Math.round(x.won_revenue))+'</b></div></div>';
+      }).join("")+'</div></div>';
+    el.insertAdjacentHTML("afterbegin",html);
   });
 }
 // The ops views still exist and still work - they are reached from Team rather
@@ -1623,13 +1785,15 @@ function renderDash(p){
   h('<div class="topbar"><div class="topbar-inner">'+
       '<span class="sbrand"><span class="blogo">C</span>Cal Sameday</span>'+
       '<div class="navwrap"><nav class="nav">'+
-        // Four places, not nine. Pipeline, Leads and the cold Call list were
-        // three filters on one thing, so they are now Accounts. Monitor, Cold
-        // outreach and Simulation are management tools and live under Team.
+        // Owen's structure: Today (the call list), Customers (mine, converted),
+        // Leads (mine, engaged), Tasks (HubSpot's), Assistant, Calendar, Team.
         '<button class="nv on" data-v="today" onclick="setView(this)">Today</button>'+
-        '<button class="nv" data-v="accounts" onclick="setView(this)">Accounts</button>'+
+        '<button class="nv" data-v="customers" onclick="setView(this)">Customers</button>'+
+        '<button class="nv" data-v="leadsmine" onclick="setView(this)">Leads</button>'+
+        '<button class="nv" data-v="tasks" onclick="setView(this)">Tasks</button>'+
         '<button class="nv" data-v="assistant" onclick="setView(this)">Assistant</button>'+
-        '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam" style="display:none">Team</button>'+
+        '<button class="nv" data-v="calendar" onclick="setView(this)">Calendar</button>'+
+        '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam">Team</button>'+
       '</nav></div>'+
       '<div class="topacts">'+adminBtn+'<button class="btn btn-ghost btn-sm" onclick="out()">Sign out</button></div>'+
     '</div></div>'+
@@ -1641,7 +1805,11 @@ function renderDash(p){
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">AI-hunted and Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot with you as the owner.</p></div></div><div id="leadboard">'+spinner()+'</div></div>'+
     '<div id="view-today" class="view" style="display:none"><div class="page-head"><div><div class="t">Today</div><p class="sub">Ranked by obligation, not by score &mdash; what we owe someone, then what you promised, then accounts going quiet, then fresh ground. It refills itself.</p></div></div><div id="todayboard">'+spinner()+'</div></div>'+
-    '<div id="view-accounts" class="view" style="display:none"><div class="page-head"><div><div class="t">Accounts</div><p class="sub">Every real company we know of, however it got here. Vendors, communities and one-off addresses are filtered out.</p></div></div><div id="acctboard">'+spinner()+'</div></div>'+
+    '<div id="view-customers" class="view" style="display:none"><div class="page-head"><div><div class="t">Customers</div><p class="sub">Your converted accounts &mdash; on the system and spending. Booking history comes from HubSpot deals until the TMS is wired in.</p></div></div><div id="custboard">'+spinner()+'</div></div>'+
+    '<div id="view-leadsmine" class="view" style="display:none"><div class="page-head"><div><div class="t">Leads</div><p class="sub">Everyone you have reached where something constructive happened. Open one for the full history.</p></div></div><div id="lmboard">'+spinner()+'</div></div>'+
+    '<div id="view-tasks" class="view" style="display:none"><div class="page-head"><div><div class="t">Tasks</div><p class="sub">Straight from your HubSpot task list, plus what the system spotted in your calls and emails.</p></div></div><div id="taskboard">'+spinner()+'</div></div>'+
+    '<div id="view-calendar" class="view" style="display:none"><div class="page-head"><div><div class="t">Calendar</div><p class="sub">What you actually did each day &mdash; calls, emails, outcomes.</p></div></div><div id="calboard">'+spinner()+'</div></div>'+
+    '<div id="view-accounts" class="view" style="display:none"><div class="page-head"><div><div class="t">All accounts</div><p class="sub">Every real company we know of, however it got here. Vendors, communities and one-off addresses are filtered out.</p></div></div><div id="acctboard">'+spinner()+'</div></div>'+
     '<div id="view-calllist" class="view" style="display:none"><div class="page-head"><div><div class="t">Cold list</div><p class="sub">Ranked by fit and by whether we can actually reach them. Log the outcome and a callback becomes a HubSpot task, so it reaches you in Front and on your phone.</p></div></div><div id="clboard">'+spinner()+'</div></div>'+
     '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Team</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
     '<div id="view-monitor" class="view" style="display:none"><div class="page-head"><div><div class="t">Monitor</div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p></div></div><div id="monboard">'+spinner()+'</div></div>'+
