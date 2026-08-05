@@ -1010,42 +1010,94 @@ function staffPost(payload, cb){
       .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach staff admin."}); });
   });
 }
-// Today: the queue. Buckets are ordered by obligation, so a rep works top-down
-// and never has to decide what to do next.
-var BUCKET={
-  owed:    {t:"Owed a reply",   d:"They wrote to us and are waiting",         c:"#DC2626", bg:"#FEF2F2"},
-  promised:{t:"You promised",   d:"Callbacks you committed to",               c:"#C2740B", bg:"#FEF6E7"},
-  warm:    {t:"Going quiet",    d:"Was a conversation, nothing for a while",  c:"#2F62F5", bg:"#EEF3FF"},
-  cold:    {t:"Fresh ground",   d:"Strong fit, never contacted",              c:"#0E9F6E", bg:"#E7F8F0"}
-};
+// Today = the outbound day, in working order: mined tasks to accept, emails to
+// chase or snooze, then the fifty fresh researched leads. No customers here -
+// this is cold outbound; service replies live with whoever owns the account.
 function loadToday(){
   var el=document.getElementById("todayboard"); if(!el) return;
   el.innerHTML=spinner();
-  // Ask for the whole queue, then cap each bucket for display. Filling purely
-  // top-down meant 'owed' and 'warm' ate the limit and a rep never saw a cold
-  // lead - the backfill that is supposed to keep them busy.
-  var CAP={owed:25, promised:25, warm:15, cold:10};
-  deskPost({action:"queue",limit:2000,all:true},function(r){
-    if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load your queue.")+'</div>'; return; }
-    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
-    var q=r.queue||[], c=r.counts||{};
-    if(!q.length){ el.innerHTML='<div class="empty"><div class="ei">&#127881;</div>Nothing waiting. Your queue is clear.</div>'; return; }
-    var order=["owed","promised","warm","cold"], html="";
-    html+='<div class="statwrap"><div class="statgrid">'+order.map(function(b){
-      var m=BUCKET[b];
-      return stat(m.t, nf(c[b]||0), m.d, (b==="owed"&&c[b])?"alarm":"");
-    }).join("")+'</div></div>';
-    order.forEach(function(b){
-      var all=q.filter(function(x){return x.bucket===b;});
-      if(!all.length) return;
-      var rows=all.slice(0,CAP[b]||15), m=BUCKET[b];
-      html+='<div class="panel flush"><div class="phead">'+
-        '<span class="bdot" style="background:'+m.c+'"></span><h3>'+m.t+'</h3>'+
-        '<span class="hint">'+(all.length>rows.length?rows.length+' of '+all.length:all.length)+'</span></div><div class="plist">'+
-        rows.map(function(x){ return queueRow(x,m); }).join("")+'</div></div>';
-    });
-    el.innerHTML=html;
+  var got={}, need=3;
+  function fin(k,r){ got[k]=r; if(--need===0) renderToday(el,got); }
+  deskPost({action:"daily"},function(r){ fin("daily",r); });
+  deskPost({action:"chase"},function(r){ fin("chase",r); });
+  deskPost({action:"tasks"},function(r){ fin("tasks",r); });
+}
+function renderToday(el,got){
+  var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
+  if(d.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
+  var worked=list.filter(function(x){return x.status==="worked";}).length;
+  var html='<div id="nexttoast"></div>'+
+    '<div class="statwrap"><div class="statgrid">'+
+    stat("Today's leads",nf(list.length),"fresh, researched overnight")+
+    stat("Worked",nf(worked),"of today's list",worked>=list.length&&list.length?"ok":"")+
+    stat("Chase",nf(chase.length),"emailed 3+ days ago, silence",chase.length?"alarm":"")+
+    stat("Suggested tasks",nf(tasks.length),"found in calls & emails")+
+    '</div></div>';
+
+  if(tasks.length){
+    html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#6D5AE6"></span><h3>Found in your conversations</h3><span class="hint">accept sends it to HubSpot</span></div><div class="plist">'+
+      tasks.map(function(t){
+        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
+          '<div class="dom">'+esc(t.domain)+(t.due_date?' &middot; due '+esc(t.due_date):'')+'</div>'+
+          (t.quote?'<div class="seg">&ldquo;'+esc(String(t.quote).slice(0,110))+'&rdquo;</div>':'')+'</div>'+
+          '<div class="rt"><button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
+          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
+      }).join("")+'</div></div>';
+  }
+
+  if(chase.length){
+    html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Waiting on a reply</h3><span class="hint">follow up or snooze</span></div><div class="plist">'+
+      chase.map(function(c){
+        return '<div class="actrow"><div class="co"><b>'+esc(c.domain)+'</b>'+
+          '<div class="dom">'+esc(c.subject||"")+' &middot; '+esc(String(c.days_waiting))+'d silent</div>'+
+          (c.blurb?'<div class="seg">'+esc(String(c.blurb).slice(0,100))+'</div>':'')+'</div>'+
+          '<div class="rt">'+
+          (c.conv_id?'<a class="btn btn-primary btn-sm" target="_blank" rel="noopener" href="https://app.frontapp.com/open/'+esc(c.conv_id)+'">Follow up</a>':'')+
+          '<button class="chip" onclick="snoozeDom(\''+esc(c.domain)+'\',7,this)">Snooze 7d</button>'+
+          '<button class="chip" onclick="snoozeDom(\''+esc(c.domain)+'\',30,this)">30d</button></div></div>';
+      }).join("")+'</div></div>';
+  }
+
+  html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0E9F6E"></span><h3>Today&rsquo;s fifty</h3><span class="hint">'+(list.length-worked)+' to go</span></div><div class="plist">'+
+    (list.length?list.map(function(x){
+      var done=x.status==="worked";
+      return '<div class="actrow callrow crow"'+(done?' style="opacity:.45"':'')+' onclick="openCallLead(\''+esc(x.domain)+'\')">'+
+        scoreRing(x.score,"sm")+
+        '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
+          '<div class="dom">'+esc(String(x.segment||"").slice(0,60))+'</div>'+
+          (x.rationale?'<div class="seg">'+esc(String(x.rationale).slice(0,90))+'</div>':'')+'</div>'+
+        '<div class="rt">'+
+          (x.brief_ready?'<span class="tag done">Brief ready</span>':'')+
+          (x.contacts?'<span class="pill">'+x.contacts+' contacts</span>':'')+
+          (done?'<span class="tag done">Done</span>'
+            : (x.phone?'<a class="btn btn-primary btn-sm tel" href="tel:'+esc(x.phone)+'" onclick="event.stopPropagation()">Call<span class="pn"> '+esc(x.phone)+'</span></a>':'<span class="nonum">no number</span>'))+
+        '</div></div>';
+    }).join("")
+    :'<div class="empty">No list for today yet &mdash; it builds itself overnight at 2am.</div>')+
+    '</div></div>';
+  el.innerHTML=html;
+}
+function taskSet(id,to,btn){
+  if(btn) btn.disabled=true;
+  deskPost({action:"task_set",id:id,status:to},function(r){
+    if(r&&r.ok){ var row=btn&&btn.closest(".actrow"); if(row) row.style.opacity=".35";
+      if(to==="accepted") showNext("Sent to HubSpot - it will appear in Front and on the phone."); }
+    else if(btn){ btn.disabled=false; }
   });
+}
+function snoozeDom(dom,days,btn){
+  if(btn) btn.disabled=true;
+  deskPost({action:"snooze",domain:dom,days:days},function(r){
+    if(r&&r.ok){ var row=btn&&btn.closest(".actrow"); if(row) row.style.opacity=".35";
+      showNext("Snoozed until "+r.until+"."); }
+    else if(btn) btn.disabled=false;
+  });
+}
+// After each step, say what happens next - the system moves the rep forward.
+function showNext(msg){
+  var t=document.getElementById("nexttoast"); if(!t) return;
+  t.innerHTML='<div class="lcard" style="border-color:#A9DEC6;background:#F4FBF7;margin-bottom:12px"><p style="margin:0"><b>Next:</b> '+esc(msg)+'</p></div>';
+  clearTimeout(window.__ntt); window.__ntt=setTimeout(function(){ if(t) t.innerHTML=""; },6000);
 }
 function queueRow(x,m){
   var right='';
@@ -1323,10 +1375,11 @@ function logCall(dom,outcome){
   if(outcome==="callback") payload.callback_at=new Date(Date.now()+864e5).toISOString();
   deskPost(payload,function(r){
     if(r&&r.ok){
-      // Close on success so the rep is returned to the list and can dial the
-      // next one, rather than being left staring at the lead they just did.
+      // Close, tell the rep what happens next, and put them on the next lead.
       closeModal();
-      loadCallList();
+      var todayVisible=document.getElementById("view-today") && document.getElementById("view-today").style.display!=="none";
+      if(todayVisible){ loadToday(); setTimeout(function(){ if(r.next) showNext(r.next); },600); }
+      else loadCallList();
     } else if(msg) msg.textContent="Could not log that: "+((r&&r.error)||"error");
   });
 }
