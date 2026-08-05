@@ -999,7 +999,23 @@ function setView(el){
   if(v==="assistant"){ var q=document.getElementById("askq"); if(q) q.focus(); }
 }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
-var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin";
+var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2";
+function desk2Post(payload, cb){
+  sb.auth.getSession().then(function(se){
+    if(!se.data.session) return login();
+    fetch(DESK2_,{method:"POST",headers:{Authorization:"Bearer "+se.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the data service."}); });
+  });
+}
+// 'Last updated' from the TMS feed - staleness must be visible, not assumed.
+function paintFreshness(tms){
+  var el=document.getElementById("freshchip"); if(!el||!tms||!tms.latest_upload) return;
+  var days=Math.floor((Date.now()-new Date(tms.latest_upload).getTime())/864e5);
+  var txt=days===0?"today":(days===1?"yesterday":days+" days ago");
+  el.textContent="TMS data: "+txt;
+  el.style.background=days>7?"#FEF6E7":"var(--color-base-200)";
+  el.style.color=days>7?"#7A4E07":"var(--mut)";
+}
 function deskPost(payload, cb){
   sb.auth.getSession().then(function(s){
     if(!s.data.session) return login();
@@ -1085,36 +1101,68 @@ function renderToday(el,got){
 function loadCustomers(){
   var el=document.getElementById("custboard"); if(!el) return;
   el.innerHTML=spinner();
-  deskPost({action:"customers"},function(r){
+  desk2Post({action:"customers"},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load customers.")+'</div>'; return; }
-    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
-    var cs=r.customers||[];
-    if(!cs.length){ el.innerHTML='<div class="empty"><div class="ei">&#128101;</div>No customers are assigned to you yet.</div>'; return; }
-    var totV=cs.reduce(function(a,x){return a+Number(x.won_value||0);},0);
-    el.innerHTML='<div class="statwrap"><div class="statgrid">'+
-      stat("Your customers",nf(cs.length),"converted and assigned to you")+
-      stat("Won value",'£'+nf(Math.round(totV)),"from HubSpot deals")+
-      stat("Quiet 30+ days",nf(cs.filter(function(x){return x.days_since!=null&&x.days_since>30;}).length),"worth a check-in call")+
-      '</div></div>'+
-      '<div class="panel flush"><div class="phead"><h3>Customers</h3><span class="hint">'+cs.length+'</span></div><div class="plist">'+
-      cs.map(function(x){
-        return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
-          '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
-          '<div class="dom">'+esc(x.town||x.domain)+(x.customer_since?' &middot; customer since '+esc(String(x.customer_since))+'':'')+'</div>'+
-          '<div class="seg">'+(x.won_deals?x.won_deals+' won deals &middot; £'+nf(Math.round(x.won_value)):'No deal history yet')+'</div></div>'+
-          '<div class="rt">'+(x.days_since!=null?'<span class="pill"'+(x.days_since>30?' style="background:#FEF6E7;color:#7A4E07"':'')+'>'+x.days_since+'d</span>':'<span class="nonum">no contact logged</span>')+'</div></div>';
-      }).join("")+'</div></div>';
+    paintFreshness(r.tms);
+    window.__cust=r.customers||[]; window.__custFilter="all";
+    renderCustomers();
   });
+}
+function custFilter(f,btn){
+  window.__custFilter=f;
+  var cs=document.querySelectorAll("#custboard .chip");
+  for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i]===btn);
+  renderCustRows();
+}
+function renderCustomers(){
+  var el=document.getElementById("custboard"); var cs=window.__cust||[];
+  if(!cs.length){ el.innerHTML='<div class="empty"><div class="ei">&#128101;</div>No spending customers are attributed to you in the TMS.</div>'; return; }
+  var totV=cs.reduce(function(a,x){return a+Number(x.revenue_total||0);},0);
+  el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+    stat("Your customers",nf(cs.length),"spending in the TMS")+
+    stat("Total revenue","\u00a3"+nf(Math.round(totV)),"all time, from consignment logs")+
+    stat("Active 90d",nf(cs.filter(function(x){return x.jobs_90d>0;}).length),"booked in the last 90 days")+
+    stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days","alarm")+
+    '</div></div>'+
+    '<div class="controls">'+
+      '<button class="chip active" onclick="custFilter(\'all\',this)">All</button>'+
+      '<button class="chip" onclick="custFilter(\'active\',this)">Active 90d</button>'+
+      '<button class="chip" onclick="custFilter(\'quiet\',this)">Quiet 60d+</button>'+
+      '<button class="chip" onclick="custFilter(\'top\',this)">Top spenders</button>'+
+      '<button class="chip" onclick="custFilter(\'noform\',this)">No account form</button>'+
+    '</div>'+
+    '<div class="panel flush"><div class="phead"><h3>Customers</h3><span class="hint" id="custcount"></span></div><div class="plist" id="custrows"></div></div>';
+  renderCustRows();
+}
+function renderCustRows(){
+  var box=document.getElementById("custrows"); if(!box) return;
+  var f=window.__custFilter, cs=(window.__cust||[]).slice();
+  if(f==="active") cs=cs.filter(function(x){return x.jobs_90d>0;});
+  if(f==="quiet")  cs=cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;});
+  if(f==="noform") cs=cs.filter(function(x){return !x.has_account_form;});
+  if(f==="top")    cs.sort(function(a,b){return b.revenue_total-a.revenue_total;});
+  var cnt=document.getElementById("custcount"); if(cnt) cnt.textContent=cs.length;
+  box.innerHTML=cs.slice(0,150).map(function(x){
+    var open=x.domain?(' crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'"';
+    return '<div class="actrow callrow'+open+'>'+
+      '<div class="co"><b>'+esc(x.customer_name)+'</b>'+
+      '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+'</div>'+
+      '<div class="seg">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime &middot; '+x.jobs_total+' jobs'+(x.jobs_90d?' &middot; '+x.jobs_90d+' in 90d':'')+'</div></div>'+
+      '<div class="rt">'+
+      (!x.has_account_form?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">no account form</span>':'')+
+      (x.days_since_job!=null&&x.days_since_job>60?'<span class="waitchip">quiet</span>':'')+
+      '</div></div>';
+  }).join("")||'<div class="empty">Nothing matches.</div>';
 }
 // ---- Leads: mine, constructive engagement ----------------------------------
 function loadLeadsMine(){
   var el=document.getElementById("lmboard"); if(!el) return;
   el.innerHTML=spinner();
-  deskPost({action:"leads"},function(r){
+  desk2Post({action:"leads"},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     var ls=r.leads||[];
-    if(!ls.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing here yet. When a call gets through or a conversation starts, the account lands here automatically.</div>'; return; }
-    el.innerHTML='<div class="panel flush"><div class="phead"><h3>Live conversations</h3><span class="hint">'+ls.length+'</span></div><div class="plist">'+
+    if(!ls.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>No live conversations yet. As calls connect and the engagement analysis works through the backlog, they land here.</div>'; return; }
+    el.innerHTML='<div class="panel flush"><div class="phead"><h3>Live conversations &mdash; whole team</h3><span class="hint">'+ls.length+'</span></div><div class="plist">'+
       ls.map(function(x){
         var eb={positive:["#E7F8F0","#0A6B4A"],mixed:["#FEF6E7","#7A4E07"],stale:["#F2F4F8","#5B6577"]}[x.engagement]||["#F2F4F8","#5B6577"];
         return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
@@ -1122,6 +1170,7 @@ function loadLeadsMine(){
           '<div class="dom">'+esc(x.headline||("Last touch "+(x.days_since!=null?x.days_since+"d ago":"unknown")))+'</div>'+
           (x.next_step?'<div class="seg">Next: '+esc(String(x.next_step).slice(0,90))+'</div>':'')+'</div>'+
           '<div class="rt">'+
+          (x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(",")[0])+'</span>':'<span class="nonum">unowned</span>')+
           (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
           (x.engagement?'<span class="pill" style="background:'+eb[0]+';color:'+eb[1]+'">'+esc(x.engagement)+'</span>':'')+
           (x.days_since!=null?'<span class="pill">'+x.days_since+'d</span>':'')+
@@ -1151,8 +1200,11 @@ function renderTasks(el,got){
   if(sg.length){
     html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#6D5AE6"></span><h3>Suggested from your conversations</h3><span class="hint">'+sg.length+'</span></div><div class="plist">'+
       sg.map(function(t){
-        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b><div class="dom">'+esc(t.domain)+(t.due_date?' &middot; due '+esc(t.due_date):'')+'</div>'+
-          (t.quote?'<div class="seg">&ldquo;'+esc(String(t.quote).slice(0,100))+'&rdquo;</div>':'')+'</div>'+
+        var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
+        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
+          '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
+          (t.quote?'<div class="seg">Because they said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+
+          '<div class="seg">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div></div>'+
           '<div class="rt"><button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
       }).join("")+'</div></div>';
@@ -1197,6 +1249,7 @@ function loadCalendar(){
     var days=(r.days||[]);
     var max=Math.max.apply(null,days.map(function(d){return d.calls+d.emails;}).concat([1]));
     el.innerHTML='<div class="controls">'+
+      '<span class="pill" style="background:#EEF3FF;color:#1E45B8">Viewing: your own activity</span>'+
       '<button class="chip" onclick="calShift(-1)">&larr; previous</button>'+
       '<span class="pill">'+esc(r.month)+'</span>'+
       '<button class="chip" onclick="calShift(1)">next &rarr;</button></div>'+
@@ -1592,16 +1645,19 @@ function loadTeam(){
 // Leaderboard on top: revenue won and customers brought on, ranked. Visible to
 // every rep, not just the head - seeing where you rank is the point.
 function teamLeaderboard(el){
-  deskPost({action:"leaderboard",from:new Date().getFullYear()+"-01-01"},function(lb){
+  // Revenue from the TMS consignment logs - actual invoiced money, not HubSpot
+  // deal values (which made everyone but Nicola read as zero).
+  desk2Post({action:"leaderboard"},function(lb){
     if(!lb||!lb.ok||!el) return;
+    paintFreshness(lb.tms);
     var rows=lb.rows||[];
-    var html='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0E9F6E"></span><h3>Leaderboard</h3><span class="hint">'+esc(lb.from)+' to '+esc(lb.to)+'</span></div><div class="plist">'+
+    var html='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0E9F6E"></span><h3>Leaderboard</h3><span class="hint">this year, from the TMS</span></div><div class="plist">'+
       rows.map(function(x){
         return '<div class="actrow"><span style="width:34px;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;color:'+(x.rank_revenue==1?'#C2740B':'var(--faint)')+'">#'+x.rank_revenue+'</span>'+
           '<span class="avi" style="background:'+avColor(x.full_name||x.email)+'">'+esc(initials(x.full_name||x.email))+'</span>'+
           '<div class="co"><b>'+esc(x.full_name||x.email)+'</b>'+
-          '<div class="dom">'+x.won_deals+' deals won &middot; '+x.new_customers+' new customers &middot; '+x.meaningful_calls+' meaningful calls</div></div>'+
-          '<div class="rt"><b style="font-size:16px;font-variant-numeric:tabular-nums">£'+nf(Math.round(x.won_revenue))+'</b></div></div>';
+          '<div class="dom">'+nf(x.jobs_ytd)+' jobs &middot; £'+nf(Math.round(x.profit_ytd))+' profit &middot; '+x.new_customers+' new customers &middot; '+x.meaningful_calls+' meaningful calls</div></div>'+
+          '<div class="rt"><b style="font-size:16px;font-variant-numeric:tabular-nums">£'+nf(Math.round(x.revenue_ytd))+'</b></div></div>';
       }).join("")+'</div></div>';
     el.insertAdjacentHTML("afterbegin",html);
   });
@@ -1794,6 +1850,7 @@ function renderDash(p){
         '<button class="nv" data-v="assistant" onclick="setView(this)">Assistant</button>'+
         '<button class="nv" data-v="calendar" onclick="setView(this)">Calendar</button>'+
         '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam">Team</button>'+
+        '<span id="freshchip" class="pill" style="margin-left:auto"></span>'+
       '</nav></div>'+
       '<div class="topacts">'+adminBtn+'<button class="btn btn-ghost btn-sm" onclick="out()">Sign out</button></div>'+
     '</div></div>'+
