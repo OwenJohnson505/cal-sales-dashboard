@@ -1098,48 +1098,62 @@ function renderToday(el,got){
     '</div></div>';
   el.innerHTML=html;
 }
-// ---- Pulse: the head-of-sales view. Productivity, effort, outcome, quality.
-var PULSE_RANGE="today";
+// ---- Pulse: the head-of-sales view. Day by day: productivity (start/finish
+// times on both channels), effort (calls, emails), outcome (answered,
+// meaningful, replies), and quality (templated vs personalised, persistence).
+var PULSE_RANGE="7d";
 function loadPulse(){
   var el=document.getElementById("pulseboard"); if(!el) return;
   el.innerHTML=spinner();
   var to=new Date().toISOString().slice(0,10), from=to;
   if(PULSE_RANGE==="7d")  from=new Date(Date.now()-6*864e5).toISOString().slice(0,10);
-  if(PULSE_RANGE==="30d") from=new Date(Date.now()-29*864e5).toISOString().slice(0,10);
+  if(PULSE_RANGE==="14d") from=new Date(Date.now()-13*864e5).toISOString().slice(0,10);
   desk2Post({action:"pulse",from:from,to:to},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the head of sales can see this.")+'</div>'; return; }
     paintFreshness(r.tms);
-    var rows=(r.rows||[]).filter(function(x){return x.calls>0||x.emails_sent>0||x.threads_touched>0||PULSE_RANGE!=="today";});
+    var byRep={};
+    (r.days||[]).forEach(function(d){ (byRep[d.full_name]=byRep[d.full_name]||{email:d.email,days:[]}).days.push(d); });
     var t=function(ts){ if(!ts) return "&ndash;"; var d=new Date(ts); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); };
     var html='<div class="controls">'+
-      ["today","7d","30d"].map(function(k){
-        var lbl={today:"Today","7d":"Last 7 days","30d":"Last 30 days"}[k];
-        return '<button class="chip'+(PULSE_RANGE===k?" active":"")+'" onclick="PULSE_RANGE=\''+k+'\';loadPulse()">'+lbl+'</button>';
-      }).join("")+'</div>';
-    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="ei">&#128564;</div>No activity recorded in this range yet.</div>'; return; }
-    html+=rows.map(function(x){
-      var q="";
-      if(x.emails_sampled>=5){
-        var bad=Number(x.near_dup_pct)>=40;
-        q='<span class="pill" style="background:'+(bad?"#FEF2F2":"#E7F8F0")+';color:'+(bad?"#8F1D1D":"#0A6B4A")+'">'+
-          (bad?x.near_dup_pct+"% templated":"personalised")+'</span>';
-      } else q='<span class="pill">quality: too few bodies</span>';
-      return '<div class="panel flush"><div class="phead">'+
-        '<span class="avi" style="background:'+avColor(x.full_name)+'">'+esc(initials(x.full_name))+'</span>'+
-        '<h3>'+esc(x.full_name)+'</h3><span class="hint">'+
-        'calls '+t(x.first_call)+' &rarr; '+t(x.last_call)+' &middot; emails '+t(x.first_email)+' &rarr; '+t(x.last_email)+'</span></div>'+
-        '<div style="padding:12px 20px 16px"><div class="repmetrics" style="grid-template-columns:repeat(7,1fr);text-align:center">'+
-          '<div class="m"><b>'+nf(x.calls)+'</b><span>calls</span></div>'+
-          '<div class="m"><b>'+nf(x.answered)+'</b><span>answered</span></div>'+
-          '<div class="m"><b>'+nf(Math.round(x.talk_minutes||0))+'m</b><span>talk time</span></div>'+
-          '<div class="m"><b>'+nf(x.emails_sent)+'</b><span>emails</span></div>'+
-          '<div class="m"><b>'+nf(x.replies_in)+'</b><span>replies back</span></div>'+
-          '<div class="m"><b>'+nf(x.meaningful)+'</b><span>meaningful</span></div>'+
-          '<div class="m"><b>'+nf(x.leads_earned)+'</b><span>leads earned</span></div>'+
-        '</div><div class="pillrow" style="margin-top:11px">'+q+
-        (x.emails_sent>=5?'<span class="pill">'+Math.min(100,Math.round(100*x.replies_in/x.emails_sent))+'% reply rate</span>':'')+
-        '</div></div></div>';
-    }).join("");
+      [["today","Today"],["7d","Last 7 days"],["14d","Last 14 days"]].map(function(kv){
+        return '<button class="chip'+(PULSE_RANGE===kv[0]?" active":"")+'" onclick="PULSE_RANGE=\''+kv[0]+'\';loadPulse()">'+kv[1]+'</button>';
+      }).join("")+
+      '<span class="pill">calls sync hourly &middot; emails from Front threads (HubSpot logs only a fraction)</span></div>';
+    var names=Object.keys(byRep).sort();
+    if(!names.length){ el.innerHTML=html+'<div class="empty">No activity in range.</div>'; return; }
+    names.forEach(function(nm){
+      var rep=byRep[nm];
+      var days=rep.days.filter(function(d){return d.calls>0||d.emails_front>0||d.emails_hs>0;});
+      var q=(r.quality||{})[rep.email]||{};
+      var qpill;
+      if((q.sampled||0)>=5){
+        var bad=Number(q.near_dup_pct)>=40;
+        qpill='<span class="pill" style="background:'+(bad?"#FEF2F2":"#E7F8F0")+';color:'+(bad?"#8F1D1D":"#0A6B4A")+'">'+
+          (bad?q.near_dup_pct+"% templated (30d)":"personalised (30d)")+'</span>';
+      } else qpill='<span class="pill">quality: no email bodies logged</span>';
+      var totC=days.reduce(function(a,d){return a+Number(d.calls);},0);
+      var totE=days.reduce(function(a,d){return a+Number(d.emails_front);},0);
+      html+='<div class="panel flush"><div class="phead">'+
+        '<span class="avi" style="background:'+avColor(nm)+'">'+esc(initials(nm))+'</span>'+
+        '<h3>'+esc(nm)+'</h3><span class="hint">'+nf(totC)+' calls &middot; '+nf(totE)+' email threads &middot; '+qpill.replace(/<[^>]+>/g,"")+'</span></div>'+
+        '<div class="plist">'+
+        (days.length?days.map(function(d){
+          var effortless=d.calls===0&&d.emails_front===0;
+          var persist=Number(d.persist_pct);
+          return '<div class="actrow" style="flex-wrap:wrap">'+
+            '<div class="co" style="flex:0 0 96px"><b>'+esc(String(d.day).slice(5))+'</b>'+
+            '<div class="dom">'+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d.day).getDay()]+'</div></div>'+
+            '<div class="co" style="flex:1 1 220px">'+
+              '<div class="dom">Calls '+t(d.first_call)+' &rarr; '+t(d.last_call)+' &middot; Emails '+t(d.first_email)+' &rarr; '+t(d.last_email)+'</div>'+
+              '<div class="seg">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' email threads'+(d.emails_hs>0?' ('+d.emails_hs+' logged)':'')+'</div></div>'+
+            '<div class="rt">'+
+              (d.calls>0?'<span class="pill" style="background:'+(persist>=50?"#E7F8F0":"#FEF6E7")+';color:'+(persist>=50?"#0A6B4A":"#7A4E07")+'" title="answered calls kept past 60s">'+persist+'% persisted</span>':'')+
+              (Number(d.replies_in)>0?'<span class="pill">'+d.replies_in+' replies in</span>':'')+
+              (Number(d.meaningful)>0?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.meaningful+' meaningful</span>':'')+
+            '</div></div>';
+        }).join(""):'<div class="empty" style="padding:14px">No recorded activity in this range.</div>')+
+        '</div></div>';
+    });
     el.innerHTML=html;
   });
 }
