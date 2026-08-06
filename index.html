@@ -1118,7 +1118,7 @@ function loadPulse(){
       [["today","Today"],["7d","Last 7 days"],["14d","Last 14 days"]].map(function(kv){
         return '<button class="chip'+(PULSE_RANGE===kv[0]?" active":"")+'" onclick="PULSE_RANGE=\''+kv[0]+'\';loadPulse()">'+kv[1]+'</button>';
       }).join("")+
-      '<span class="pill">calls sync hourly &middot; emails from Front threads (HubSpot logs only a fraction)</span></div>';
+      '<span class="pill">calls &amp; emails sync hourly &middot; emails counted one-by-one from Front</span></div>';
     var names=Object.keys(byRep).sort();
     if(!names.length){ el.innerHTML=html+'<div class="empty">No activity in range.</div>'; return; }
     names.forEach(function(nm){
@@ -1135,7 +1135,7 @@ function loadPulse(){
       var totE=days.reduce(function(a,d){return a+Number(d.emails_front);},0);
       html+='<div class="panel flush"><div class="phead">'+
         '<span class="avi" style="background:'+avColor(nm)+'">'+esc(initials(nm))+'</span>'+
-        '<h3>'+esc(nm)+'</h3><span class="hint">'+nf(totC)+' calls &middot; '+nf(totE)+' email threads &middot; '+qpill.replace(/<[^>]+>/g,"")+'</span></div>'+
+        '<h3>'+esc(nm)+'</h3><span class="hint">'+nf(totC)+' calls &middot; '+nf(totE)+' emails &middot; '+qpill.replace(/<[^>]+>/g,"")+'</span></div>'+
         '<div class="plist">'+
         (days.length?days.map(function(d){
           var effortless=d.calls===0&&d.emails_front===0;
@@ -1145,7 +1145,7 @@ function loadPulse(){
             '<div class="dom">'+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d.day).getDay()]+'</div></div>'+
             '<div class="co" style="flex:1 1 220px">'+
               '<div class="dom">Calls '+t(d.first_call)+' &rarr; '+t(d.last_call)+' &middot; Emails '+t(d.first_email)+' &rarr; '+t(d.last_email)+'</div>'+
-              '<div class="seg">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' email threads'+(d.emails_hs>0?' ('+d.emails_hs+' logged)':'')+'</div></div>'+
+              '<div class="seg">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' emails'+(d.emails_hs>0?' ('+d.emails_hs+' in HubSpot)':'')+'</div></div>'+
             '<div class="rt">'+
               (d.calls>0?'<span class="pill" style="background:'+(persist>=50?"#E7F8F0":"#FEF6E7")+';color:'+(persist>=50?"#0A6B4A":"#7A4E07")+'" title="answered calls kept past 60s">'+persist+'% persisted</span>':'')+
               (Number(d.replies_in)>0?'<span class="pill">'+d.replies_in+' replies in</span>':'')+
