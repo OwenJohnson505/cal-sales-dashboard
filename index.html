@@ -1045,7 +1045,7 @@ function loadToday(){
 }
 function renderToday(el,got){
   var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
-  if(d.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
+  if(d.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; }
   var worked=list.filter(function(x){return x.status==="worked";}).length;
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
@@ -1939,6 +1939,24 @@ function renderDash(p){
   flt();
   renderWorklist();
   var q=document.getElementById("askq"); if(q) q.focus();
+  bootDesk();
+}
+// Runs once after the shell renders, regardless of which tab is opened first:
+// reveals the head-only tabs (Pulse/Team), paints the TMS freshness chip, and
+// loads Today so the landing view is never an empty spinner. Previously the
+// Pulse reveal only lived inside a legacy view no longer in the nav, so the
+// tab never appeared on the live site.
+function bootDesk(){
+  desk2Post({action:"meta"},function(r){
+    if(r&&r.ok){
+      paintFreshness(r.tms);
+      if(r.can_manage){
+        var t=document.getElementById("nvteam");  if(t) t.style.display="";
+        var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";
+      }
+    }
+  });
+  loadToday();
 }
 function setF(el){ filter=el.getAttribute("data-f"); var cs=el.parentElement.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){cs[i].classList.toggle("active",cs[i]===el);} PAGE=1; flt(); }
 function setSort(k){ if(sortK===k)sortDir*=-1; else {sortK=k; sortDir=(k==="company"||k==="rep_list"||k==="type")?1:-1;} PAGE=1; flt(); }
