@@ -983,9 +983,10 @@ function automationsPanel(inst){
 function setView(el){
   var v=el.getAttribute("data-v");
   var b=document.querySelectorAll(".nav .nv"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i]===el);
-  var ids={assistant:"view-assistant",today:"view-today",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   if(v==="today") loadToday();
+  if(v==="pulse") loadPulse();
   if(v==="customers") loadCustomers();
   if(v==="leadsmine") loadLeadsMine();
   if(v==="tasks") loadTasksView();
@@ -1096,6 +1097,51 @@ function renderToday(el,got){
     :'<div class="empty">No list for today yet &mdash; it builds itself overnight at 2am.</div>')+
     '</div></div>';
   el.innerHTML=html;
+}
+// ---- Pulse: the head-of-sales view. Productivity, effort, outcome, quality.
+var PULSE_RANGE="today";
+function loadPulse(){
+  var el=document.getElementById("pulseboard"); if(!el) return;
+  el.innerHTML=spinner();
+  var to=new Date().toISOString().slice(0,10), from=to;
+  if(PULSE_RANGE==="7d")  from=new Date(Date.now()-6*864e5).toISOString().slice(0,10);
+  if(PULSE_RANGE==="30d") from=new Date(Date.now()-29*864e5).toISOString().slice(0,10);
+  desk2Post({action:"pulse",from:from,to:to},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the head of sales can see this.")+'</div>'; return; }
+    paintFreshness(r.tms);
+    var rows=(r.rows||[]).filter(function(x){return x.calls>0||x.emails_sent>0||x.threads_touched>0||PULSE_RANGE!=="today";});
+    var t=function(ts){ if(!ts) return "&ndash;"; var d=new Date(ts); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); };
+    var html='<div class="controls">'+
+      ["today","7d","30d"].map(function(k){
+        var lbl={today:"Today","7d":"Last 7 days","30d":"Last 30 days"}[k];
+        return '<button class="chip'+(PULSE_RANGE===k?" active":"")+'" onclick="PULSE_RANGE=\''+k+'\';loadPulse()">'+lbl+'</button>';
+      }).join("")+'</div>';
+    if(!rows.length){ el.innerHTML=html+'<div class="empty"><div class="ei">&#128564;</div>No activity recorded in this range yet.</div>'; return; }
+    html+=rows.map(function(x){
+      var q="";
+      if(x.emails_sampled>=5){
+        var bad=Number(x.near_dup_pct)>=40;
+        q='<span class="pill" style="background:'+(bad?"#FEF2F2":"#E7F8F0")+';color:'+(bad?"#8F1D1D":"#0A6B4A")+'">'+
+          (bad?x.near_dup_pct+"% templated":"personalised")+'</span>';
+      } else q='<span class="pill">quality: too few bodies</span>';
+      return '<div class="panel flush"><div class="phead">'+
+        '<span class="avi" style="background:'+avColor(x.full_name)+'">'+esc(initials(x.full_name))+'</span>'+
+        '<h3>'+esc(x.full_name)+'</h3><span class="hint">'+
+        'calls '+t(x.first_call)+' &rarr; '+t(x.last_call)+' &middot; emails '+t(x.first_email)+' &rarr; '+t(x.last_email)+'</span></div>'+
+        '<div style="padding:12px 20px 16px"><div class="repmetrics" style="grid-template-columns:repeat(7,1fr);text-align:center">'+
+          '<div class="m"><b>'+nf(x.calls)+'</b><span>calls</span></div>'+
+          '<div class="m"><b>'+nf(x.answered)+'</b><span>answered</span></div>'+
+          '<div class="m"><b>'+nf(Math.round(x.talk_minutes||0))+'m</b><span>talk time</span></div>'+
+          '<div class="m"><b>'+nf(x.emails_sent)+'</b><span>emails</span></div>'+
+          '<div class="m"><b>'+nf(x.replies_in)+'</b><span>replies back</span></div>'+
+          '<div class="m"><b>'+nf(x.meaningful)+'</b><span>meaningful</span></div>'+
+          '<div class="m"><b>'+nf(x.leads_earned)+'</b><span>leads earned</span></div>'+
+        '</div><div class="pillrow" style="margin-top:11px">'+q+
+        (x.emails_sent>=5?'<span class="pill">'+Math.min(100,Math.round(100*x.replies_in/x.emails_sent))+'% reply rate</span>':'')+
+        '</div></div></div>';
+    }).join("");
+    el.innerHTML=html;
+  });
 }
 // ---- Customers: mine, converted, spending ----------------------------------
 function loadCustomers(){
@@ -1381,7 +1427,7 @@ function loadCallList(){
   deskPost({action:"list",limit:40},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
     // Only the head/admin should see the Team tab; the desk tells us the role.
-    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; }
+    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; }
     CL=r.list||[];
     renderCallList();
   });
@@ -1849,6 +1895,7 @@ function renderDash(p){
         '<button class="nv" data-v="tasks" onclick="setView(this)">Tasks</button>'+
         '<button class="nv" data-v="assistant" onclick="setView(this)">Assistant</button>'+
         '<button class="nv" data-v="calendar" onclick="setView(this)">Calendar</button>'+
+        '<button class="nv" data-v="pulse" onclick="setView(this)" id="nvpulse" style="display:none">Pulse</button>'+
         '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam">Team</button>'+
         '<span id="freshchip" class="pill" style="margin-left:auto"></span>'+
       '</nav></div>'+
@@ -1862,6 +1909,7 @@ function renderDash(p){
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">AI-hunted and Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot with you as the owner.</p></div></div><div id="leadboard">'+spinner()+'</div></div>'+
     '<div id="view-today" class="view" style="display:none"><div class="page-head"><div><div class="t">Today</div><p class="sub">Ranked by obligation, not by score &mdash; what we owe someone, then what you promised, then accounts going quiet, then fresh ground. It refills itself.</p></div></div><div id="todayboard">'+spinner()+'</div></div>'+
+    '<div id="view-pulse" class="view" style="display:none"><div class="page-head"><div><div class="t">Pulse</div><p class="sub">Productivity, effort, outcome and quality &mdash; per person, from the phones, the inboxes and HubSpot. Only you see this.</p></div></div><div id="pulseboard">'+spinner()+'</div></div>'+
     '<div id="view-customers" class="view" style="display:none"><div class="page-head"><div><div class="t">Customers</div><p class="sub">Your converted accounts &mdash; on the system and spending. Booking history comes from HubSpot deals until the TMS is wired in.</p></div></div><div id="custboard">'+spinner()+'</div></div>'+
     '<div id="view-leadsmine" class="view" style="display:none"><div class="page-head"><div><div class="t">Leads</div><p class="sub">Everyone you have reached where something constructive happened. Open one for the full history.</p></div></div><div id="lmboard">'+spinner()+'</div></div>'+
     '<div id="view-tasks" class="view" style="display:none"><div class="page-head"><div><div class="t">Tasks</div><p class="sub">Straight from your HubSpot task list, plus what the system spotted in your calls and emails.</p></div></div><div id="taskboard">'+spinner()+'</div></div>'+
