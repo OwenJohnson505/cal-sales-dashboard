@@ -1099,108 +1099,204 @@ function renderToday(el,got){
   el.innerHTML=html;
 }
 // ---- Pulse: the head-of-sales view. Focused on Ricky + Luke for now.
-// Day by day: productivity (start/finish, hourly rhythm), effort (calls,
-// emails per hour), outcome (answered, replies, meaningful) and quality
-// (mail-merge vs tailored, persistence).
-var PULSE_RANGE="7d", PULSE_REPS=["ricky@cal.delivery","luker@cal.delivery"];
+// One day in detail (hourly rhythm + quality verdict) plus 3-week trend
+// lines per rep: when they start (first call / first email) and how much
+// they do (calls, emails). Falling lines = time to remotivate.
+var PULSE_DATA=null, PULSE_DAY=null;
+var PULSE_REPS=["ricky@cal.delivery","luker@cal.delivery"];
 var CALL_COL="#16233A", MAIL_COL="#0A6B4A";
+var PULSE_SPAN=20; // days of history fetched for trends
 function loadPulse(){
   var el=document.getElementById("pulseboard"); if(!el) return;
   el.innerHTML=spinner();
-  var to=new Date().toISOString().slice(0,10), from=to;
-  if(PULSE_RANGE==="7d")  from=new Date(Date.now()-6*864e5).toISOString().slice(0,10);
-  if(PULSE_RANGE==="14d") from=new Date(Date.now()-13*864e5).toISOString().slice(0,10);
+  var to=new Date().toISOString().slice(0,10);
+  var from=new Date(Date.now()-PULSE_SPAN*864e5).toISOString().slice(0,10);
   desk2Post({action:"pulse",from:from,to:to},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the head of sales can see this.")+'</div>'; return; }
     paintFreshness(r.tms);
-    var byRep={};
-    (r.days||[]).forEach(function(d){ if(PULSE_REPS.indexOf(d.email)<0) return;
-      (byRep[d.email]=byRep[d.email]||{name:d.full_name,days:[]}).days.push(d); });
-    var hourly={};
-    (r.hourly||[]).forEach(function(h){ var k=h.email+"|"+h.day; (hourly[k]=hourly[k]||{})[h.hr]={c:Number(h.calls),e:Number(h.emails)}; });
-    var equality={};
-    (r.equality||[]).forEach(function(q){ equality[q.email+"|"+q.day]=q; });
-    var maxHour=1;
-    Object.keys(hourly).forEach(function(k){
-      if(PULSE_REPS.indexOf(k.split("|")[0])<0) return;
-      var hs=hourly[k]; Object.keys(hs).forEach(function(h){ maxHour=Math.max(maxHour,hs[h].c,hs[h].e); });
-    });
-    var t=function(ts){ if(!ts) return "&ndash;"; var d=new Date(ts); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); };
-    var html='<div class="controls">'+
-      [["today","Today"],["7d","Last 7 days"],["14d","Last 14 days"]].map(function(kv){
-        return '<button class="chip'+(PULSE_RANGE===kv[0]?" active":"")+'" onclick="PULSE_RANGE=\''+kv[0]+'\';loadPulse()">'+kv[1]+'</button>';
-      }).join("")+
-      '<span class="pill"><span style="display:inline-block;width:9px;height:9px;background:'+CALL_COL+';border-radius:2px;margin-right:5px"></span>calls'+
-      '<span style="display:inline-block;width:9px;height:9px;background:'+MAIL_COL+';border-radius:2px;margin:0 5px 0 12px"></span>emails</span>'+
-      '<span class="pill">counted one-by-one from Aircall and Front &middot; synced hourly</span></div>';
-    var any=false;
-    PULSE_REPS.forEach(function(em){
-      var rep=byRep[em]; if(!rep) return;
-      var days=rep.days.filter(function(d){return d.calls>0||d.emails_front>0||d.emails_hs>0;});
-      if(!days.length) return;
-      any=true;
-      var totC=days.reduce(function(a,d){return a+Number(d.calls);},0);
-      var totE=days.reduce(function(a,d){return a+Number(d.emails_front);},0);
-      html+='<div class="panel flush"><div class="phead">'+
-        '<span class="avi" style="background:'+avColor(rep.name)+'">'+esc(initials(rep.name))+'</span>'+
-        '<h3>'+esc(rep.name)+'</h3><span class="hint">'+nf(totC)+' calls &middot; '+nf(totE)+' emails in range</span></div>'+
-        '<div class="plist">'+
-        days.map(function(d){
-          var wd=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d.day).getDay()];
-          var persist=Number(d.persist_pct);
-          var hs=hourly[em+"|"+d.day]||{};
-          var bars="";
-          for(var h=7;h<=18;h++){
-            var v=hs[h]||{c:0,e:0};
-            var hc=v.c>0?Math.max(6,Math.round(46*v.c/maxHour)):2;
-            var he=v.e>0?Math.max(6,Math.round(46*v.e/maxHour)):2;
-            bars+='<div style="flex:1;min-width:34px;text-align:center">'+
-              '<div style="display:flex;gap:3px;align-items:flex-end;justify-content:center;height:62px">'+
-                '<div style="width:13px"><div style="font-size:10px;color:'+CALL_COL+';font-weight:600;height:13px">'+(v.c||"")+'</div>'+
-                  '<div title="'+v.c+' calls" style="height:'+hc+'px;background:'+(v.c?CALL_COL:"#E5E9F0")+';border-radius:3px 3px 0 0"></div></div>'+
-                '<div style="width:13px"><div style="font-size:10px;color:'+MAIL_COL+';font-weight:600;height:13px">'+(v.e||"")+'</div>'+
-                  '<div title="'+v.e+' emails" style="height:'+he+'px;background:'+(v.e?MAIL_COL:"#E5E9F0")+';border-radius:3px 3px 0 0"></div></div>'+
-              '</div>'+
-              '<div class="dom" style="font-size:10px;margin-top:3px">'+(h<13?h+"am":(h-12)+"pm").replace("12am","12pm")+'</div></div>';
-          }
-          var q=equality[em+"|"+d.day];
-          var qline="";
-          if(q && Number(q.emails)>0){
-            var verdict, vb, vc, detail;
-            if(Number(q.with_bodies)<3){ verdict="too few bodies to judge"; vb="#F2F4F8"; vc="#5B6577"; detail=""; }
-            else if(Number(q.near_dup_pct)>=60){
-              verdict="mail-merge"; vb="#FEF2F2"; vc="#8F1D1D";
-              detail=q.top_subject_n+' of '+q.emails+' were the same template &mdash; &ldquo;'+esc(String(q.top_subject||"").slice(0,60))+'&rdquo; &middot; '+q.near_dup_pct+'% near-identical &middot; one every '+Math.round(q.median_gap_secs)+'s';
-            } else if(Number(q.near_dup_pct)>=30){
-              verdict="part-templated"; vb="#FEF6E7"; vc="#7A4E07";
-              detail=q.near_dup_pct+'% near-identical &middot; '+q.tailored+' written individually &middot; '+q.distinct_subjects+' different subjects';
-            } else {
-              verdict="tailored"; vb="#E7F8F0"; vc="#0A6B4A";
-              detail=q.distinct_subjects+' different subjects across '+q.emails+' emails &middot; '+q.tailored+' individually written';
-            }
-            qline='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:7px">'+
-              '<span class="pill" style="background:'+vb+';color:'+vc+'">'+verdict+'</span>'+
-              (detail?'<span class="dom">'+detail+'</span>':'')+'</div>';
-          }
-          return '<div style="padding:14px 20px 12px;border-bottom:1px solid var(--color-base-200)">'+
-            '<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'+
-              '<b style="font-size:15px">'+wd+' '+esc(String(d.day).slice(5))+'</b>'+
-              '<span style="font-size:14px;font-weight:600;color:'+CALL_COL+'">Calls '+t(d.first_call)+' &rarr; '+t(d.last_call)+'</span>'+
-              '<span style="font-size:14px;font-weight:600;color:'+MAIL_COL+'">Emails '+t(d.first_email)+' &rarr; '+t(d.last_email)+'</span>'+
-              '<span style="margin-left:auto;display:flex;gap:6px">'+
-                (d.calls>0?'<span class="pill" style="background:'+(persist>=50?"#E7F8F0":"#FEF6E7")+';color:'+(persist>=50?"#0A6B4A":"#7A4E07")+'" title="answered calls kept past 60s">'+persist+'% persisted</span>':'')+
-                (Number(d.replies_in)>0?'<span class="pill">'+d.replies_in+' replies in</span>':'')+
-                (Number(d.meaningful)>0?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.meaningful+' meaningful</span>':'')+
-              '</span></div>'+
-            '<div class="dom" style="margin-top:3px">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' emails'+(d.emails_hs>0?' ('+d.emails_hs+' in HubSpot)':'')+'</div>'+
-            '<div style="display:flex;gap:6px;align-items:flex-end;margin-top:10px;overflow-x:auto">'+bars+'</div>'+
-            qline+'</div>';
-        }).join("")+
-        '</div></div>';
-    });
-    if(!any) html+='<div class="empty">No activity from Ricky or Luke in this range.</div>';
-    el.innerHTML=html;
+    PULSE_DATA=r;
+    if(!PULSE_DAY) PULSE_DAY=to;
+    renderPulse();
   });
+}
+function pShiftDay(n){
+  var d=new Date(PULSE_DAY+"T12:00:00"); d.setDate(d.getDate()+n);
+  if(d.getDay()===0) d.setDate(d.getDate()+(n>0?1:-1)); // Sundays are empty
+  var iso=d.toISOString().slice(0,10);
+  var today=new Date().toISOString().slice(0,10);
+  var from=new Date(Date.now()-PULSE_SPAN*864e5).toISOString().slice(0,10);
+  if(iso>today||iso<from) return;
+  PULSE_DAY=iso; renderPulse();
+}
+function selPulseDay(iso){ PULSE_DAY=iso; renderPulse(); }
+function pMins(ts){ if(!ts) return null; var d=new Date(ts); return d.getHours()*60+d.getMinutes(); }
+function pT(ts){ if(!ts) return "&ndash;"; var d=new Date(ts); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+function pDayLbl(iso){ var d=new Date(iso+"T12:00:00"); return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]+" "+("0"+d.getDate()).slice(-2)+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]; }
+
+// Shared SVG line-chart scaffold. series: [{col,pts:[{d,v,tip}],right}].
+function pChart(title, xdays, series, yaxis){
+  var W=470,H=170,PL=46,PR=44,PT=16,PB=26;
+  var iw=W-PL-PR, ih=H-PT-PB;
+  var x=function(i){ return PL + (xdays.length<2?iw/2:i*iw/(xdays.length-1)); };
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:'+W+'px;display:block">';
+  // selected-day band
+  var si=xdays.indexOf(PULSE_DAY);
+  if(si>=0) svg+='<rect x="'+(x(si)-7)+'" y="'+(PT-6)+'" width="14" height="'+(ih+12)+'" rx="5" fill="#EEF3FF"></rect>';
+  // y gridlines + labels
+  yaxis.ticks.forEach(function(tk){
+    var y=PT+ih-(tk.v-yaxis.min)/(yaxis.max-yaxis.min)*ih;
+    svg+='<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+y+'" y2="'+y+'" stroke="#EAEDF3" stroke-width="1"></line>'+
+         '<text x="'+(PL-6)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="10" fill="'+(tk.col||"#8A93A6")+'">'+tk.l+'</text>';
+  });
+  (yaxis.rticks||[]).forEach(function(tk){
+    var y=PT+ih-(tk.f)*ih;
+    svg+='<text x="'+(W-PR+6)+'" y="'+(y+3.5)+'" text-anchor="start" font-size="10" fill="'+(tk.col||"#8A93A6")+'">'+tk.l+'</text>';
+  });
+  // x labels
+  xdays.forEach(function(d,i){
+    if(i%3===0||i===xdays.length-1) svg+='<text x="'+x(i)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9.5" fill="#8A93A6">'+Number(d.slice(8,10))+"/"+Number(d.slice(5,7))+'</text>';
+  });
+  series.forEach(function(se){
+    var path="", pen=false;
+    se.pts.forEach(function(pt,i){
+      if(pt.v==null){ pen=false; return; }
+      var y=PT+ih-(pt.f)*ih;
+      path+=(pen?"L":"M")+x(pt.i)+" "+y+" "; pen=true;
+    });
+    if(path) svg+='<path d="'+path+'" fill="none" stroke="'+se.col+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>';
+    se.pts.forEach(function(pt){
+      if(pt.v==null) return;
+      var y=PT+ih-(pt.f)*ih;
+      svg+='<circle cx="'+x(pt.i)+'" cy="'+y+'" r="3.4" fill="'+se.col+'" stroke="#fff" stroke-width="1.4" style="cursor:pointer" onclick="selPulseDay(\''+pt.d+'\')"><title>'+pt.tip+'</title></circle>';
+    });
+  });
+  svg+='</svg>';
+  return '<div style="flex:1 1 320px;min-width:300px"><div class="dom" style="font-weight:650;color:#3B4457;margin-bottom:2px">'+title+'</div>'+svg+'</div>';
+}
+
+function renderPulse(){
+  var el=document.getElementById("pulseboard"); var r=PULSE_DATA; if(!el||!r) return;
+  var byRep={};
+  (r.days||[]).forEach(function(d){ if(PULSE_REPS.indexOf(d.email)<0) return;
+    (byRep[d.email]=byRep[d.email]||{name:d.full_name,rows:{}}).rows[d.day]=d; });
+  var hourly={};
+  (r.hourly||[]).forEach(function(h){ var k=h.email+"|"+h.day; (hourly[k]=hourly[k]||{})[h.hr]={c:Number(h.calls),e:Number(h.emails)}; });
+  var equality={};
+  (r.equality||[]).forEach(function(q){ equality[q.email+"|"+q.day]=q; });
+  // working days (Mon-Sat) in the fetched window, oldest first
+  var xdays=[];
+  for(var i=PULSE_SPAN;i>=0;i--){
+    var d=new Date(Date.now()-i*864e5);
+    if(d.getDay()===0) continue;
+    xdays.push(d.toISOString().slice(0,10));
+  }
+  var today=new Date().toISOString().slice(0,10);
+  var html='<div class="controls" style="align-items:center">'+
+    '<button class="chip" onclick="pShiftDay(-1)">&larr;</button>'+
+    '<b style="font-size:16px;min-width:120px;text-align:center">'+pDayLbl(PULSE_DAY)+(PULSE_DAY===today?' <span class="dom">(today)</span>':'')+'</b>'+
+    '<button class="chip" onclick="pShiftDay(1)"'+(PULSE_DAY===today?' disabled style="opacity:.4"':'')+'>&rarr;</button>'+
+    '<span class="pill"><span style="display:inline-block;width:9px;height:9px;background:'+CALL_COL+';border-radius:2px;margin-right:5px"></span>calls'+
+    '<span style="display:inline-block;width:9px;height:9px;background:'+MAIL_COL+';border-radius:2px;margin:0 5px 0 12px"></span>emails</span>'+
+    '<span class="pill">counted one-by-one from Aircall and Front &middot; synced hourly &middot; click a dot to jump to that day</span></div>';
+  var any=false;
+  PULSE_REPS.forEach(function(em){
+    var rep=byRep[em]; if(!rep) return;
+    any=true;
+    var d=rep.rows[PULSE_DAY];
+    var maxHour=1, hs=hourly[em+"|"+PULSE_DAY]||{};
+    Object.keys(hs).forEach(function(h){ maxHour=Math.max(maxHour,hs[h].c,hs[h].e); });
+    // ---- day detail
+    var detail;
+    if(d && (d.calls>0||d.emails_front>0||d.emails_hs>0)){
+      var persist=Number(d.persist_pct);
+      var bars="";
+      for(var h=7;h<=18;h++){
+        var v=hs[h]||{c:0,e:0};
+        var hc=v.c>0?Math.max(6,Math.round(52*v.c/maxHour)):2;
+        var he=v.e>0?Math.max(6,Math.round(52*v.e/maxHour)):2;
+        bars+='<div style="flex:1;min-width:38px;text-align:center">'+
+          '<div style="display:flex;gap:3px;align-items:flex-end;justify-content:center;height:70px">'+
+            '<div style="width:14px"><div style="font-size:10px;color:'+CALL_COL+';font-weight:600;height:13px">'+(v.c||"")+'</div>'+
+              '<div title="'+v.c+' calls" style="height:'+hc+'px;background:'+(v.c?CALL_COL:"#E5E9F0")+';border-radius:3px 3px 0 0"></div></div>'+
+            '<div style="width:14px"><div style="font-size:10px;color:'+MAIL_COL+';font-weight:600;height:13px">'+(v.e||"")+'</div>'+
+              '<div title="'+v.e+' emails" style="height:'+he+'px;background:'+(v.e?MAIL_COL:"#E5E9F0")+';border-radius:3px 3px 0 0"></div></div>'+
+          '</div>'+
+          '<div class="dom" style="font-size:10px;margin-top:3px">'+(h<12?h+"am":(h===12?"12pm":(h-12)+"pm"))+'</div></div>';
+      }
+      var q=equality[em+"|"+PULSE_DAY];
+      var qline="";
+      if(q && Number(q.emails)>0){
+        var verdict, vb, vc, det;
+        if(Number(q.with_bodies)<3){ verdict="too few bodies to judge"; vb="#F2F4F8"; vc="#5B6577"; det=""; }
+        else if(Number(q.near_dup_pct)>=60){
+          verdict="mail-merge"; vb="#FEF2F2"; vc="#8F1D1D";
+          det=q.top_subject_n+' of '+q.emails+' were the same template &mdash; &ldquo;'+esc(String(q.top_subject||"").slice(0,60))+'&rdquo; &middot; '+q.near_dup_pct+'% near-identical &middot; one every '+Math.round(q.median_gap_secs)+'s';
+        } else if(Number(q.near_dup_pct)>=30){
+          verdict="part-templated"; vb="#FEF6E7"; vc="#7A4E07";
+          det=q.near_dup_pct+'% near-identical &middot; '+q.tailored+' written individually &middot; '+q.distinct_subjects+' different subjects';
+        } else {
+          verdict="tailored"; vb="#E7F8F0"; vc="#0A6B4A";
+          det=q.distinct_subjects+' different subjects across '+q.emails+' emails &middot; '+q.tailored+' individually written';
+        }
+        qline='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">'+
+          '<span class="pill" style="background:'+vb+';color:'+vc+'">'+verdict+'</span>'+
+          (det?'<span class="dom">'+det+'</span>':'')+'</div>';
+      }
+      detail='<div style="padding:14px 20px 12px">'+
+        '<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'+
+          '<span style="font-size:14px;font-weight:600;color:'+CALL_COL+'">Calls '+pT(d.first_call)+' &rarr; '+pT(d.last_call)+'</span>'+
+          '<span style="font-size:14px;font-weight:600;color:'+MAIL_COL+'">Emails '+pT(d.first_email)+' &rarr; '+pT(d.last_email)+'</span>'+
+          '<span style="margin-left:auto;display:flex;gap:6px">'+
+            (d.calls>0?'<span class="pill" style="background:'+(persist>=50?"#E7F8F0":"#FEF6E7")+';color:'+(persist>=50?"#0A6B4A":"#7A4E07")+'" title="answered calls kept past 60s">'+persist+'% persisted</span>':'')+
+            (Number(d.replies_in)>0?'<span class="pill">'+d.replies_in+' replies in</span>':'')+
+            (Number(d.meaningful)>0?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.meaningful+' meaningful</span>':'')+
+          '</span></div>'+
+        '<div class="dom" style="margin-top:3px">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' emails'+(d.emails_hs>0?' ('+d.emails_hs+' in HubSpot)':'')+'</div>'+
+        '<div style="display:flex;gap:6px;align-items:flex-end;margin-top:10px;overflow-x:auto">'+bars+'</div>'+
+        qline+'</div>';
+    } else {
+      detail='<div class="empty" style="padding:22px">No recorded activity on '+pDayLbl(PULSE_DAY)+'.</div>';
+    }
+    // ---- trends
+    var rows=rep.rows;
+    var SM=7*60, EM=12*60; // start-time chart window: 7am..12pm
+    var mkStart=function(get,col,lbl){
+      return { col:col, pts:xdays.map(function(dy,i){
+        var row=rows[dy]; var v=row?pMins(get(row)):null;
+        if(v!=null){ if(v<SM)v=SM; if(v>EM)v=EM; }
+        return {i:i,d:dy,v:v,f:v==null?null:1-(v-SM)/(EM-SM),tip:pDayLbl(dy)+" &middot; "+lbl+" "+(v==null?"-":pT(row?get(row):null))};
+      })};
+    };
+    var maxC=1,maxE=1;
+    xdays.forEach(function(dy){ var row=rows[dy]; if(!row) return;
+      maxC=Math.max(maxC,Number(row.calls)); maxE=Math.max(maxE,Number(row.emails_front)); });
+    var mkVol=function(get,mx,col,lbl){
+      return { col:col, pts:xdays.map(function(dy,i){
+        var row=rows[dy]; var v=row?Number(get(row)):null;
+        if(v===0 && !row) v=null;
+        return {i:i,d:dy,v:v,f:v==null?null:v/mx,tip:pDayLbl(dy)+" &middot; "+v+" "+lbl};
+      })};
+    };
+    var startChart=pChart("When they start &mdash; first call / first email", xdays,
+      [mkStart(function(x){return x.first_call;},CALL_COL,"first call"),
+       mkStart(function(x){return x.first_email;},MAIL_COL,"first email")],
+      { min:0, max:1, ticks:[{v:1,l:"7am"},{v:.8,l:"8am"},{v:.6,l:"9am"},{v:.4,l:"10am"},{v:.2,l:"11am"},{v:0,l:"12pm"}] });
+    var volChart=pChart("How much they do &mdash; calls (left) / emails (right)", xdays,
+      [mkVol(function(x){return x.calls;},maxC,CALL_COL,"calls"),
+       mkVol(function(x){return x.emails_front;},maxE,MAIL_COL,"emails")],
+      { min:0, max:1, ticks:[{v:0,l:"0",col:CALL_COL},{v:.5,l:Math.round(maxC/2),col:CALL_COL},{v:1,l:maxC,col:CALL_COL}],
+        rticks:[{f:0,l:"0",col:MAIL_COL},{f:.5,l:Math.round(maxE/2),col:MAIL_COL},{f:1,l:maxE,col:MAIL_COL}] });
+    html+='<div class="panel flush"><div class="phead">'+
+      '<span class="avi" style="background:'+avColor(rep.name)+'">'+esc(initials(rep.name))+'</span>'+
+      '<h3>'+esc(rep.name)+'</h3><span class="hint">'+pDayLbl(PULSE_DAY)+'</span></div>'+
+      detail+
+      '<div style="padding:6px 20px 16px;border-top:1px solid var(--color-base-200)">'+
+        '<div class="dom" style="font-weight:650;color:#3B4457;margin:8px 0 6px">Trend &mdash; last 3 weeks (higher start line = earlier; click a dot to open that day)</div>'+
+        '<div style="display:flex;gap:22px;flex-wrap:wrap">'+startChart+volChart+'</div>'+
+      '</div></div>';
+  });
+  if(!any) html+='<div class="empty">No activity from Ricky or Luke in this window.</div>';
+  el.innerHTML=html;
 }
 // ---- Customers: mine, converted, spending ----------------------------------
 function loadCustomers(){
