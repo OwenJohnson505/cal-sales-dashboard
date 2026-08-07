@@ -1011,12 +1011,19 @@ function desk2Post(payload, cb){
 }
 // 'Last updated' from the TMS feed - staleness must be visible, not assumed.
 function paintFreshness(tms){
-  var el=document.getElementById("freshchip"); if(!el||!tms||!tms.latest_upload) return;
-  var days=Math.floor((Date.now()-new Date(tms.latest_upload).getTime())/864e5);
-  var txt=days===0?"today":(days===1?"yesterday":days+" days ago");
-  el.textContent="TMS data: "+txt;
-  el.style.background=days>7?"#FEF6E7":"var(--color-base-200)";
-  el.style.color=days>7?"#7A4E07":"var(--mut)";
+  var el=document.getElementById("freshchip"); if(!el||!tms) return;
+  // honesty: show the last JOB DATE in the data, not when the file was uploaded
+  var dt=tms.data_through||null;
+  if(dt){
+    var d=new Date(dt+"T12:00:00");
+    var days=Math.floor((Date.now()-d.getTime())/864e5);
+    el.textContent="TMS data to "+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]+" "+d.getDate()+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]+" ("+days+"d behind)";
+    el.style.background=days>9?"#FEF6E7":"var(--color-base-200)";
+    el.style.color=days>9?"#7A4E07":"var(--mut)";
+  } else if(tms.latest_upload){
+    var days2=Math.floor((Date.now()-new Date(tms.latest_upload).getTime())/864e5);
+    el.textContent="TMS uploaded "+(days2===0?"today":days2+"d ago");
+  }
 }
 function deskPost(payload, cb){
   if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
@@ -1369,6 +1376,7 @@ function renderCustomers(){
       '<input id="custq" class="input" placeholder="Search customers..." oninput="custSearch(this.value)" style="max-width:210px;padding:7px 12px;font-size:13.5px">'+
       '<button class="chip active" onclick="custFilter(\'all\',this)">All</button>'+
       '<button class="chip" onclick="custFilter(\'declining\',this)">Spend falling</button>'+
+      '<button class="chip" onclick="custFilter(\'offpattern\',this)">Out of pattern</button>'+
       '<button class="chip" onclick="custFilter(\'growing\',this)">Growing</button>'+
       '<button class="chip" onclick="custFilter(\'new\',this)">New</button>'+
       '<button class="chip" onclick="custFilter(\'quiet\',this)">Quiet 60d+</button>'+
@@ -1388,6 +1396,7 @@ function renderCustRows(){
         || String(x.domain||"").toLowerCase().indexOf(q)>=0
         || String(x.salesperson||"").toLowerCase().indexOf(q)>=0; });
   if(f==="declining"){ cs=cs.filter(function(x){return x.trend==="declining";}).sort(function(a,b){return b.prior_monthly-a.prior_monthly;}); }
+  if(f==="offpattern"){ cs=cs.filter(function(x){return x.off_pattern||x.volume_shift;}).sort(function(a,b){return (b.jobs_per_week||0)-(a.jobs_per_week||0);}); }
   if(f==="growing"){ cs=cs.filter(function(x){return x.trend==="growing";}).sort(function(a,b){return b.recent_monthly-a.recent_monthly;}); }
   if(f==="new"){ cs=cs.filter(function(x){return x.trend==="new";}); }
   if(f==="quiet")  cs=cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;});
@@ -1399,6 +1408,7 @@ function renderCustRows(){
     return '<div class="actrow callrow'+open+'>'+
       '<div class="co"><b>'+esc(x.customer_name)+'</b>'+
       '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+
+        (x.pattern_tracked&&x.cadence?' &middot; usually books '+esc(x.cadence)+' ('+x.jobs_per_week+'/wk)':'')+
         (window.__custAll&&x.salesperson?' &middot; '+esc(x.salesperson):'')+'</div>'+
       '<div style="font-size:15px;font-weight:650;color:#16233A;margin-top:3px">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime <span style="color:var(--faint);font-weight:500">&middot;</span> '+nf(x.jobs_total)+' jobs <span style="color:var(--faint);font-weight:500">&middot;</span> \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job <span style="color:var(--faint);font-weight:500">&middot;</span> '+(x.margin_pct!=null?x.margin_pct+'% margin':'')+'</div>'+
       (Number(x.quoted_n)>0
@@ -1407,6 +1417,8 @@ function renderCustRows(){
       '</div>'+
       '<div class="rt" style="align-items:center;gap:10px">'+
       spendSpark(x.monthly)+
+      (x.off_pattern?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D" title="silent for more full weeks than any gap in their recent history">out of pattern &middot; silent '+x.silent_weeks+'wk</span>':'')+
+      (x.volume_shift&&!x.off_pattern?'<span class="pill" style="background:#FEF6E7;color:#7A4E07" title="job count halved over 4 weeks">volume down '+x.jobs_prior_4w+'&rarr;'+x.jobs_4w+' jobs/4wk</span>':'')+
       trendPill(x)+
       (Number(x.quoted_n)>=5?(function(){var w=Number(x.win_pct)||0;var c=w>=60?["#E7F8F0","#0A6B4A"]:(w>=30?["#FEF6E7","#7A4E07"]:["#FEF2F2","#8F1D1D"]);return '<span class="pill" style="background:'+c[0]+';color:'+c[1]+'">wins '+w+'% of quotes</span>';})():'')+
       (!x.has_account_form?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">no account form</span>':'')+
