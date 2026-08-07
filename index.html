@@ -1002,6 +1002,7 @@ function setView(el){
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
 var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2";
 function desk2Post(payload, cb){
+  if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
   sb.auth.getSession().then(function(se){
     if(!se.data.session) return login();
     fetch(DESK2_,{method:"POST",headers:{Authorization:"Bearer "+se.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
@@ -1018,6 +1019,7 @@ function paintFreshness(tms){
   el.style.color=days>7?"#7A4E07":"var(--mut)";
 }
 function deskPost(payload, cb){
+  if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
   sb.auth.getSession().then(function(s){
     if(!s.data.session) return login();
     fetch(DESK_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
@@ -1045,7 +1047,7 @@ function loadToday(){
 }
 function renderToday(el,got){
   var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
-  if(d.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; }
+  if(d.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
   var worked=list.filter(function(x){return x.status==="worked";}).length;
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
@@ -1630,7 +1632,7 @@ function loadCallList(){
   deskPost({action:"list",limit:40},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
     // Only the head/admin should see the Team tab; the desk tells us the role.
-    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; }
+    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
     CL=r.list||[];
     renderCallList();
   });
@@ -1833,7 +1835,7 @@ function loadTeam(){
   el.innerHTML=spinner();
   deskPost({action:"scoreboard"},function(r){
     // Everyone sees the leaderboard; only head/admin get the management detail.
-    if(!r||!r.ok){ el.innerHTML=""; teamLeaderboard(el); return; }
+    if(!r||!r.ok){ el.innerHTML=""; teamLeaderboard(el); loadApprovals(el); return; }
     var rows=(r.rows||[]).filter(function(x){return x.role!=="ops";});
     var broken=rows.filter(function(x){return !x.logging_ok;});
     var sla=rows.reduce(function(a,x){return a+Number(x.sla_breaches||0);},0);
@@ -1889,10 +1891,55 @@ function loadTeam(){
         '<button class="btn btn-primary btn-sm" onclick="resolveStaff()">Look up</button></div>'+
         '<div id="staffres" style="margin-top:10px"></div></div></div>';
     teamLeaderboard(el);
+    loadApprovals(el);
   });
 }
 // Leaderboard on top: revenue won and customers brought on, ranked. Visible to
 // every rep, not just the head - seeing where you rank is the point.
+// Head/admin can look at the app through any rep's eyes. The server only
+// honours rep_email for canManage users, so this is presentation, not access.
+function initViewAs(){
+  var sel=document.getElementById("viewas");
+  if(!sel||sel.dataset.ready) return;
+  sel.dataset.ready="1";
+  deskPost({action:"staff_list"},function(r){
+    if(!r||!r.ok) return;
+    sel.innerHTML='<option value="">Viewing: myself</option>'+
+      (r.staff||[]).map(function(x){ return '<option value="'+esc(x.email)+'">Viewing: '+esc(x.full_name)+'</option>'; }).join("");
+    sel.style.display="";
+  });
+}
+function setViewAs(em){
+  window.VIEW_AS=em||null;
+  var sel=document.getElementById("viewas");
+  if(sel){ sel.style.background=em?"#EEF3FF":""; sel.style.color=em?"#1E45B8":""; sel.style.fontWeight=em?"650":""; }
+  var active=document.querySelector(".nv.active");
+  if(active) setView(active); else location.hash="";
+}
+
+// Pending sign-ups: staff request access on the login screen; they land here.
+function loadApprovals(el){
+  deskPost({action:"approvals"},function(r){
+    if(!r||!r.ok||!(r.pending||[]).length) return;
+    var html='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Waiting to be let in</h3><span class="hint">'+r.pending.length+'</span></div><div class="plist">'+
+      r.pending.map(function(u){
+        return '<div class="actrow"><div class="co"><b>'+esc(u.email)+'</b>'+
+          '<div class="dom">requested '+esc(String(u.created_at).slice(0,10))+
+          (u.staff_match?' &middot; matches staff record: '+esc(u.staff_match.full_name)+' ('+esc(u.staff_match.role)+')':' &middot; no staff record yet - one will be created as a rep')+'</div></div>'+
+          '<div class="rt"><button class="btn btn-primary btn-sm" onclick="approveUser(\''+esc(u.id)+'\',true,this)">Approve</button>'+
+          '<button class="chip" onclick="approveUser(\''+esc(u.id)+'\',false,this)">Reject</button></div></div>';
+      }).join("")+'</div></div>';
+    el.insertAdjacentHTML("afterbegin",html);
+  });
+}
+function approveUser(uid,ok,btn){
+  if(btn) btn.disabled=true;
+  deskPost({action:"approve",user_id:uid,ok:ok},function(r){
+    if(r&&r.ok){ var row=btn&&btn.closest(".actrow"); if(row) row.style.opacity=".35";
+      showNext(ok?"Approved - they can sign in now.":"Rejected - they can request again."); }
+    else if(btn) btn.disabled=false;
+  });
+}
 function teamLeaderboard(el){
   // Revenue from the TMS consignment logs - actual invoiced money, not HubSpot
   // deal values (which made everyone but Nicola read as zero).
@@ -2100,7 +2147,8 @@ function renderDash(p){
         '<button class="nv" data-v="calendar" onclick="setView(this)">Calendar</button>'+
         '<button class="nv" data-v="pulse" onclick="setView(this)" id="nvpulse" style="display:none">Pulse</button>'+
         '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam">Team</button>'+
-        '<span id="freshchip" class="pill" style="margin-left:auto"></span>'+
+        '<select id="viewas" class="input" style="display:none;margin-left:auto;max-width:190px;font-size:13px;padding:6px 10px" onchange="setViewAs(this.value)"></select>'+
+        '<span id="freshchip" class="pill"></span>'+
       '</nav></div>'+
       '<div class="topacts">'+adminBtn+'<button class="btn btn-ghost btn-sm" onclick="out()">Sign out</button></div>'+
     '</div></div>'+
