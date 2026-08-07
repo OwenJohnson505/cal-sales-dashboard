@@ -1865,9 +1865,13 @@ function openCallLead(dom){
         '<p style="margin:0 0 8px">'+esc(ins.story||ins.headline||'')+'</p>'+
         (ins.next_step?'<div class="nextact" style="padding:13px 16px;margin-top:4px"><div><div class="lbl">Next step</div><div class="dt" style="font-size:13.5px">'+esc(ins.next_step)+'</div></div></div>':'')+
         '</div>';
-    } else if(r.insight_pending){
+    } else if(r.insight_pending && st && (Number(st.calls||0)+Number(st.emails||0))>=2){
+      // an assessment only actually starts when there is engagement to read
       known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0"><p class="sub" style="margin:0">'+
         '<span class="loading loading-spinner loading-xs"></span> Assessing this account now &mdash; the website check and engagement read take about half a minute. Reopen shortly.</p></div>';
+    } else if(!ins && (!st || (Number(st.calls||0)+Number(st.emails||0))<2)){
+      known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0"><p class="sub" style="margin:0">'+
+        'Fresh account &mdash; no calls or emails on record yet. The story starts after the first contact; the brief above is your way in.</p></div>';
     } else if(st.state){
       known='<h3 class="msec">What we already know</h3><div class="lcard" style="margin:0">'+
         '<p><b>'+esc(st.state)+'</b>'+(st.days_since!=null?' &middot; last touch '+st.days_since+'d ago':'')+'</p>'+
