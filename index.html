@@ -1400,10 +1400,10 @@ function renderCustRows(){
       '<div class="co"><b>'+esc(x.customer_name)+'</b>'+
       '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+
         (window.__custAll&&x.salesperson?' &middot; '+esc(x.salesperson):'')+'</div>'+
-      '<div class="seg">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime &middot; '+x.jobs_total+' jobs &middot; \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job'+(x.margin_pct!=null?' &middot; '+x.margin_pct+'% margin':'')+'</div>'+
+      '<div style="font-size:15px;font-weight:650;color:#16233A;margin-top:3px">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime <span style="color:var(--faint);font-weight:500">&middot;</span> '+nf(x.jobs_total)+' jobs <span style="color:var(--faint);font-weight:500">&middot;</span> \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job <span style="color:var(--faint);font-weight:500">&middot;</span> '+(x.margin_pct!=null?x.margin_pct+'% margin':'')+'</div>'+
       (Number(x.quoted_n)>0
-        ? '<div class="seg">Quotes since Mar: won '+x.won_n+' of '+x.quoted_n+' ('+(x.win_pct!=null?x.win_pct:0)+'%) &middot; \u00a3'+nf(Math.round(x.won_value))+' won of \u00a3'+nf(Math.round(x.quoted_value))+' quoted</div>'
-        : '<div class="seg" style="color:var(--faint)">No quotes logged since Mar &middot; books straight in</div>')+
+        ? '<div style="font-size:14.5px;font-weight:600;margin-top:2px;color:#3A455B">Quotes since Mar: won <span style="color:#0A6B4A;font-weight:750">'+x.won_n+' of '+x.quoted_n+' ('+(x.win_pct!=null?x.win_pct:0)+'%)</span> &middot; <span style="color:#0A6B4A;font-weight:750">\u00a3'+nf(Math.round(x.won_value))+'</span> won of \u00a3'+nf(Math.round(x.quoted_value))+' quoted</div>'
+        : '<div class="seg" style="color:var(--faint);font-size:13px">No quotes logged since Mar &middot; books straight in</div>')+
       '</div>'+
       '<div class="rt" style="align-items:center;gap:10px">'+
       spendSpark(x.monthly)+
