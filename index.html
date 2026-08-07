@@ -1740,6 +1740,47 @@ function openCallLead(dom){
       ? '<div class="alertcard" style="background:#E7F8F0;border-color:#A9DEC6"><h4 style="color:#0A6B4A">Already a Cal customer</h4><p>Account rep '+esc(r.customer.rep||"unknown")+(r.customer.town?', '+esc(r.customer.town):'')+'. Check before pitching &mdash; this is a service call, not a cold one.</p></div>'
       : "";
 
+    // The agreed account terms, from their actual Zoho account form.
+    var formHtml="";
+    var af=(r.forms||[])[0];
+    if(af){
+      var raw=af.raw||{};
+      var fv=function(frag){ var ks=Object.keys(raw); frag=frag.toLowerCase();
+        for(var i=0;i<ks.length;i++){ if(ks[i].toLowerCase().indexOf(frag)>=0){ var v=String(raw[ks[i]]||"").trim(); if(v) return v; } }
+        return ""; };
+      var payTerms=fv("standard payment terms");
+      var invRun=fv("standard invoice runs");
+      var poRef=fv("invoice reference at the time");
+      var invPref=fv("prefer to receive your invoices");
+      var acctsName=fv("accounts contact");
+      var acctsEmail=fv("accounts e-mail");
+      var invEmail=fv("invoice e-mail");
+      var vat=fv("vat no");
+      var reg=fv("company reg");
+      var estSpend=fv("estimated annual spend");
+      var row=function(l,v,warn){ if(!v) return "";
+        return '<div class="actrow" style="padding:7px 0"><div class="co"><div class="dom">'+l+'</div><div style="font-size:13.5px'+(warn?';color:#7A4E07;font-weight:600':'')+'">'+esc(v)+'</div></div></div>'; };
+      formHtml='<h3 class="msec">Account terms <span class="faint" style="font-weight:400">from their account form &middot; '+esc(String(af.submitted_at).slice(0,10))+'</span></h3>'+
+        '<div class="lcard" style="margin:0">'+
+        '<div class="pillrow" style="margin:0 0 6px">'+
+          (payTerms?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">non-standard payment terms</span>'
+                   :'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">standard 30-day terms</span>')+
+          (invRun?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">non-standard invoice run</span>':'')+
+        '</div>'+
+        row("Payment terms", payTerms||"Standard: 30 days from invoice", !!payTerms)+
+        row("Invoice run", invRun, true)+
+        row("Booking reference they give", poRef)+
+        row("Invoices by", invPref)+
+        row("Accounts contact", acctsName+(acctsEmail?" - "+acctsEmail:""))+
+        row("Invoice e-mail", invEmail)+
+        row("VAT no", vat)+
+        row("Company reg", reg)+
+        row("Estimated annual spend (their words)", estSpend)+
+        '</div>';
+    } else if(r.customer){
+      formHtml='<div class="alertcard"><h4>No account form on file</h4><p>They spend with Cal but never submitted an account form &mdash; payment terms and invoicing details are unconfirmed. Worth sending the form.</p></div>';
+    }
+
     // Whether a contact has been reached is INFERRED from Front, Aircall and
     // HubSpot - never something a rep ticks.
     var cons=(r.contacts||[]).length
@@ -1811,7 +1852,7 @@ function openCallLead(dom){
       return '<div class="evid"><b>'+esc(p.point)+'</b><span class="src">'+esc(p.why_it_lands||"")+'</span></div>';
     }).join(""):"";
 
-    body.innerHTML=warn+
+    body.innerHTML=warn+formHtml+
       '<div class="actrow" style="border:0;padding:0 0 4px">'+
         scoreRing(v.fit_score,"md")+
         '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+'</div></div>'+
