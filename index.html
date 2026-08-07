@@ -1841,7 +1841,8 @@ function openCallLead(dom){
           else if(c.emailed) tags+='<span class="tag part">Emailed</span>';
           else tags+='<span class="tag new">Not reached</span>';
           return '<div class="actrow"><div class="co"><b>'+esc(c.full_name)+'</b>'+
-            (c.title?'<div class="dom">'+esc(c.title)+'</div>':'')+
+            (c.title?'<div class="dom">'+esc(c.title)+(c.city?' &middot; '+esc(c.city):'')+'</div>':'')+
+            (c.pitch_angle?'<div class="seg">Angle: '+esc(String(c.pitch_angle).slice(0,140))+'</div>':'')+
             (c.best_call_window?'<div class="seg">Best time: '+esc(c.best_call_window)+'</div>':'')+'</div>'+
             '<div class="rt">'+tags+
             (c.email?'<a class="btn btn-soft btn-sm" href="mailto:'+esc(c.email)+'">Email</a>':'<span class="nonum">no email</span>')+
@@ -1907,17 +1908,40 @@ function openCallLead(dom){
       return '<div class="evid"><b>'+esc(p.point)+'</b><span class="src">'+esc(p.why_it_lands||"")+'</span></div>';
     }).join(""):"";
 
+    // The FULL research brief: who they are, why they scored what they scored,
+    // and how to handle the pushback - all of it was stored, none of it shown.
+    var comp=(b&&b.company)||null;
+    var whoHtml=comp?('<h3 class="msec">Who they are</h3><div class="lcard" style="margin:0">'+
+      (comp.what_they_do?'<p style="margin:0 0 8px">'+esc(comp.what_they_do)+'</p>':'')+
+      (comp.size_signal?'<p class="sub" style="margin:0 0 10px">'+esc(comp.size_signal)+'</p>':'')+
+      ((comp.uk_locations||[]).length?'<div class="pillrow" style="margin:0">'+(comp.uk_locations||[]).map(function(l){return '<span class="pill">'+esc(l)+'</span>';}).join('')+'</div>':'')+
+      '</div>'):'';
+    var bv=(b&&b.verdict)||null;
+    var whyHtml=bv?('<h3 class="msec">Why the '+((bv.score!=null?bv.score:v.fit_score)||'score')+'</h3><div class="lcard" style="margin:0">'+
+      (bv.headline?'<p style="margin:0 0 8px"><b>'+esc(bv.headline)+'</b></p>':'')+
+      (bv.reasoning?'<p class="sub" style="margin:0 0 10px">'+esc(bv.reasoning)+'</p>':'')+
+      ((bv.evidence||[]).map(function(e){return '<div class="evid"><b>'+esc(e.fact||'')+'</b>'+(e.source?'<span class="src">Source: '+esc(e.source)+'</span>':'')+'</div>';}).join(''))+
+      (bv.confidence?'<p class="sub" style="margin:8px 0 0;color:var(--faint)">Research confidence: '+esc(bv.confidence)+'</p>':'')+
+      '</div>'):'';
+    var ap=(b&&b.approach)||{};
+    var pushHtml=(ap.objection||ap.avoid)?('<h3 class="msec">If they push back</h3>'+
+      (ap.objection?'<div class="evid"><b>Likely objection &amp; the answer</b><span class="src">'+esc(ap.objection)+'</span></div>':'')+
+      (ap.avoid?'<div class="evid"><b>Avoid</b><span class="src">'+esc(ap.avoid)+'</span></div>':'')):'';
+
     body.innerHTML=warn+formHtml+
       '<div class="actrow" style="border:0;padding:0 0 4px">'+
         scoreRing(v.fit_score,"md")+
         '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+'</div></div>'+
         '<div class="rt">'+(phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a>':'<span class="nonum">no number on file</span>')+'</div>'+
       '</div>'+
-      (v.rationale?'<p class="sub" style="margin-top:10px">'+esc(v.rationale)+'</p>':'')+
+      (v.rationale&&!bv?'<p class="sub" style="margin-top:10px">'+esc(v.rationale)+'</p>':'')+
+      whoHtml+
+      whyHtml+
       (b&&b.approach&&b.approach.opening_line
         ? '<h3 class="msec">Opening line</h3><div class="nextact"><div><div class="lbl">Say this</div><div class="dt">'+esc(b.approach.opening_line)+'</div></div></div>'
         : '')+
       talk+
+      pushHtml+
       known+
       evidence+
       '<h3 class="msec">Contacts</h3>'+cons+
