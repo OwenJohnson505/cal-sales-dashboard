@@ -1047,7 +1047,7 @@ function loadToday(){
 }
 function renderToday(el,got){
   var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
-  if(d.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
+  if(d.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
   var worked=list.filter(function(x){return x.status==="worked";}).length;
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
@@ -1304,10 +1304,13 @@ function renderPulse(){
 function loadCustomers(){
   var el=document.getElementById("custboard"); if(!el) return;
   el.innerHTML=spinner();
-  desk2Post({action:"customers"},function(r){
+  // head/admin with no view-as selected see the whole book with rep chips
+  var payload={action:"customers"};
+  if(window.CAN_MANAGE && !window.VIEW_AS) payload.all=true;
+  desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load customers.")+'</div>'; return; }
     paintFreshness(r.tms);
-    window.__cust=r.customers||[]; window.__custFilter="all";
+    window.__cust=r.customers||[]; window.__custAll=!!r.all; window.__custFilter="all";
     renderCustomers();
   });
 }
@@ -1317,19 +1320,42 @@ function custFilter(f,btn){
   for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active", cs[i]===btn);
   renderCustRows();
 }
+// 13-month spend sparkline; the current partial month is the last, faded bar.
+function spendSpark(series){
+  if(!series||!series.length) return "";
+  var mx=1; series.forEach(function(pt){ mx=Math.max(mx,Number(pt.r)||0); });
+  var bars=series.map(function(pt,i){
+    var h=Math.max(2,Math.round(20*(Number(pt.r)||0)/mx));
+    var last=i===series.length-1;
+    return '<span title="'+esc(pt.m)+': \u00a3'+nf(Math.round(pt.r))+'" style="display:inline-block;width:5px;height:'+h+'px;background:'+(last?"#9DB1C9":"#16233A")+';border-radius:1px"></span>';
+  }).join("");
+  return '<span style="display:inline-flex;gap:2px;align-items:flex-end;height:22px">'+bars+'</span>';
+}
+function trendPill(x){
+  var t=x.trend;
+  if(t==="declining") return '<span class="pill" style="background:#FEF2F2;color:#8F1D1D" title="last 2 complete months vs the 3 before">spend falling \u00a3'+nf(Math.round(x.prior_monthly))+'/mo \u2192 \u00a3'+nf(Math.round(x.recent_monthly))+'/mo</span>';
+  if(t==="growing")  return '<span class="pill" style="background:#E7F8F0;color:#0A6B4A">spend growing \u00a3'+nf(Math.round(x.recent_monthly))+'/mo</span>';
+  if(t==="new")      return '<span class="pill" style="background:#EEF3FF;color:#1E45B8">new customer</span>';
+  if(t==="quiet")    return '<span class="pill">no recent spend</span>';
+  return "";
+}
 function renderCustomers(){
   var el=document.getElementById("custboard"); var cs=window.__cust||[];
-  if(!cs.length){ el.innerHTML='<div class="empty"><div class="ei">&#128101;</div>No spending customers are attributed to you in the TMS.</div>'; return; }
+  if(!cs.length){ el.innerHTML='<div class="empty"><div class="ei">&#128101;</div>No spending customers are attributed to '+(window.__custAll?'the team':'you')+' in the TMS.</div>'; return; }
   var totV=cs.reduce(function(a,x){return a+Number(x.revenue_total||0);},0);
+  var declining=cs.filter(function(x){return x.trend==="declining";});
+  var declValue=declining.reduce(function(a,x){return a+Number(x.prior_monthly||0);},0);
   el.innerHTML='<div class="statwrap"><div class="statgrid">'+
-    stat("Your customers",nf(cs.length),"spending in the TMS")+
+    stat(window.__custAll?"All customers":"Your customers",nf(cs.length),"spending in the TMS")+
     stat("Total revenue","\u00a3"+nf(Math.round(totV)),"all time, from consignment logs")+
-    stat("Active 90d",nf(cs.filter(function(x){return x.jobs_90d>0;}).length),"booked in the last 90 days")+
-    stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days","alarm")+
+    stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
+    stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days")+
     '</div></div>'+
     '<div class="controls">'+
       '<button class="chip active" onclick="custFilter(\'all\',this)">All</button>'+
-      '<button class="chip" onclick="custFilter(\'active\',this)">Active 90d</button>'+
+      '<button class="chip" onclick="custFilter(\'declining\',this)">Spend falling</button>'+
+      '<button class="chip" onclick="custFilter(\'growing\',this)">Growing</button>'+
+      '<button class="chip" onclick="custFilter(\'new\',this)">New</button>'+
       '<button class="chip" onclick="custFilter(\'quiet\',this)">Quiet 60d+</button>'+
       '<button class="chip" onclick="custFilter(\'top\',this)">Top spenders</button>'+
       '<button class="chip" onclick="custFilter(\'noform\',this)">No account form</button>'+
@@ -1340,7 +1366,9 @@ function renderCustomers(){
 function renderCustRows(){
   var box=document.getElementById("custrows"); if(!box) return;
   var f=window.__custFilter, cs=(window.__cust||[]).slice();
-  if(f==="active") cs=cs.filter(function(x){return x.jobs_90d>0;});
+  if(f==="declining"){ cs=cs.filter(function(x){return x.trend==="declining";}).sort(function(a,b){return b.prior_monthly-a.prior_monthly;}); }
+  if(f==="growing"){ cs=cs.filter(function(x){return x.trend==="growing";}).sort(function(a,b){return b.recent_monthly-a.recent_monthly;}); }
+  if(f==="new"){ cs=cs.filter(function(x){return x.trend==="new";}); }
   if(f==="quiet")  cs=cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;});
   if(f==="noform") cs=cs.filter(function(x){return !x.has_account_form;});
   if(f==="top")    cs.sort(function(a,b){return b.revenue_total-a.revenue_total;});
@@ -1349,11 +1377,13 @@ function renderCustRows(){
     var open=x.domain?(' crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'"';
     return '<div class="actrow callrow'+open+'>'+
       '<div class="co"><b>'+esc(x.customer_name)+'</b>'+
-      '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+'</div>'+
-      '<div class="seg">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime &middot; '+x.jobs_total+' jobs'+(x.jobs_90d?' &middot; '+x.jobs_90d+' in 90d':'')+'</div></div>'+
-      '<div class="rt">'+
+      '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+
+        (window.__custAll&&x.salesperson?' &middot; '+esc(x.salesperson):'')+'</div>'+
+      '<div class="seg">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime &middot; '+x.jobs_total+' jobs &middot; \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job'+(x.margin_pct!=null?' &middot; '+x.margin_pct+'% margin':'')+'</div></div>'+
+      '<div class="rt" style="align-items:center;gap:10px">'+
+      spendSpark(x.monthly)+
+      trendPill(x)+
       (!x.has_account_form?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">no account form</span>':'')+
-      (x.days_since_job!=null&&x.days_since_job>60?'<span class="waitchip">quiet</span>':'')+
       '</div></div>';
   }).join("")||'<div class="empty">Nothing matches.</div>';
 }
@@ -1632,7 +1662,7 @@ function loadCallList(){
   deskPost({action:"list",limit:40},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
     // Only the head/admin should see the Team tab; the desk tells us the role.
-    if(r.can_manage){ var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
+    if(r.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
     CL=r.list||[];
     renderCallList();
   });
