@@ -1406,7 +1406,8 @@ function renderTasks(el,got){
           '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
           (t.quote?'<div class="seg">Because they said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+
           '<div class="seg">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div></div>'+
-          '<div class="rt"><button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
+          '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
+          '<button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
       }).join("")+'</div></div>';
   }
@@ -1473,6 +1474,53 @@ function calShift(n){
   var d=new Date(m+"-15"); d.setMonth(d.getMonth()+n);
   window.__calMonth=d.toISOString().slice(0,7);
   loadCalendar();
+}
+// The full comms chain behind a suggested task - the rep judges the context,
+// not just the one quoted sentence.
+function openTaskCtx(id){
+  var m=document.getElementById("cmodal"); if(!m) return;
+  m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>Where this task came from</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+spinner("Fetching the full conversation...")+'</div></div>';
+  deskPost({action:"task_ctx",id:id},function(r){
+    var b=document.querySelector("#cmodal .mbody"); if(!b) return;
+    if(!r||!r.ok){ b.innerHTML='<p class="err">'+esc((r&&r.error)||"Could not load the conversation.")+'</p>'; return; }
+    var t=r.task||{};
+    var head='<div class="actrow" style="padding:0 0 12px"><div class="co"><b>'+esc(t.title||"")+'</b>'+
+      '<div class="dom">'+esc(t.domain||"")+(t.due_date?' &middot; due '+esc(t.due_date):'')+'</div>'+
+      (t.quote?'<div class="seg">&ldquo;'+esc(t.quote)+'&rdquo;</div>':'')+'</div>'+
+      '<div class="rt"><button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this);closeModal()">Accept</button>'+
+      '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this);closeModal()">Dismiss</button></div></div>';
+    var bodyHtml="";
+    if(t.source==="call"){
+      var c=r.call||{};
+      bodyHtml+='<h3 class="msec">The call</h3>'+
+        '<div class="dom" style="margin-bottom:8px">'+esc(c.agent||"")+' '+(c.direction==="outbound"?"called":"spoke to")+' '+esc(c.contact_name||c.company||c.phone||"")+
+        (c.started_at?' &middot; '+esc(String(c.started_at).slice(0,16).replace("T"," ")):'')+
+        (c.duration?' &middot; '+Math.round(c.duration/60)+'m '+(c.duration%60)+'s':'')+'</div>';
+      if(r.summary) bodyHtml+='<div class="seg" style="margin-bottom:10px"><b>Summary:</b> '+esc(r.summary)+'</div>';
+      if(r.transcript){
+        bodyHtml+='<details open><summary style="cursor:pointer;font-weight:600;font-size:13px;margin-bottom:6px">Full transcript</summary>'+
+          '<div style="white-space:pre-wrap;font-size:13px;line-height:1.55;color:#3A455B;max-height:420px;overflow:auto;border:1px solid var(--color-base-200);border-radius:8px;padding:12px 14px;background:var(--color-base-100)">'+esc(r.transcript)+'</div></details>';
+      } else if(!r.summary) bodyHtml+='<p class="muted">No transcript is available for this call.</p>';
+    } else {
+      var conv=r.conversation||{};
+      bodyHtml+='<h3 class="msec">The thread'+(conv.subject?': '+esc(conv.subject):'')+'</h3>';
+      if(conv.recipient_handle) bodyHtml+='<div class="dom" style="margin-bottom:8px">with '+esc(conv.recipient_name||conv.recipient_handle)+' &lt;'+esc(conv.recipient_handle)+'&gt;</div>';
+      var ms=r.messages||[];
+      if(ms.length){
+        bodyHtml+='<div style="display:flex;flex-direction:column;gap:8px;max-height:440px;overflow:auto;padding-right:4px">'+
+          ms.map(function(msg){
+            var when=msg.at?String(msg.at).slice(0,16).replace("T"," "):"";
+            var inb=!!msg.inbound;
+            return '<div style="border:1px solid var(--color-base-200);border-left:3px solid '+(inb?"#0A6B4A":"#16233A")+';border-radius:8px;padding:10px 13px;background:'+(inb?"#F4FAF7":"#fff")+'">'+
+              '<div class="dom" style="margin-bottom:4px"><b style="color:'+(inb?"#0A6B4A":"#16233A")+'">'+esc(msg.author||(inb?"them":"Cal"))+'</b>'+(inb?' (them)':' (us)')+(when?' &middot; '+when:'')+'</div>'+
+              '<div style="font-size:13px;line-height:1.5;color:#3A455B;white-space:pre-wrap">'+esc(String(msg.text||"").slice(0,1500))+'</div></div>';
+          }).join("")+'</div>';
+      } else bodyHtml+='<p class="muted">No message bodies are available for this thread yet.</p>';
+      if(r.front_link) bodyHtml+='<div style="margin-top:12px"><a class="btn btn-soft btn-sm" href="'+esc(r.front_link)+'" target="_blank" rel="noopener">Open &amp; reply in Front</a></div>';
+    }
+    b.innerHTML=head+bodyHtml;
+  });
 }
 function taskSet(id,to,btn){
   if(btn) btn.disabled=true;
