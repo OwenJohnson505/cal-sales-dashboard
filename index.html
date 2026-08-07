@@ -1311,6 +1311,7 @@ function loadCustomers(){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load customers.")+'</div>'; return; }
     paintFreshness(r.tms);
     window.__cust=r.customers||[]; window.__custAll=!!r.all; window.__custFilter="all";
+    window.__custWatch=r.watch||[]; window.__custQ="";
     renderCustomers();
   });
 }
@@ -1345,13 +1346,27 @@ function renderCustomers(){
   var totV=cs.reduce(function(a,x){return a+Number(x.revenue_total||0);},0);
   var declining=cs.filter(function(x){return x.trend==="declining";});
   var declValue=declining.reduce(function(a,x){return a+Number(x.prior_monthly||0);},0);
-  el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+  // AI 'keep an eye on' briefs - the accounts that need a call this week
+  var watch=window.__custWatch||[];
+  var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
+    watch.map(function(w){
+      var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
+      var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
+      return '<div class="actrow callrow'+open+'>'+
+        '<div class="co"><b>'+esc(w.customer_name)+'</b>'+
+        '<div class="seg" style="margin-top:2px">'+esc(w.headline||"")+'</div></div>'+
+        '<div class="rt">'+(w.salesperson?'<span class="pill">'+esc(w.salesperson)+'</span>':'')+
+        (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
+        '</div></div>';
+    }).join("")+'</div></div>'):"";
+  el.innerHTML=watchHtml+'<div class="statwrap"><div class="statgrid">'+
     stat(window.__custAll?"All customers":"Your customers",nf(cs.length),"spending in the TMS")+
     stat("Total revenue","\u00a3"+nf(Math.round(totV)),"all time, from consignment logs")+
     stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
     stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days")+
     '</div></div>'+
     '<div class="controls">'+
+      '<input id="custq" class="input" placeholder="Search customers..." oninput="custSearch(this.value)" style="max-width:210px;padding:7px 12px;font-size:13.5px">'+
       '<button class="chip active" onclick="custFilter(\'all\',this)">All</button>'+
       '<button class="chip" onclick="custFilter(\'declining\',this)">Spend falling</button>'+
       '<button class="chip" onclick="custFilter(\'growing\',this)">Growing</button>'+
@@ -1363,9 +1378,15 @@ function renderCustomers(){
     '<div class="panel flush"><div class="phead"><h3>Customers</h3><span class="hint" id="custcount"></span></div><div class="plist" id="custrows"></div></div>';
   renderCustRows();
 }
+function custSearch(q){ window.__custQ=String(q||"").toLowerCase(); renderCustRows(); }
 function renderCustRows(){
   var box=document.getElementById("custrows"); if(!box) return;
   var f=window.__custFilter, cs=(window.__cust||[]).slice();
+  var q=window.__custQ||"";
+  if(q) cs=cs.filter(function(x){
+    return String(x.customer_name||"").toLowerCase().indexOf(q)>=0
+        || String(x.domain||"").toLowerCase().indexOf(q)>=0
+        || String(x.salesperson||"").toLowerCase().indexOf(q)>=0; });
   if(f==="declining"){ cs=cs.filter(function(x){return x.trend==="declining";}).sort(function(a,b){return b.prior_monthly-a.prior_monthly;}); }
   if(f==="growing"){ cs=cs.filter(function(x){return x.trend==="growing";}).sort(function(a,b){return b.recent_monthly-a.recent_monthly;}); }
   if(f==="new"){ cs=cs.filter(function(x){return x.trend==="new";}); }
@@ -1379,10 +1400,15 @@ function renderCustRows(){
       '<div class="co"><b>'+esc(x.customer_name)+'</b>'+
       '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+
         (window.__custAll&&x.salesperson?' &middot; '+esc(x.salesperson):'')+'</div>'+
-      '<div class="seg">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime &middot; '+x.jobs_total+' jobs &middot; \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job'+(x.margin_pct!=null?' &middot; '+x.margin_pct+'% margin':'')+'</div></div>'+
+      '<div class="seg">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime &middot; '+x.jobs_total+' jobs &middot; \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job'+(x.margin_pct!=null?' &middot; '+x.margin_pct+'% margin':'')+'</div>'+
+      (Number(x.quoted_n)>0
+        ? '<div class="seg">Quotes since Mar: won '+x.won_n+' of '+x.quoted_n+' ('+(x.win_pct!=null?x.win_pct:0)+'%) &middot; \u00a3'+nf(Math.round(x.won_value))+' won of \u00a3'+nf(Math.round(x.quoted_value))+' quoted</div>'
+        : '<div class="seg" style="color:var(--faint)">No quotes logged since Mar &middot; books straight in</div>')+
+      '</div>'+
       '<div class="rt" style="align-items:center;gap:10px">'+
       spendSpark(x.monthly)+
       trendPill(x)+
+      (Number(x.quoted_n)>=5?(function(){var w=Number(x.win_pct)||0;var c=w>=60?["#E7F8F0","#0A6B4A"]:(w>=30?["#FEF6E7","#7A4E07"]:["#FEF2F2","#8F1D1D"]);return '<span class="pill" style="background:'+c[0]+';color:'+c[1]+'">wins '+w+'% of quotes</span>';})():'')+
       (!x.has_account_form?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">no account form</span>':'')+
       '</div></div>';
   }).join("")||'<div class="empty">Nothing matches.</div>';
@@ -1687,7 +1713,20 @@ function renderCallList(){
   }
   var ph=CL.filter(function(x){return x.phone;}).length;
   var cb=CL.filter(function(x){return x.callback_at;}).length;
-  el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+  // AI 'keep an eye on' briefs - the accounts that need a call this week
+  var watch=window.__custWatch||[];
+  var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
+    watch.map(function(w){
+      var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
+      var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
+      return '<div class="actrow callrow'+open+'>'+
+        '<div class="co"><b>'+esc(w.customer_name)+'</b>'+
+        '<div class="seg" style="margin-top:2px">'+esc(w.headline||"")+'</div></div>'+
+        '<div class="rt">'+(w.salesperson?'<span class="pill">'+esc(w.salesperson)+'</span>':'')+
+        (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
+        '</div></div>';
+    }).join("")+'</div></div>'):"";
+  el.innerHTML=watchHtml+'<div class="statwrap"><div class="statgrid">'+
       stat("On your list",nf(CL.length),"scored 6+, not a customer")+
       stat("Reachable now",nf(ph),"have a phone number",ph?"ok":"alarm")+
       stat("Callbacks due",nf(cb),"you promised to ring back",cb?"alarm":"")+
@@ -1911,7 +1950,20 @@ function loadTeam(){
     var broken=rows.filter(function(x){return !x.logging_ok;});
     var sla=rows.reduce(function(a,x){return a+Number(x.sla_breaches||0);},0);
     var totOpp=rows.reduce(function(a,x){return a+Number(x.opportunities||0);},0);
-    el.innerHTML='<div class="statwrap"><div class="statgrid">'+
+    // AI 'keep an eye on' briefs - the accounts that need a call this week
+  var watch=window.__custWatch||[];
+  var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
+    watch.map(function(w){
+      var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
+      var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
+      return '<div class="actrow callrow'+open+'>'+
+        '<div class="co"><b>'+esc(w.customer_name)+'</b>'+
+        '<div class="seg" style="margin-top:2px">'+esc(w.headline||"")+'</div></div>'+
+        '<div class="rt">'+(w.salesperson?'<span class="pill">'+esc(w.salesperson)+'</span>':'')+
+        (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
+        '</div></div>';
+    }).join("")+'</div></div>'):"";
+  el.innerHTML=watchHtml+'<div class="statwrap"><div class="statgrid">'+
         stat("Reply due",nf(sla),"inbound waiting over 24h",sla>0?"alarm":"ok")+
         stat("Opportunities",nf(totOpp),"logged from the call list")+
         stat("Talk time",nf(Math.round(rows.reduce(function(a,x){return a+Number(x.talk_minutes||0);},0)/60))+"h","connected calls")+
