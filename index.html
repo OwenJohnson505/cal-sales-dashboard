@@ -1473,10 +1473,12 @@ function loadLeadsMine(){
     renderLmRows();
   });
 }
-function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); renderLmRows(); }
-function lmSort(k,el){ window.__lmSort=k;
+function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); window.__lmPage=1; renderLmRows(); }
+function lmSort(k,el){ window.__lmSort=k; window.__lmPage=1;
   if(el){ var cs=el.parentElement.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active",cs[i]===el); }
   renderLmRows(); }
+function lmPage(p){ window.__lmPage=p; renderLmRows();
+  var box=document.getElementById("lmrows"); if(box) box.scrollIntoView({block:"start",behavior:"smooth"}); }
 function renderLmRows(){
   var box=document.getElementById("lmrows"), cnt=document.getElementById("lmcount");
   if(!box) return;
@@ -1489,8 +1491,10 @@ function renderLmRows(){
   else if(srt==="notes") ls.sort(function(a,b){ return (Number(b.notes)||0)-(Number(a.notes)||0); });
   else if(srt==="name") ls.sort(function(a,b){ return String(a.company||"").localeCompare(String(b.company||"")); });
   else ls.sort(function(a,b){ return new Date(b.last_touch||0)-new Date(a.last_touch||0); });
-  var CAP=150, shown=ls.slice(0,CAP);
-  if(cnt) cnt.textContent=ls.length+(ls.length>CAP?' · showing '+CAP+' — search for the rest':'');
+  var PAGE=100, pages=Math.max(1,Math.ceil(ls.length/PAGE));
+  var pg=Math.min(Math.max(1,window.__lmPage||1),pages); window.__lmPage=pg;
+  var shown=ls.slice((pg-1)*PAGE, pg*PAGE);
+  if(cnt) cnt.textContent=ls.length+' leads';
   var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   // the key numbers ARE the row: big, aligned, sortable - no squinting
   var met=function(n,l){ n=Number(n)||0; return '<div class="m'+(n?'':' dim')+'"><b>'+n+'</b><span>'+l+'</span></div>'; };
@@ -1511,6 +1515,8 @@ function renderLmRows(){
         (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
         (fx.uses_couriers==='confirmed'?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">confirmed courier user</span>':'')+
         (fx.current_supplier?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">uses '+esc(String(fx.current_supplier).slice(0,24))+'</span>':'')+
+        ((fx.tags||[]).slice(0,4).map(function(t){return '<span class="pill" style="background:#F2F4F8;color:#39435A">'+esc(String(t).slice(0,26))+'</span>';}).join(''))+
+        (x.other_owners?'<span class="pill" style="background:#FEF6E7;color:#7A4E07" title="the same company exists more than once in HubSpot">duplicate &middot; also on '+esc(String(x.other_owners).split(" ")[0])+'’s book'+(x.dup_newer?' (theirs is newer)':'')+'</span>':'')+
         (team&&x.rep?'<span class="repchip"><span class="avi" style="width:20px;height:20px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
       '</div>'+
       (insight?'<div class="seg" style="margin-top:5px">'+esc(insight.slice(0,150))+'</div>':'')+'</div>'+
@@ -1519,6 +1525,18 @@ function renderLmRows(){
         met(x.calls,'calls')+met(x.emails,'emails')+met(x.notes,'notes')+
       '</div></div>';
   }).join("")||'<div class="empty" style="padding:16px">Nothing matches that search.</div>';
+  // page selector: every lead is reachable, not just the first screen
+  if(pages>1){
+    var pbtn=function(p,label,on){ return '<button class="chip'+(on?' active':'')+'" '+(p?'onclick="lmPage('+p+')"':'disabled style="opacity:.4"')+'>'+label+'</button>'; };
+    var nums='';
+    for(var p=1;p<=pages;p++){
+      if(pages>9 && p>2 && p<pages-1 && Math.abs(p-pg)>1){ if(nums.slice(-7)!=='&#8230; ') nums+=(nums.slice(-1)===' '?'':' ')+'&#8230; '; continue; }
+      nums+=pbtn(p===pg?0:p, p, p===pg)+' ';
+    }
+    box.innerHTML+='<div class="controls" style="padding:14px 20px;border-top:1px solid var(--line-soft);align-items:center">'+
+      pbtn(pg>1?pg-1:0,'&larr; Prev')+' '+nums+pbtn(pg<pages?pg+1:0,'Next &rarr;')+
+      '<span class="hint" style="margin-left:auto">page '+pg+' of '+pages+' &middot; '+ls.length+' leads</span></div>';
+  }
 }
 // ---- Tasks: HubSpot's list + create + suggested ----------------------------
 function loadTasksView(){
