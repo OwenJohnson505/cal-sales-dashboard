@@ -1084,7 +1084,9 @@ function renderToday(el,got){
         scoreRing(x.score,"sm")+
         '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
           '<div class="dom">'+esc(String(x.segment||"").slice(0,60))+'</div>'+
-          (x.rationale?'<div class="seg">'+esc(String(x.rationale).slice(0,90))+'</div>':'')+'</div>'+
+          (x.rationale?'<div class="seg">'+esc(String(x.rationale).slice(0,90))+'</div>':'')+
+          (x.phone&&x.phone_source?'<div class="seg" style="color:var(--faint)">number from '+esc(x.phone_source)+
+            (((x.alt_dials||[]).length>1)?' &middot; '+x.alt_dials.length+' direct dials on their site':'')+'</div>':'')+'</div>'+
         '<div class="rt">'+
           (x.brief_ready?'<span class="tag done">Brief ready</span>':'')+
           (x.contacts?'<span class="pill">'+x.contacts+' contacts</span>':'')+
@@ -1778,7 +1780,21 @@ function openCallLead(dom){
     var body=m.querySelector(".mbody"); if(!body) return;
     if(!r||!r.ok){ body.innerHTML='<div class="empty">Could not load that lead.</div>'; return; }
     var v=r.verdict||{}, t=r.target||{}, b=r.brief&&r.brief.brief;
+    var dials=r.site_dials||[];
     var phone=(t.phone)||(r.hubspot&&r.hubspot.phone)||"";
+    // every number carries its origin, so the rep can always answer
+    // "where did you get my number?" honestly and specifically
+    var phoneSrc=t.phone?'Apollo company record':(r.hubspot&&r.hubspot.phone?'HubSpot company record':'');
+    if(!phone&&dials.length){ phone=dials[0].number; phoneSrc='their public website'; }
+    var hostOf=function(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return String(u||''); } };
+    var numsHtml=(phone||dials.length)?('<h3 class="msec">Numbers &amp; where we got them</h3><div class="lcard" style="margin:0">'+
+      (phone?'<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(phone)+'</b><div class="dom">Main number &middot; from '+esc(phoneSrc||'company record')+'</div></div><div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(phone)+'">Call</a></div></div>':'')+
+      dials.filter(function(s){return s.number!==phone;}).slice(0,4).map(function(s){
+        return '<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(s.display||s.number)+'</b>'+
+          '<div class="dom">'+esc(s.label||(s.phone_class==='mobile'?'Mobile they list publicly':'Listed on their site'))+'</div>'+
+          '<div class="seg" style="color:var(--faint)">from '+esc(hostOf(s.source_url))+' &middot; their public contact page</div></div>'+
+          '<div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(s.number)+'">Call</a></div></div>';
+      }).join('')+'</div>'):'';
     var head=m.querySelector(".mhead b"); if(head) head.textContent=t.name||dom;
 
     var warn=r.customer
@@ -1928,6 +1944,7 @@ function openCallLead(dom){
         '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+'</div></div>'+
         '<div class="rt">'+(phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a>':'<span class="nonum">no number on file</span>')+'</div>'+
       '</div>'+
+      numsHtml+
       (v.rationale&&!bv?'<p class="sub" style="margin-top:10px">'+esc(v.rationale)+'</p>':'')+
       whoHtml+
       whyHtml+
