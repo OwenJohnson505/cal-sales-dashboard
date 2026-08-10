@@ -381,6 +381,24 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .mbody .table{ width:100%; table-layout:fixed; }
 .mbody .table th,.mbody .table td{ white-space:normal; overflow-wrap:anywhere; }
 .msec{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); margin:18px 0 10px; }
+/* Lead profile: fold-away sections. Everything scans from the closed state -
+   title, a one-line preview, and a provenance chip saying where it came from. */
+.psec{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); margin:9px 0; }
+.psec>summary{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px; padding:12px 16px; }
+.psec>summary::-webkit-details-marker{ display:none; }
+.psec>summary .pt{ font-size:13.5px; font-weight:700; color:var(--ink); white-space:nowrap; }
+.psec>summary .pp{ flex:1; min-width:0; font-size:12.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.psec>summary .chev{ flex:none; color:var(--faint); font-size:11px; transition:transform .18s ease; }
+.psec[open]>summary{ border-bottom:1px solid var(--line-soft); }
+.psec[open]>summary .chev{ transform:rotate(90deg); }
+.psec .pbody{ padding:14px 16px 16px; }
+.psec .pbody p{ font-size:13.5px; color:var(--ink2); line-height:1.6; margin:0 0 8px; overflow-wrap:anywhere; }
+.psec .pbody p:last-child{ margin-bottom:0; }
+/* provenance chips: green solid = sourced fact, amber dashed = AI inference */
+.pv{ flex:none; font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border-radius:999px; padding:3px 9px; white-space:nowrap; }
+.pv.fact{ background:#F0F7F2; color:#0A6B4A; border:1px solid #BFE3CD; }
+.pv.inf{ background:#FFFBEB; color:#8A6410; border:1px dashed #DCC689; }
+@media (prefers-reduced-motion: reduce){ .psec>summary .chev{ transition:none; } }
 
 /* ============================ threads / calls =========================== */
 .thread{ border:1px solid var(--line); border-radius:14px; padding:13px 15px; margin-bottom:12px; }
@@ -1787,22 +1805,25 @@ function openCallLead(dom){
     var phoneSrc=t.phone?'Apollo company record':(r.hubspot&&r.hubspot.phone?'HubSpot company record':'');
     if(!phone&&dials.length){ phone=dials[0].number; phoneSrc='their public website'; }
     var hostOf=function(u){ try{ return new URL(u).hostname.replace(/^www\./,''); }catch(e){ return String(u||''); } };
-    var numsHtml=(phone||dials.length)?('<h3 class="msec">Numbers &amp; where we got them</h3><div class="lcard" style="margin:0">'+
-      (phone?'<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(phone)+'</b><div class="dom">Main number &middot; from '+esc(phoneSrc||'company record')+'</div></div><div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(phone)+'">Call</a></div></div>':'')+
-      dials.filter(function(s){return s.number!==phone;}).slice(0,4).map(function(s){
-        return '<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(s.display||s.number)+'</b>'+
-          '<div class="dom">'+esc(s.label||(s.phone_class==='mobile'?'Mobile they list publicly':'Listed on their site'))+'</div>'+
-          '<div class="seg" style="color:var(--faint)">from '+esc(hostOf(s.source_url))+' &middot; their public contact page</div></div>'+
-          '<div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(s.number)+'">Call</a></div></div>';
-      }).join('')+'</div>'):'';
     var head=m.querySelector(".mhead b"); if(head) head.textContent=t.name||dom;
 
     var warn=r.customer
       ? '<div class="alertcard" style="background:#E7F8F0;border-color:#A9DEC6"><h4 style="color:#0A6B4A">Already a Cal customer</h4><p>Account rep '+esc(r.customer.rep||"unknown")+(r.customer.town?', '+esc(r.customer.town):'')+'. Check before pitching &mdash; this is a service call, not a cold one.</p></div>'
       : "";
 
+    // Section builder: title + provenance chip + one-line preview, folded by
+    // default so the whole profile scans in one screen. Green chip = sourced
+    // fact (and says where from); amber dashed chip = AI inference.
+    var fact=function(t){ return '<span class="pv fact">'+esc(t)+'</span>'; };
+    var INF='<span class="pv inf">AI inferred</span>';
+    var sec=function(title,chip,preview,bodyHtml,open){
+      if(!bodyHtml) return '';
+      return '<details class="psec"'+(open?' open':'')+'><summary><span class="pt">'+title+'</span>'+chip+
+        '<span class="pp">'+preview+'</span><span class="chev">&#9656;</span></summary><div class="pbody">'+bodyHtml+'</div></details>';
+    };
+
     // The agreed account terms, from their actual Zoho account form.
-    var formHtml="";
+    var formSec="", formAlert="";
     var af=(r.forms||[])[0];
     if(af){
       var raw=af.raw||{};
@@ -1821,8 +1842,8 @@ function openCallLead(dom){
       var estSpend=fv("estimated annual spend");
       var row=function(l,v,warn){ if(!v) return "";
         return '<div class="actrow" style="padding:7px 0"><div class="co"><div class="dom">'+l+'</div><div style="font-size:13.5px'+(warn?';color:#7A4E07;font-weight:600':'')+'">'+esc(v)+'</div></div></div>'; };
-      formHtml='<h3 class="msec">Account terms <span class="faint" style="font-weight:400">from their account form &middot; '+esc(String(af.submitted_at).slice(0,10))+'</span></h3>'+
-        '<div class="lcard" style="margin:0">'+
+      formSec=sec('Account terms',fact('their account form'),
+        esc(payTerms?'non-standard payment terms':'standard 30-day terms')+(estSpend?' &middot; est. '+esc(estSpend):'')+' &middot; '+esc(String(af.submitted_at).slice(0,10)),
         '<div class="pillrow" style="margin:0 0 6px">'+
           (payTerms?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">non-standard payment terms</span>'
                    :'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">standard 30-day terms</span>')+
@@ -1836,10 +1857,9 @@ function openCallLead(dom){
         row("Invoice e-mail", invEmail)+
         row("VAT no", vat)+
         row("Company reg", reg)+
-        row("Estimated annual spend (their words)", estSpend)+
-        '</div>';
+        row("Estimated annual spend (their words)", estSpend));
     } else if(r.customer){
-      formHtml='<div class="alertcard"><h4>No account form on file</h4><p>They spend with Cal but never submitted an account form &mdash; payment terms and invoicing details are unconfirmed. Worth sending the form.</p></div>';
+      formAlert='<div class="alertcard"><h4>No account form on file</h4><p>They spend with Cal but never submitted an account form &mdash; payment terms and invoicing details are unconfirmed. Worth sending the form.</p></div>';
     }
 
     // Whether a contact has been reached is INFERRED from Front, Aircall and
@@ -1867,31 +1887,25 @@ function openCallLead(dom){
     if(ins){
       var pb={high:['#E7F8F0','#0A6B4A','High potential'],medium:['#EEF3FF','#1E45B8','Medium potential'],low:['#F2F4F8','#5B6577','Low potential']}[ins.potential]||null;
       var eb={positive:['#E7F8F0','#0A6B4A'],mixed:['#FEF6E7','#7A4E07'],stale:['#F2F4F8','#5B6577'],negative:['#FEF2F2','#8F1D1D'],none:['#F2F4F8','#98A2B3']}[ins.engagement]||['#F2F4F8','#5B6577'];
-      known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0">'+
-        '<div class="pillrow" style="margin:0 0 10px">'+
+      known='<div class="pillrow" style="margin:0 0 10px">'+
           (pb?'<span class="pill" style="background:'+pb[0]+';color:'+pb[1]+'">'+pb[2]+'</span>':'')+
           '<span class="pill" style="background:'+eb[0]+';color:'+eb[1]+'">'+esc(ins.engagement)+' engagement</span>'+
           (ins.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
         '</div>'+
-        '<p style="margin:0 0 8px">'+esc(ins.story||ins.headline||'')+'</p>'+
-        (ins.next_step?'<div class="nextact" style="padding:13px 16px;margin-top:4px"><div><div class="lbl">Next step</div><div class="dt" style="font-size:13.5px">'+esc(ins.next_step)+'</div></div></div>':'')+
-        '</div>';
+        '<p>'+esc(ins.story||ins.headline||'')+'</p>'+
+        (ins.next_step?'<div class="nextact" style="padding:13px 16px;margin-top:4px"><div><div class="lbl">Next step</div><div class="dt" style="font-size:13.5px">'+esc(ins.next_step)+'</div></div></div>':'');
     } else if(r.insight_pending && st && (Number(st.calls||0)+Number(st.emails||0))>=2){
       // an assessment only actually starts when there is engagement to read
-      known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0"><p class="sub" style="margin:0">'+
-        '<span class="loading loading-spinner loading-xs"></span> Assessing this account now &mdash; the website check and engagement read take about half a minute. Reopen shortly.</p></div>';
+      known='<p class="sub" style="margin:0"><span class="loading loading-spinner loading-xs"></span> Assessing this account now &mdash; the website check and engagement read take about half a minute. Reopen shortly.</p>';
     } else if(!ins && (!st || (Number(st.calls||0)+Number(st.emails||0))<2)){
-      known='<h3 class="msec">The story so far</h3><div class="lcard" style="margin:0"><p class="sub" style="margin:0">'+
-        'Fresh account &mdash; no calls or emails on record yet. The story starts after the first contact; the brief above is your way in.</p></div>';
+      known='<p class="sub" style="margin:0">Fresh account &mdash; no calls or emails on record yet. The story starts after the first contact; the brief above is your way in.</p>';
     } else if(st.state){
-      known='<h3 class="msec">What we already know</h3><div class="lcard" style="margin:0">'+
-        '<p><b>'+esc(st.state)+'</b>'+(st.days_since!=null?' &middot; last touch '+st.days_since+'d ago':'')+'</p>'+
-        (st.last_call_summary?'<p class="sub" style="margin:0">&ldquo;'+esc(String(st.last_call_summary).slice(0,300))+'&rdquo;</p>':'')+
-        '</div>';
+      known='<p><b>'+esc(st.state)+'</b>'+(st.days_since!=null?' &middot; last touch '+st.days_since+'d ago':'')+'</p>'+
+        (st.last_call_summary?'<p class="sub" style="margin:0">&ldquo;'+esc(String(st.last_call_summary).slice(0,300))+'&rdquo;</p>':'');
     }
 
-    // The underlying evidence, so the synthesis can be checked: real calls with
-    // their transcript summaries, and the actual email threads.
+    // The underlying evidence folds in beneath the synthesis, so the AI's read
+    // can always be checked against what was actually said and written.
     var ev=(ins&&ins.evidence)||{};
     var evCalls=(ev.calls||[]).map(function(c){
       return '<div class="evid"><b>'+esc(String(c["when"]||""))+' &middot; '+esc(c.agent||"?")+' &middot; '+esc(String(c.seconds||0))+'s</b>'+
@@ -1903,8 +1917,8 @@ function openCallLead(dom){
         (f.conv_id?'<span class="src"><a target="_blank" rel="noopener" href="https://app.frontapp.com/open/'+esc(f.conv_id)+'">Open thread in Front</a></span>':'')+
         '</div>';
     }).join("");
-    var evidence=(evCalls?'<h3 class="msec">Calls &mdash; what was said</h3>'+evCalls:'')+
-                 (evMails?'<h3 class="msec">Email threads</h3>'+evMails:'');
+    if(evCalls) known+='<div class="msec" style="margin:12px 0 4px">Calls &mdash; what was actually said</div>'+evCalls;
+    if(evMails) known+='<div class="msec" style="margin:12px 0 4px">Email threads</div>'+evMails;
 
     var hist=(r.attempts||[]).length
       ? '<div class="feed">'+(r.attempts||[]).map(function(a){
@@ -1914,49 +1928,82 @@ function openCallLead(dom){
       : '<div class="empty" style="padding:16px">No call logged yet.</div>';
 
     var pts=(b&&b.approach&&b.approach.talking_points)||[];
-    var talk=pts.length?'<h3 class="msec">Talking points</h3>'+pts.slice(0,4).map(function(p){
+    var talkBody=pts.length?pts.slice(0,5).map(function(p){
       return '<div class="evid"><b>'+esc(p.point)+'</b><span class="src">'+esc(p.why_it_lands||"")+'</span></div>';
     }).join(""):"";
 
-    // The FULL research brief: who they are, why they scored what they scored,
-    // and how to handle the pushback - all of it was stored, none of it shown.
     var comp=(b&&b.company)||null;
-    var whoHtml=comp?('<h3 class="msec">Who they are</h3><div class="lcard" style="margin:0">'+
-      (comp.what_they_do?'<p style="margin:0 0 8px">'+esc(comp.what_they_do)+'</p>':'')+
-      (comp.size_signal?'<p class="sub" style="margin:0 0 10px">'+esc(comp.size_signal)+'</p>':'')+
-      ((comp.uk_locations||[]).length?'<div class="pillrow" style="margin:0">'+(comp.uk_locations||[]).map(function(l){return '<span class="pill">'+esc(l)+'</span>';}).join('')+'</div>':'')+
-      '</div>'):'';
+    var news=(b&&b.news)||[];
+    var newsHtml=news.length?('<div class="msec" style="margin:12px 0 6px">In the news</div>'+
+      news.slice(0,3).map(function(n){
+        return '<div class="evid"><b>'+esc(n.headline||'')+'</b><span class="src">'+esc(n.source||'')+
+          (n.date?' &middot; '+esc(n.date):'')+
+          (n.url?' &middot; <a target="_blank" rel="noopener" href="'+esc(n.url)+'">read the article</a>':'')+
+          (n.gist?'<br>'+esc(n.gist):'')+'</span></div>';
+      }).join('')):'';
+    var whoBody=comp?(
+      (comp.size_signal?'<p>'+esc(comp.size_signal)+'</p>':'')+
+      ((comp.uk_locations||[]).length?'<div class="pillrow" style="margin:4px 0 0">'+(comp.uk_locations||[]).map(function(l){return '<span class="pill">'+esc(l)+'</span>';}).join('')+'</div>':'')+
+      newsHtml):'';
     var bv=(b&&b.verdict)||null;
-    var whyHtml=bv?('<h3 class="msec">Why the '+((bv.score!=null?bv.score:v.fit_score)||'score')+'</h3><div class="lcard" style="margin:0">'+
-      (bv.headline?'<p style="margin:0 0 8px"><b>'+esc(bv.headline)+'</b></p>':'')+
-      (bv.reasoning?'<p class="sub" style="margin:0 0 10px">'+esc(bv.reasoning)+'</p>':'')+
-      ((bv.evidence||[]).map(function(e){return '<div class="evid"><b>'+esc(e.fact||'')+'</b>'+(e.source?'<span class="src">Source: '+esc(e.source)+'</span>':'')+'</div>';}).join(''))+
-      (bv.confidence?'<p class="sub" style="margin:8px 0 0;color:var(--faint)">Research confidence: '+esc(bv.confidence)+'</p>':'')+
-      '</div>'):'';
+    var whyBody=bv?(
+      (bv.headline?'<p><b>'+esc(bv.headline)+'</b></p>':'')+
+      (bv.reasoning?'<p>'+esc(bv.reasoning)+' <span class="pv inf" style="vertical-align:1px">AI inferred</span></p>':'')+
+      ((bv.evidence||[]).length?'<div class="msec" style="margin:12px 0 4px">The evidence</div>'+(bv.evidence||[]).map(function(e){return '<div class="evid"><b>'+esc(e.fact||'')+'</b>'+(e.source?'<span class="src">Source: '+esc(e.source)+'</span>':'')+'</div>';}).join(''):'')+
+      (bv.confidence?'<p style="margin-top:8px;color:var(--faint);font-size:12.5px">Research confidence: '+esc(bv.confidence)+'</p>':''))
+      :(v.rationale?'<p>'+esc(v.rationale)+'</p>':'');
     var ap=(b&&b.approach)||{};
-    var pushHtml=(ap.objection||ap.avoid)?('<h3 class="msec">If they push back</h3>'+
+    var pushBody=(ap.objection||ap.avoid)?(
       (ap.objection?'<div class="evid"><b>Likely objection &amp; the answer</b><span class="src">'+esc(ap.objection)+'</span></div>':'')+
       (ap.avoid?'<div class="evid"><b>Avoid</b><span class="src">'+esc(ap.avoid)+'</span></div>':'')):'';
 
-    body.innerHTML=warn+formHtml+
-      '<div class="actrow" style="border:0;padding:0 0 4px">'+
+    // brief-level warnings are call-changing; they sit above the fold
+    var rel=(b&&b.relationship)||null;
+    var warnList=(rel&&rel.warnings)||[];
+    var warnHtml=warnList.length?('<div class="alertcard" style="background:#FEF6E7;border-color:#EAD9A9;margin:12px 0 4px"><h4 style="color:#7A4E07">Before you dial</h4>'+
+      warnList.slice(0,3).map(function(w){return '<p>'+esc(w)+'</p>';}).join('')+'</div>'):'';
+
+    var numsBody=(phone||dials.length)?(
+      (phone?'<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(phone)+'</b><div class="dom">Main number &middot; from '+esc(phoneSrc||'company record')+'</div></div><div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(phone)+'">Call</a></div></div>':'')+
+      dials.filter(function(s){return s.number!==phone;}).slice(0,4).map(function(s){
+        return '<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(s.display||s.number)+'</b>'+
+          '<div class="dom">'+esc(s.label||(s.phone_class==='mobile'?'Mobile they list publicly':'Listed on their site'))+'</div>'+
+          '<div class="seg" style="color:var(--faint)">from '+esc(hostOf(s.source_url))+' &middot; their public contact page</div></div>'+
+          '<div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(s.number)+'">Call</a></div></div>';
+      }).join('')):'';
+
+    var reached=(r.contacts||[]).filter(function(c){return c.spoken_to||c.emailed;}).length;
+    var consPrev=(r.contacts||[]).length?((r.contacts||[]).length+' named &middot; '+reached+' reached'):'none found yet';
+    var lastAt=(r.attempts||[])[0];
+    var histPrev=lastAt?(esc(String(lastAt.outcome).replace(/_/g,' '))+' &middot; '+esc(String(lastAt.created_at).slice(0,10))):'no calls logged yet';
+    var storyPrev=ins?esc(String(ins.headline||ins.story||'').slice(0,90))
+      :(r.insight_pending&&st&&(Number(st.calls||0)+Number(st.emails||0))>=2?'assessing now &mdash; reopen shortly'
+      :((!st||(Number(st.calls||0)+Number(st.emails||0))<2)?'fresh account &mdash; no contact yet':esc(st.state||'')));
+
+    body.innerHTML=warn+formAlert+
+      '<div class="actrow" style="border:0;padding:0 0 2px">'+
         scoreRing(v.fit_score,"md")+
-        '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+'</div></div>'+
-        '<div class="rt">'+(phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a>':'<span class="nonum">no number on file</span>')+'</div>'+
+        '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+(rel&&rel.status?' &middot; '+esc(rel.status):'')+'</div></div>'+
+        '<div class="rt" style="flex-direction:column;align-items:flex-end;gap:3px">'+
+          (phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a><span class="faint" style="font-size:11px">number from '+esc(phoneSrc||'company record')+'</span>':'<span class="nonum">no number on file</span>')+
+        '</div>'+
       '</div>'+
-      numsHtml+
-      (v.rationale&&!bv?'<p class="sub" style="margin-top:10px">'+esc(v.rationale)+'</p>':'')+
-      whoHtml+
-      whyHtml+
-      (b&&b.approach&&b.approach.opening_line
-        ? '<h3 class="msec">Opening line</h3><div class="nextact"><div><div class="lbl">Say this</div><div class="dt">'+esc(b.approach.opening_line)+'</div></div></div>'
+      (comp&&comp.what_they_do?'<p style="margin:6px 0 2px;font-size:14px;color:var(--ink2);line-height:1.55">'+esc(comp.what_they_do)+'</p>':'')+
+      warnHtml+
+      (ap.opening_line
+        ? '<div class="nextact" style="margin:12px 0 4px"><div><div class="lbl">Say this &middot; AI drafted</div><div class="dt">'+esc(ap.opening_line)+'</div></div></div>'
         : '')+
-      talk+
-      pushHtml+
-      known+
-      evidence+
-      '<h3 class="msec">Contacts</h3>'+cons+
-      '<h3 class="msec">Call history</h3>'+hist+
+      '<div style="margin:12px 0 14px">'+
+      sec('Who they are',fact('their website & press'),comp?esc(String(comp.size_signal||comp.what_they_do||'').slice(0,90)):'',whoBody)+
+      sec('Why the '+((bv&&bv.score!=null?bv.score:v.fit_score)||'score'),INF,bv?esc(String(bv.headline||'').slice(0,90)):esc(String(v.rationale||'').slice(0,90)),whyBody)+
+      sec('Talking points',INF,pts.length?esc(String((pts[0]||{}).point||'').slice(0,90)):'',talkBody)+
+      sec('If they push back',INF,'objection to expect &amp; what to avoid',pushBody)+
+      sec('Numbers',fact('public records & their site'),phone?(esc(phone)+' &middot; '+esc(phoneSrc||'')):'no number found',numsBody)+
+      formSec+
+      sec('The story so far',INF,storyPrev,known)+
+      sec('Contacts',fact('Apollo & our records'),consPrev,cons)+
+      sec('Call history',fact('our call log'),histPrev,hist)+
+      '</div>'+
       '<h3 class="msec">Anything to correct?</h3>'+
       '<p class="sub" style="margin:-4px 0 10px">Calls and emails record themselves. Only tap if the outcome needs saying.</p>'+
       '<div class="outrow">'+
