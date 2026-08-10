@@ -1531,12 +1531,14 @@ function renderCustomers(){
   var mc=window.__myComm, commHtml='';
   if(mc&&mc.scheme){
     var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
-    var top=(mc.detail||[])[0];
+    var top=(mc.detail||[])[0], nb=mc.new_business&&mc.new_business.last12?mc.new_business:null;
     commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
       '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf(acc)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">still accruing</span></div>'+
+      (nb?'<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">\u00a3'+nf(Math.round(Number(nb.last12.revenue)||0))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">from '+nf(nb.last12.customers)+' customers won \u00b7 last 12 mo</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">\u00a3'+nf(Math.round(Number(nb.fy.revenue)||0))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">from '+nf(nb.fy.customers)+' won this FY \u00b7 since '+esc(String(nb.fy_start||'').slice(0,10))+'</span></div>':'')+
       (top?'<div class="dom" style="margin-left:auto;max-width:320px">Biggest: <b>'+esc(top.customer_name)+'</b> \u00a3'+nf(Math.round(top.commission))+' ('+top.margin_pct+'% margin)</div>':'')+
       '</div></div>';
   }
@@ -1997,12 +1999,14 @@ function renderCallList(){
   var mc=window.__myComm, commHtml='';
   if(mc&&mc.scheme){
     var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
-    var top=(mc.detail||[])[0];
+    var top=(mc.detail||[])[0], nb=mc.new_business&&mc.new_business.last12?mc.new_business:null;
     commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
       '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf(acc)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">still accruing</span></div>'+
+      (nb?'<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">\u00a3'+nf(Math.round(Number(nb.last12.revenue)||0))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">from '+nf(nb.last12.customers)+' customers won \u00b7 last 12 mo</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">\u00a3'+nf(Math.round(Number(nb.fy.revenue)||0))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">from '+nf(nb.fy.customers)+' won this FY \u00b7 since '+esc(String(nb.fy_start||'').slice(0,10))+'</span></div>':'')+
       (top?'<div class="dom" style="margin-left:auto;max-width:320px">Biggest: <b>'+esc(top.customer_name)+'</b> \u00a3'+nf(Math.round(top.commission))+' ('+top.margin_pct+'% margin)</div>':'')+
       '</div></div>';
   }
@@ -2365,12 +2369,14 @@ function loadTeam(){
   var mc=window.__myComm, commHtml='';
   if(mc&&mc.scheme){
     var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
-    var top=(mc.detail||[])[0];
+    var top=(mc.detail||[])[0], nb=mc.new_business&&mc.new_business.last12?mc.new_business:null;
     commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
       '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf(acc)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">still accruing</span></div>'+
+      (nb?'<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">\u00a3'+nf(Math.round(Number(nb.last12.revenue)||0))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">from '+nf(nb.last12.customers)+' customers won \u00b7 last 12 mo</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">\u00a3'+nf(Math.round(Number(nb.fy.revenue)||0))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">from '+nf(nb.fy.customers)+' won this FY \u00b7 since '+esc(String(nb.fy_start||'').slice(0,10))+'</span></div>':'')+
       (top?'<div class="dom" style="margin-left:auto;max-width:320px">Biggest: <b>'+esc(top.customer_name)+'</b> \u00a3'+nf(Math.round(top.commission))+' ('+top.margin_pct+'% margin)</div>':'')+
       '</div></div>';
   }
