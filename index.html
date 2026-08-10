@@ -1485,7 +1485,15 @@ function loadCustomers(){
     paintFreshness(r.tms);
     window.__cust=r.customers||[]; window.__custAll=!!r.all; window.__custFilter="all";
     window.__custWatch=r.watch||[]; window.__custQ="";
+    window.__myComm=null;
     renderCustomers();
+    // a rep (or a viewed-as rep) sees their own commission right where their
+    // customers live - each person only ever sees their own scheme
+    if(!r.all){
+      desk2Post({action:"commission"},function(c){
+        if(c&&c.ok&&c.scheme){ window.__myComm=c; renderCustomers(); }
+      });
+    }
   });
 }
 function custFilter(f,btn){
@@ -1519,6 +1527,19 @@ function renderCustomers(){
   var totV=cs.reduce(function(a,x){return a+Number(x.revenue_total||0);},0);
   var declining=cs.filter(function(x){return x.trend==="declining";});
   var declValue=declining.reduce(function(a,x){return a+Number(x.prior_monthly||0);},0);
+  // their own commission, computed live from the same schemes Settings manages
+  var mc=window.__myComm, commHtml='';
+  if(mc&&mc.scheme){
+    var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
+    var top=(mc.detail||[])[0];
+    commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
+      '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf(acc)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">still accruing</span></div>'+
+      (top?'<div class="dom" style="margin-left:auto;max-width:320px">Biggest: <b>'+esc(top.customer_name)+'</b> \u00a3'+nf(Math.round(top.commission))+' ('+top.margin_pct+'% margin)</div>':'')+
+      '</div></div>';
+  }
   // AI 'keep an eye on' briefs - the accounts that need a call this week
   var watch=window.__custWatch||[];
   var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
@@ -1532,7 +1553,7 @@ function renderCustomers(){
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
         '</div></div>';
     }).join("")+'</div></div>'):"";
-  el.innerHTML=watchHtml+'<div class="statwrap"><div class="statgrid">'+
+  el.innerHTML=commHtml+watchHtml+'<div class="statwrap"><div class="statgrid">'+
     stat(window.__custAll?"All customers":"Your customers",nf(cs.length),"spending in the TMS")+
     stat("Total revenue","\u00a3"+nf(Math.round(totV)),"all time, from consignment logs")+
     stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
@@ -1972,6 +1993,19 @@ function renderCallList(){
   }
   var ph=CL.filter(function(x){return x.phone;}).length;
   var cb=CL.filter(function(x){return x.callback_at;}).length;
+  // their own commission, computed live from the same schemes Settings manages
+  var mc=window.__myComm, commHtml='';
+  if(mc&&mc.scheme){
+    var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
+    var top=(mc.detail||[])[0];
+    commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
+      '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf(acc)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">still accruing</span></div>'+
+      (top?'<div class="dom" style="margin-left:auto;max-width:320px">Biggest: <b>'+esc(top.customer_name)+'</b> \u00a3'+nf(Math.round(top.commission))+' ('+top.margin_pct+'% margin)</div>':'')+
+      '</div></div>';
+  }
   // AI 'keep an eye on' briefs - the accounts that need a call this week
   var watch=window.__custWatch||[];
   var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
@@ -1985,7 +2019,7 @@ function renderCallList(){
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
         '</div></div>';
     }).join("")+'</div></div>'):"";
-  el.innerHTML=watchHtml+'<div class="statwrap"><div class="statgrid">'+
+  el.innerHTML=commHtml+watchHtml+'<div class="statwrap"><div class="statgrid">'+
       stat("On your list",nf(CL.length),"scored 6+, not a customer")+
       stat("Reachable now",nf(ph),"have a phone number",ph?"ok":"alarm")+
       stat("Callbacks due",nf(cb),"you promised to ring back",cb?"alarm":"")+
@@ -2203,7 +2237,8 @@ function openCallLead(dom){
 
     // brief-level warnings are call-changing; they sit above the fold
     var rel=(b&&b.relationship)||null;
-    var warnList=(rel&&rel.warnings)||[];
+    var warnList=((rel&&rel.warnings)||[]).slice();
+    if(chOverdue) warnList.unshift('Their statutory accounts are OVERDUE at Companies House (due '+String(ch.accounts_next_due)+') - a credit-risk flag; be careful with payment terms.');
     var warnHtml=warnList.length?('<div class="alertcard" style="background:#FEF6E7;border-color:#EAD9A9;margin:12px 0 4px"><h4 style="color:#7A4E07">Before you dial</h4>'+
       warnList.slice(0,3).map(function(w){return '<p>'+esc(w)+'</p>';}).join('')+'</div>'):'';
 
@@ -2233,6 +2268,16 @@ function openCallLead(dom){
     hsa.forEach(function(a){ hsaCounts[a.type]=(hsaCounts[a.type]||0)+1; });
     var hsaPrev=Object.keys(hsaCounts).map(function(k){ return hsaCounts[k]+' '+k; }).join(' &middot; ')||'';
 
+    // Companies House: the official record - registered facts, not research
+    var ch=r.companies_house||null;
+    var chOverdue=ch&&ch.accounts_next_due&&(new Date(ch.accounts_next_due)<new Date());
+    var chBody=ch?(
+      '<div class="evid"><b>'+esc(ch.name||'')+' &middot; '+esc(ch.company_number||'')+'</b>'+
+      '<span class="src">'+esc(ch.status||'')+(ch.category?' &middot; '+esc(ch.category):'')+(ch.incorporated?' &middot; incorporated '+esc(String(ch.incorporated).slice(0,4)):'')+'</span></div>'+
+      (ch.address||ch.postcode?'<div class="evid"><b>Registered office</b><span class="src">'+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span></div>':'')+
+      (ch.sic?'<div class="evid"><b>Nature of business</b><span class="src">'+esc(ch.sic)+'</span></div>':'')+
+      (ch.accounts_next_due?'<div class="evid"><b>Accounts next due</b><span class="src">'+esc(String(ch.accounts_next_due))+(chOverdue?' &middot; <b style="color:#8F1D1D">OVERDUE</b>':'')+(ch.accounts_last_made?' &middot; last filed '+esc(String(ch.accounts_last_made)):'')+'</span></div>':'')
+    ):'';
     var reached=(r.contacts||[]).filter(function(c){return c.spoken_to||c.emailed;}).length;
     var consPrev=(r.contacts||[]).length?((r.contacts||[]).length+' named &middot; '+reached+' reached'):'none found yet';
     var lastAt=(r.attempts||[])[0];
@@ -2260,6 +2305,7 @@ function openCallLead(dom){
       sec('Talking points',INF,pts.length?esc(String((pts[0]||{}).point||'').slice(0,90)):'',talkBody)+
       sec('If they push back',INF,'objection to expect &amp; what to avoid',pushBody)+
       sec('Numbers',fact('public records & their site'),phone?(esc(phone)+' &middot; '+esc(phoneSrc||'')):'no number found',numsBody)+
+      sec('Companies House',fact('official register'),ch?(esc(ch.status||'')+(ch.incorporated?' &middot; since '+String(ch.incorporated).slice(0,4):'')+(chOverdue?' &middot; accounts OVERDUE':'')):'',chBody)+
       formSec+
       sec('HubSpot activity',fact('HubSpot log'),hsaPrev,hsaBody)+
       sec('The story so far',INF,storyPrev,known)+
@@ -2315,7 +2361,20 @@ function loadTeam(){
     var broken=rows.filter(function(x){return !x.logging_ok;});
     var sla=rows.reduce(function(a,x){return a+Number(x.sla_breaches||0);},0);
     var totOpp=rows.reduce(function(a,x){return a+Number(x.opportunities||0);},0);
-    // AI 'keep an eye on' briefs - the accounts that need a call this week
+    // their own commission, computed live from the same schemes Settings manages
+  var mc=window.__myComm, commHtml='';
+  if(mc&&mc.scheme){
+    var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
+    var top=(mc.detail||[])[0];
+    commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
+      '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
+      '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf(acc)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">still accruing</span></div>'+
+      (top?'<div class="dom" style="margin-left:auto;max-width:320px">Biggest: <b>'+esc(top.customer_name)+'</b> \u00a3'+nf(Math.round(top.commission))+' ('+top.margin_pct+'% margin)</div>':'')+
+      '</div></div>';
+  }
+  // AI 'keep an eye on' briefs - the accounts that need a call this week
   var watch=window.__custWatch||[];
   var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
     watch.map(function(w){
@@ -2328,7 +2387,7 @@ function loadTeam(){
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
         '</div></div>';
     }).join("")+'</div></div>'):"";
-  el.innerHTML=watchHtml+'<div class="statwrap"><div class="statgrid">'+
+  el.innerHTML=commHtml+watchHtml+'<div class="statwrap"><div class="statgrid">'+
         stat("Reply due",nf(sla),"inbound waiting over 24h",sla>0?"alarm":"ok")+
         stat("Opportunities",nf(totOpp),"logged from the call list")+
         stat("Talk time",nf(Math.round(rows.reduce(function(a,x){return a+Number(x.talk_minutes||0);},0)/60))+"h","connected calls")+
