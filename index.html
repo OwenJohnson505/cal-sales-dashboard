@@ -381,6 +381,11 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .mbody .table{ width:100%; table-layout:fixed; }
 .mbody .table th,.mbody .table td{ white-space:normal; overflow-wrap:anywhere; }
 .msec{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); margin:18px 0 10px; }
+/* Modal rows must never let the right-hand column crash into the text:
+   the content column shrinks, the action column keeps its size and wraps. */
+.mbody .actrow{ flex-wrap:wrap; }
+.mbody .actrow .co{ min-width:0; flex:1 1 220px; }
+.mbody .actrow .rt{ flex:0 0 auto; max-width:100%; }
 /* Lead profile: fold-away sections. Everything scans from the closed state -
    title, a one-line preview, and a provenance chip saying where it came from. */
 .psec{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); margin:9px 0; }
@@ -1438,29 +1443,49 @@ function renderCustRows(){
 function loadLeadsMine(){
   var el=document.getElementById("lmboard"); if(!el) return;
   el.innerHTML=spinner();
-  // reps (and view-as) get their own conversations; only the head's
-  // un-filtered view asks for the whole team
+  // a lead = a company owned in HubSpot that isn't a customer yet; reps
+  // (and view-as) get their own book, the head's own view gets everyone's
   var payload={action:"leads"};
   if(window.CAN_MANAGE && !window.VIEW_AS) payload.all=true;
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
-    var ls=r.leads||[], team=!!r.all;
-    if(!ls.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>No live conversations yet. As calls connect and the engagement analysis works through the backlog, they land here.</div>'; return; }
-    el.innerHTML='<div class="panel flush"><div class="phead"><h3>'+(team?'Live conversations &mdash; whole team':'Your live conversations')+'</h3><span class="hint">'+ls.length+'</span></div><div class="plist">'+
-      ls.map(function(x){
-        var eb={positive:["#E7F8F0","#0A6B4A"],mixed:["#FEF6E7","#7A4E07"],stale:["#F2F4F8","#5B6577"]}[x.engagement]||["#F2F4F8","#5B6577"];
-        return '<div class="actrow callrow crow" onclick="openCallLead(\''+esc(x.domain)+'\')">'+
-          '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
-          '<div class="dom">'+esc(x.headline||("Last touch "+(x.days_since!=null?x.days_since+"d ago":"unknown")))+'</div>'+
-          (x.next_step?'<div class="seg">Next: '+esc(String(x.next_step).slice(0,90))+'</div>':'')+'</div>'+
-          '<div class="rt">'+
-          (team?(x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(",")[0])+'</span>':'<span class="nonum">unowned</span>'):'')+
-          (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
-          (x.engagement?'<span class="pill" style="background:'+eb[0]+';color:'+eb[1]+'">'+esc(x.engagement)+'</span>':'')+
-          (x.days_since!=null?'<span class="pill">'+x.days_since+'d</span>':'')+
-          '</div></div>';
-      }).join("")+'</div></div>';
+    window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmQ="";
+    if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
+    el.innerHTML='<div class="panel flush"><div class="phead"><h3>'+(window.__lmTeam?'HubSpot leads &mdash; whole team':'Your HubSpot leads')+'</h3>'+
+      '<input id="lmq" class="input" placeholder="Search leads..." oninput="lmSearch(this.value)" style="margin-left:auto;max-width:220px;padding:6px 12px;font-size:13px">'+
+      '<span class="hint" id="lmcount"></span></div><div class="plist" id="lmrows"></div></div>';
+    renderLmRows();
   });
+}
+function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); renderLmRows(); }
+function renderLmRows(){
+  var box=document.getElementById("lmrows"), cnt=document.getElementById("lmcount");
+  if(!box) return;
+  var ls=(window.__lm||[]), team=!!window.__lmTeam, q=window.__lmQ||"";
+  if(q) ls=ls.filter(function(x){ return String(x.company||"").toLowerCase().indexOf(q)>=0
+    || String(x.domain||"").toLowerCase().indexOf(q)>=0 || String(x.rep||"").toLowerCase().indexOf(q)>=0; });
+  var CAP=150, shown=ls.slice(0,CAP);
+  if(cnt) cnt.textContent=ls.length+(ls.length>CAP?' · showing '+CAP+' — search for the rest':'');
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  box.innerHTML=shown.map(function(x){
+    var sb={positive:["#E7F8F0","#0A6B4A","positive"],mixed:["#FEF6E7","#7A4E07","mixed"],stale:["#F2F4F8","#5B6577","gone quiet"],negative:["#FEF2F2","#8F1D1D","negative"]}[x.engagement]||null;
+    var when="never engaged";
+    if(x.last_touch){ var d=new Date(x.last_touch); when="Last engagement "+d.getDate()+" "+M[d.getMonth()]+(x.days_since!=null?" ("+x.days_since+"d ago)":""); }
+    var touches=(Number(x.calls)||0)+" call"+(Number(x.calls)===1?"":"s")+" · "+(Number(x.emails)||0)+" email"+(Number(x.emails)===1?"":"s");
+    var insight=x.headline?String(x.headline):"";
+    if(x.next_step) insight+=(insight?" — ":"")+"Next: "+String(x.next_step);
+    var open=x.domain?(' onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
+    return '<div class="actrow callrow'+(x.domain?' crow':'')+'"'+open+'>'+
+      '<div class="co"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
+      '<div class="dom">'+esc(when)+' · '+touches+'</div>'+
+      (insight?'<div class="seg">'+esc(insight.slice(0,160))+'</div>':'')+'</div>'+
+      '<div class="rt">'+
+      (team&&x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
+      (x.stage==='opportunity'?'<span class="pill" style="background:#EEF3FF;color:#1E45B8">opportunity</span>':'')+
+      (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
+      (sb?'<span class="pill" style="background:'+sb[0]+';color:'+sb[1]+'">'+sb[2]+'</span>':'<span class="pill" style="color:var(--faint)">no read yet</span>')+
+      '</div></div>';
+  }).join("")||'<div class="empty" style="padding:16px">Nothing matches that search.</div>';
 }
 // ---- Tasks: HubSpot's list + create + suggested ----------------------------
 function loadTasksView(){
