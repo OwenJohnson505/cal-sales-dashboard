@@ -1474,12 +1474,15 @@ function renderLmRows(){
     var touches=(Number(x.calls)||0)+" call"+(Number(x.calls)===1?"":"s")+" · "+(Number(x.emails)||0)+" email"+(Number(x.emails)===1?"":"s");
     var insight=x.headline?String(x.headline):"";
     if(x.next_step) insight+=(insight?" — ":"")+"Next: "+String(x.next_step);
+    var fx=x.facts||{};
     var open=x.domain?(' onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
     return '<div class="actrow callrow'+(x.domain?' crow':'')+'"'+open+'>'+
       '<div class="co"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
       '<div class="dom">'+esc(when)+' · '+touches+'</div>'+
       (insight?'<div class="seg">'+esc(insight.slice(0,160))+'</div>':'')+'</div>'+
       '<div class="rt">'+
+      (fx.current_supplier?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">uses '+esc(String(fx.current_supplier).slice(0,24))+'</span>':'')+
+      (fx.uses_couriers==='confirmed'?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">confirmed courier user</span>':'')+
       (team&&x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
       (x.stage==='opportunity'?'<span class="pill" style="background:#EEF3FF;color:#1E45B8">opportunity</span>':'')+
       (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
@@ -1922,6 +1925,17 @@ function openCallLead(dom){
           (ins.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
         '</div>'+
         '<p>'+esc(ins.story||ins.headline||'')+'</p>'+
+        (function(){
+          // hard facts extracted from the conversations - only what was said
+          var fx=ins.facts; if(!fx) return '';
+          var fr=function(l,v){ return v?'<div class="evid"><b>'+l+'</b><span class="src">'+esc(String(v))+'</span></div>':''; };
+          var inner=fr('Do they use same-day couriers?', fx.uses_couriers&&fx.uses_couriers!=='unknown'?fx.uses_couriers:'')+
+            fr('How often', fx.usage_frequency)+
+            fr('Current supplier', fx.current_supplier)+
+            fr('People named', fx.key_people)+
+            ((fx.other||[]).map(function(o){ return fr('Also said', o); }).join(''));
+          return inner?'<div class="msec" style="margin:12px 0 4px">Said in the conversations <span class="pv fact" style="vertical-align:1px">their words</span></div>'+inner:'';
+        })()+
         (ins.next_step?'<div class="nextact" style="padding:13px 16px;margin-top:4px"><div><div class="lbl">Next step</div><div class="dt" style="font-size:13.5px">'+esc(ins.next_step)+'</div></div></div>':'');
     } else if(r.insight_pending && st && (Number(st.calls||0)+Number(st.emails||0))>=2){
       // an assessment only actually starts when there is engagement to read
