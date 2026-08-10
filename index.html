@@ -381,6 +381,13 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .mbody .table{ width:100%; table-layout:fixed; }
 .mbody .table th,.mbody .table td{ white-space:normal; overflow-wrap:anywhere; }
 .msec{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); margin:18px 0 10px; }
+/* Lead list: the key numbers ARE the row - big, aligned, tabular */
+.lmmets{ display:flex; gap:20px; align-items:center; flex:none; margin-left:14px; }
+.lmmets .m{ text-align:right; min-width:54px; }
+.lmmets .m b{ display:block; font-size:17px; font-weight:750; color:var(--ink); font-variant-numeric:tabular-nums; line-height:1.15; white-space:nowrap; }
+.lmmets .m span{ font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); white-space:nowrap; }
+.lmmets .m.dim b{ color:var(--faint); font-weight:600; }
+@media (max-width:760px){ .lmmets{ margin-left:0; gap:14px; } }
 /* Modal rows must never let the right-hand column crash into the text:
    the content column shrinks, the action column keeps its size and wraps. */
 .mbody .actrow{ flex-wrap:wrap; }
@@ -1453,40 +1460,63 @@ function loadLeadsMine(){
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     el.innerHTML='<div class="panel flush"><div class="phead"><h3>'+(window.__lmTeam?'HubSpot leads &mdash; whole team':'Your HubSpot leads')+'</h3>'+
       '<input id="lmq" class="input" placeholder="Search leads..." oninput="lmSearch(this.value)" style="margin-left:auto;max-width:220px;padding:6px 12px;font-size:13px">'+
-      '<span class="hint" id="lmcount"></span></div><div class="plist" id="lmrows"></div></div>';
+      '<span class="hint" id="lmcount"></span></div>'+
+      '<div class="controls" style="padding:10px 20px 6px;border-bottom:1px solid var(--line-soft)">'+
+        '<span class="hint" style="margin-right:2px">Sort by</span>'+
+        '<button class="chip active" onclick="lmSort(\'recent\',this)">Last engagement</button>'+
+        '<button class="chip" onclick="lmSort(\'calls\',this)">Calls</button>'+
+        '<button class="chip" onclick="lmSort(\'emails\',this)">Emails</button>'+
+        '<button class="chip" onclick="lmSort(\'notes\',this)">Notes</button>'+
+        '<button class="chip" onclick="lmSort(\'name\',this)">Name</button>'+
+      '</div><div class="plist" id="lmrows"></div></div>';
+    window.__lmSort="recent";
     renderLmRows();
   });
 }
 function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); renderLmRows(); }
+function lmSort(k,el){ window.__lmSort=k;
+  if(el){ var cs=el.parentElement.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++) cs[i].classList.toggle("active",cs[i]===el); }
+  renderLmRows(); }
 function renderLmRows(){
   var box=document.getElementById("lmrows"), cnt=document.getElementById("lmcount");
   if(!box) return;
-  var ls=(window.__lm||[]), team=!!window.__lmTeam, q=window.__lmQ||"";
+  var ls=(window.__lm||[]).slice(), team=!!window.__lmTeam, q=window.__lmQ||"";
   if(q) ls=ls.filter(function(x){ return String(x.company||"").toLowerCase().indexOf(q)>=0
     || String(x.domain||"").toLowerCase().indexOf(q)>=0 || String(x.rep||"").toLowerCase().indexOf(q)>=0; });
+  var srt=window.__lmSort||"recent";
+  if(srt==="calls") ls.sort(function(a,b){ return (Number(b.calls)||0)-(Number(a.calls)||0); });
+  else if(srt==="emails") ls.sort(function(a,b){ return (Number(b.emails)||0)-(Number(a.emails)||0); });
+  else if(srt==="notes") ls.sort(function(a,b){ return (Number(b.notes)||0)-(Number(a.notes)||0); });
+  else if(srt==="name") ls.sort(function(a,b){ return String(a.company||"").localeCompare(String(b.company||"")); });
+  else ls.sort(function(a,b){ return new Date(b.last_touch||0)-new Date(a.last_touch||0); });
   var CAP=150, shown=ls.slice(0,CAP);
   if(cnt) cnt.textContent=ls.length+(ls.length>CAP?' · showing '+CAP+' — search for the rest':'');
   var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  // the key numbers ARE the row: big, aligned, sortable - no squinting
+  var met=function(n,l){ n=Number(n)||0; return '<div class="m'+(n?'':' dim')+'"><b>'+n+'</b><span>'+l+'</span></div>'; };
   box.innerHTML=shown.map(function(x){
     var sb={positive:["#E7F8F0","#0A6B4A","positive"],mixed:["#FEF6E7","#7A4E07","mixed"],stale:["#F2F4F8","#5B6577","gone quiet"],negative:["#FEF2F2","#8F1D1D","negative"]}[x.engagement]||null;
-    var when="never engaged";
-    if(x.last_touch){ var d=new Date(x.last_touch); when="Last engagement "+d.getDate()+" "+M[d.getMonth()]+(x.days_since!=null?" ("+x.days_since+"d ago)":""); }
-    var touches=(Number(x.calls)||0)+" call"+(Number(x.calls)===1?"":"s")+" · "+(Number(x.emails)||0)+" email"+(Number(x.emails)===1?"":"s");
+    var whenB="&mdash;", whenS="never engaged";
+    if(x.last_touch){ var d=new Date(x.last_touch); whenB=d.getDate()+" "+M[d.getMonth()];
+      whenS=(x.days_since===0?"today":(x.days_since!=null?x.days_since+"d ago":"")); }
     var insight=x.headline?String(x.headline):"";
     if(x.next_step) insight+=(insight?" — ":"")+"Next: "+String(x.next_step);
     var fx=x.facts||{};
     var open=x.domain?(' onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
     return '<div class="actrow callrow'+(x.domain?' crow':'')+'"'+open+'>'+
-      '<div class="co"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
-      '<div class="dom">'+esc(when)+' · '+touches+'</div>'+
-      (insight?'<div class="seg">'+esc(insight.slice(0,160))+'</div>':'')+'</div>'+
-      '<div class="rt">'+
-      (fx.current_supplier?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">uses '+esc(String(fx.current_supplier).slice(0,24))+'</span>':'')+
-      (fx.uses_couriers==='confirmed'?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">confirmed courier user</span>':'')+
-      (team&&x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
-      (x.stage==='opportunity'?'<span class="pill" style="background:#EEF3FF;color:#1E45B8">opportunity</span>':'')+
-      (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
-      (sb?'<span class="pill" style="background:'+sb[0]+';color:'+sb[1]+'">'+sb[2]+'</span>':'<span class="pill" style="color:var(--faint)">no read yet</span>')+
+      '<div class="co"><b style="font-size:14.5px">'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
+      '<div class="pillrow" style="margin:4px 0 0">'+
+        (sb?'<span class="pill" style="background:'+sb[0]+';color:'+sb[1]+'">'+sb[2]+'</span>':'<span class="pill" style="color:var(--faint)">no read yet</span>')+
+        (x.stage==='opportunity'?'<span class="pill" style="background:#EEF3FF;color:#1E45B8">opportunity</span>':'')+
+        (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
+        (fx.uses_couriers==='confirmed'?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">confirmed courier user</span>':'')+
+        (fx.current_supplier?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">uses '+esc(String(fx.current_supplier).slice(0,24))+'</span>':'')+
+        (team&&x.rep?'<span class="repchip"><span class="avi" style="width:20px;height:20px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
+      '</div>'+
+      (insight?'<div class="seg" style="margin-top:5px">'+esc(insight.slice(0,150))+'</div>':'')+'</div>'+
+      '<div class="lmmets">'+
+        '<div class="m'+(x.last_touch?'':' dim')+'"><b>'+whenB+'</b><span>'+esc(whenS)+'</span></div>'+
+        met(x.calls,'calls')+met(x.emails,'emails')+met(x.notes,'notes')+
       '</div></div>';
   }).join("")||'<div class="empty" style="padding:16px">Nothing matches that search.</div>';
 }
@@ -2015,6 +2045,21 @@ function openCallLead(dom){
           '<div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(s.number)+'">Call</a></div></div>';
       }).join('')):'';
 
+    // the raw HubSpot record: rep notes, logged calls (with transcript where
+    // we hold one) and logged emails - verbatim, so the AI's read is checkable
+    var hsa=r.hs_activity||[];
+    var stripT=function(s){ return String(s||'').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim(); };
+    var hsaBody=hsa.length?hsa.map(function(a){
+      var lbl={calls:'Call',emails:'Email',notes:'Note',meetings:'Meeting'}[a.type]||a.type;
+      var bodyTxt=stripT(a.body);
+      return '<div class="evid"><b>'+esc(String(a.occurred_at||'').slice(0,10))+' &middot; '+esc(lbl)+(a.direction?' &middot; '+esc(a.direction):'')+(a.subject?' &middot; '+esc(String(a.subject).slice(0,80)):'')+'</b>'+
+        (a.transcript_summary?'<span class="src">Transcript: '+esc(String(a.transcript_summary).slice(0,400))+'</span>':'')+
+        (bodyTxt?'<span class="src">'+esc(bodyTxt.slice(0,400))+'</span>':'')+'</div>';
+    }).join(''):'';
+    var hsaCounts={};
+    hsa.forEach(function(a){ hsaCounts[a.type]=(hsaCounts[a.type]||0)+1; });
+    var hsaPrev=Object.keys(hsaCounts).map(function(k){ return hsaCounts[k]+' '+k; }).join(' &middot; ')||'';
+
     var reached=(r.contacts||[]).filter(function(c){return c.spoken_to||c.emailed;}).length;
     var consPrev=(r.contacts||[]).length?((r.contacts||[]).length+' named &middot; '+reached+' reached'):'none found yet';
     var lastAt=(r.attempts||[])[0];
@@ -2043,6 +2088,7 @@ function openCallLead(dom){
       sec('If they push back',INF,'objection to expect &amp; what to avoid',pushBody)+
       sec('Numbers',fact('public records & their site'),phone?(esc(phone)+' &middot; '+esc(phoneSrc||'')):'no number found',numsBody)+
       formSec+
+      sec('HubSpot activity',fact('HubSpot log'),hsaPrev,hsaBody)+
       sec('The story so far',INF,storyPrev,known)+
       sec('Contacts',fact('Apollo & our records'),consPrev,cons)+
       sec('Call history',fact('our call log'),histPrev,hist)+
