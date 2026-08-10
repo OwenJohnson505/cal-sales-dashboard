@@ -525,8 +525,26 @@ function defaultRange(){var to=new Date();var from=new Date(Date.now()-7*8640000
 async function boot(){
   var s=await sb.auth.getSession();
   if(!s.data.session){return login();}
+  // invited users arrive on a temporary password - make them pick their own
+  var u=s.data.session.user||{};
+  if(u.user_metadata&&u.user_metadata.must_change){return firstPw();}
   if(!RANGE.from) defaultRange();
   loadData();
+}
+function firstPw(){
+  h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Welcome</h2><p>You\'re in. Choose your own password to finish setting up.</p>'+
+    '<input id="pw1" type="password" class="input wfull" placeholder="New password (8+ characters)">'+
+    '<input id="pw2" type="password" class="input wfull" placeholder="Repeat it">'+
+    '<div class="row"><button class="btn btn-primary" onclick="saveFirstPw()">Save and continue</button></div>'+
+    '<div id="msg" class="msg"></div></div></div>');
+}
+async function saveFirstPw(){
+  var a=val("pw1"),b=val("pw2");
+  if(!a||a.length<8) return setMsg("Use at least 8 characters.");
+  if(a!==b) return setMsg("Those don't match.");
+  var r=await sb.auth.updateUser({password:a,data:{must_change:false}});
+  if(r.error) return setMsg(r.error.message);
+  boot();
 }
 async function loadData(){
   var s=await sb.auth.getSession();
@@ -1135,6 +1153,10 @@ function renderToday(el,got){
 // and the team, so a good or bad day is visible without guesswork.
 var PULSE_DATA=null, PULSE_DAY=null;
 var PULSE_REPS=[]; // computed from whoever actually has activity in the window
+// Marcus + Michael work out of Outlook, not Front - we cannot count their
+// emails yet, so showing them would misread as "did nothing all day".
+// Remove them from here once an outlook-sync lands their mail.
+var PULSE_EXCLUDE={"marcus@cal.delivery":1,"michaels@cal.delivery":1};
 var CALL_COL="#16233A", MAIL_COL="#0A6B4A";
 var PULSE_SPAN=20; // days of history fetched for trends
 function loadPulse(){
@@ -1212,7 +1234,7 @@ function renderPulse(){
     (byRep[d.email]=byRep[d.email]||{name:d.full_name,rows:{}}).rows[d.day]=d;
     var t=Number(d.calls)+Number(d.emails_front)+Number(d.emails_hs);
     if(t>0) totals[d.email]=(totals[d.email]||0)+t; });
-  PULSE_REPS=Object.keys(totals).sort(function(a,b){return totals[b]-totals[a];});
+  PULSE_REPS=Object.keys(totals).filter(function(e){return !PULSE_EXCLUDE[e];}).sort(function(a,b){return totals[b]-totals[a];});
   var visitsBy={};
   (r.visits||[]).forEach(function(v){ (visitsBy[v.staff_email+"|"+v.visit_date]=visitsBy[v.staff_email+"|"+v.visit_date]||[]).push(v); });
   var hourly={};
@@ -2445,6 +2467,32 @@ function loadTeam(){
         '<div id="staffres" style="margin-top:10px"></div></div></div>';
     teamLeaderboard(el);
     loadApprovals(el);
+    loadLogins(el);
+  });
+}
+// The head creates each login and hands over a one-off temporary password in
+// person; the app forces a personal password on first sign-in. No invite
+// emails to configure, nothing for the rep to request.
+function loadLogins(el){
+  desk2Post({action:"logins"},function(r){
+    if(!r||!r.ok||!(r.logins||[]).length) return;
+    var html='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#2F62F5"></span><h3>Logins</h3><span class="hint">create a login, send them the site link + temporary password &middot; they pick their own on first sign-in</span></div><div class="plist">'+
+      r.logins.map(function(s){
+        return '<div class="actrow"><div class="co"><b>'+esc(s.full_name||s.email)+'</b><div class="dom">'+esc(s.email)+' &middot; '+esc(s.role)+'</div></div>'+
+          '<div class="rt">'+(s.has_login?'<span class="pill" style="background:#ECFDF3;color:#0A6B4A">can sign in</span>':'<button class="btn btn-primary btn-sm" onclick="inviteStaff(\''+esc(s.email)+'\',this)">Create login</button>')+'</div></div>';
+      }).join("")+'</div></div>';
+    el.insertAdjacentHTML("afterbegin",html);
+  });
+}
+function inviteStaff(em,btn){
+  btn.disabled=true; btn.textContent="Creating...";
+  desk2Post({action:"invite",email:em},function(r){
+    var rt=btn.closest(".rt")||btn.parentElement;
+    if(r&&r.ok){
+      rt.innerHTML='<code style="font-size:13px;background:#F4F6F8;padding:4px 8px;border-radius:6px;user-select:all">'+esc(r.temp_password)+'</code>'+
+        '<button class="chip" onclick="navigator.clipboard.writeText(\''+esc(r.temp_password)+'\');this.textContent=\'Copied\'">Copy</button>';
+      showNext("Login created for "+em+". Send them the site link and this temporary password - it is shown once, and they choose their own the first time they sign in.");
+    } else { btn.disabled=false; btn.textContent="Create login"; showNext("Could not create the login: "+((r&&r.error)||"error")); }
   });
 }
 // Leaderboard on top: revenue won and customers brought on, ranked. Visible to
