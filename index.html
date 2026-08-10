@@ -1013,7 +1013,7 @@ function automationsPanel(inst){
 function setView(el){
   var v=el.getAttribute("data-v");
   var b=document.querySelectorAll(".nav .nv"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i]===el);
-  var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   if(v==="today") loadToday();
   if(v==="pulse") loadPulse();
@@ -1024,6 +1024,7 @@ function setView(el){
   if(v==="accounts") loadAccounts();
   if(v==="calllist") loadCallList();
   if(v==="team") loadTeam();
+  if(v==="settings") loadSettings();
   if(v==="leads" && !LEADSloaded) loadLeads();
   if(v==="monitor" && !MONloaded) loadMonitor();
   if(v==="simulation" && !SIMloaded) loadSim();
@@ -1084,7 +1085,7 @@ function loadToday(){
 }
 function renderToday(el,got){
   var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
-  if(d.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
+  if(d.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; var sz=document.getElementById("nvsettings"); if(sz) sz.style.display="";  initViewAs(); }
   var worked=list.filter(function(x){return x.status==="worked";}).length;
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
@@ -1128,12 +1129,12 @@ function renderToday(el,got){
     '</div></div>';
   el.innerHTML=html;
 }
-// ---- Pulse: the head-of-sales view. Focused on Ricky + Luke for now.
+// ---- Pulse: the head-of-sales view, for EVERY active salesperson.
 // One day in detail (hourly rhythm + quality verdict) plus 3-week trend
-// lines per rep: when they start (first call / first email) and how much
-// they do (calls, emails). Falling lines = time to remotivate.
+// lines per rep - and every number compared against the rep's own usual
+// and the team, so a good or bad day is visible without guesswork.
 var PULSE_DATA=null, PULSE_DAY=null;
-var PULSE_REPS=["ricky@cal.delivery","luker@cal.delivery"];
+var PULSE_REPS=[]; // computed from whoever actually has activity in the window
 var CALL_COL="#16233A", MAIL_COL="#0A6B4A";
 var PULSE_SPAN=20; // days of history fetched for trends
 function loadPulse(){
@@ -1206,9 +1207,14 @@ function pChart(title, xdays, series, yaxis){
 
 function renderPulse(){
   var el=document.getElementById("pulseboard"); var r=PULSE_DATA; if(!el||!r) return;
-  var byRep={};
-  (r.days||[]).forEach(function(d){ if(PULSE_REPS.indexOf(d.email)<0) return;
-    (byRep[d.email]=byRep[d.email]||{name:d.full_name,rows:{}}).rows[d.day]=d; });
+  var byRep={}, totals={};
+  (r.days||[]).forEach(function(d){
+    (byRep[d.email]=byRep[d.email]||{name:d.full_name,rows:{}}).rows[d.day]=d;
+    var t=Number(d.calls)+Number(d.emails_front)+Number(d.emails_hs);
+    if(t>0) totals[d.email]=(totals[d.email]||0)+t; });
+  PULSE_REPS=Object.keys(totals).sort(function(a,b){return totals[b]-totals[a];});
+  var visitsBy={};
+  (r.visits||[]).forEach(function(v){ (visitsBy[v.staff_email+"|"+v.visit_date]=visitsBy[v.staff_email+"|"+v.visit_date]||[]).push(v); });
   var hourly={};
   (r.hourly||[]).forEach(function(h){ var k=h.email+"|"+h.day; (hourly[k]=hourly[k]||{})[h.hr]={c:Number(h.calls),e:Number(h.emails)}; });
   var equality={};
@@ -1228,6 +1234,25 @@ function renderPulse(){
     '<span class="pill"><span style="display:inline-block;width:9px;height:9px;background:'+CALL_COL+';border-radius:2px;margin-right:5px"></span>calls'+
     '<span style="display:inline-block;width:9px;height:9px;background:'+MAIL_COL+';border-radius:2px;margin:0 5px 0 12px"></span>emails</span>'+
     '<span class="pill">counted one-by-one from Aircall and Front &middot; synced hourly &middot; click a dot to jump to that day</span></div>';
+  // the day side-by-side: same numbers for everyone, ranked - comparison first
+  var dayRows=PULSE_REPS.map(function(em){ var rep=byRep[em]||{}; var d=(rep.rows||{})[PULSE_DAY];
+    return {em:em,name:rep.name||em,calls:d?Number(d.calls):0,emails:d?Number(d.emails_front):0,meaningful:d?Number(d.meaningful):0,
+      visit:!!visitsBy[em+"|"+PULSE_DAY]}; });
+  var active=dayRows.filter(function(x){return x.calls+x.emails>0||x.visit;});
+  var teamAvgC=active.length?Math.round(active.reduce(function(a,x){return a+x.calls;},0)/active.length):0;
+  var teamAvgE=active.length?Math.round(active.reduce(function(a,x){return a+x.emails;},0)/active.length):0;
+  window.__pulseTeamAvg={c:teamAvgC,e:teamAvgE};
+  dayRows.sort(function(a,b){return (b.calls+b.emails)-(a.calls+a.emails);});
+  html+='<div class="panel flush"><div class="phead"><h3>The day, side by side</h3><span class="hint">team average on '+pDayLbl(PULSE_DAY)+': '+teamAvgC+' calls &middot; '+teamAvgE+' emails</span></div><div class="plist">'+
+    dayRows.map(function(x){
+      return '<div class="actrow"><div class="co"><b style="font-size:14px">'+esc(x.name)+'</b></div>'+
+        '<div class="lmmets">'+
+        (x.visit?'<span class="pill" style="background:#EEF3FF;color:#1E45B8">on a site visit</span>':'')+
+        '<div class="m'+(x.calls?'':' dim')+'"><b>'+x.calls+'</b><span>calls</span></div>'+
+        '<div class="m'+(x.emails?'':' dim')+'"><b>'+x.emails+'</b><span>emails</span></div>'+
+        '<div class="m'+(x.meaningful?'':' dim')+'"><b>'+x.meaningful+'</b><span>meaningful</span></div>'+
+        '</div></div>';
+    }).join("")+'</div></div>';
   var any=false;
   PULSE_REPS.forEach(function(em){
     var rep=byRep[em]; if(!rep) return;
@@ -1272,7 +1297,18 @@ function renderPulse(){
           '<span class="pill" style="background:'+vb+';color:'+vc+'">'+verdict+'</span>'+
           (det?'<span class="dom">'+det+'</span>':'')+'</div>';
       }
+      // this rep's own baseline over the window: is today good FOR THEM?
+      var actD=0,sumC=0,sumE=0;
+      xdays.forEach(function(dy){ if(dy===PULSE_DAY) return; var row=rep.rows[dy]; if(!row) return;
+        var c=Number(row.calls),e=Number(row.emails_front); if(c+e>0){actD++;sumC+=c;sumE+=e;} });
+      var avgC=actD?sumC/actD:0, avgE=actD?sumE/actD:0;
+      var dPill=function(v,avg,lbl){ if(!avg) return '';
+        var pct=Math.round(100*(v-avg)/avg);
+        var good=pct>=-10, col=good?['#E7F8F0','#0A6B4A']:['#FEF2F2','#8F1D1D'];
+        return '<span class="pill" style="background:'+col[0]+';color:'+col[1]+'" title="their average over the last 3 weeks: '+Math.round(avg)+' '+lbl+'/day">'+lbl+' '+(pct>=0?'+':'')+pct+'% vs their usual</span>'; };
+      var vst=visitsBy[em+"|"+PULSE_DAY];
       detail='<div style="padding:14px 20px 12px">'+
+        (vst?'<div class="pillrow" style="margin:0 0 8px"><span class="pill" style="background:#EEF3FF;color:#1E45B8">site visit: '+esc(vst.map(function(v){return v.company||v.domain||'logged';}).join(', '))+' &middot; fewer calls/emails expected today</span></div>':'')+
         '<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">'+
           '<span style="font-size:14px;font-weight:600;color:'+CALL_COL+'">Calls '+pT(d.first_call)+' &rarr; '+pT(d.last_call)+'</span>'+
           '<span style="font-size:14px;font-weight:600;color:'+MAIL_COL+'">Emails '+pT(d.first_email)+' &rarr; '+pT(d.last_email)+'</span>'+
@@ -1282,10 +1318,15 @@ function renderPulse(){
             (Number(d.meaningful)>0?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.meaningful+' meaningful</span>':'')+
           '</span></div>'+
         '<div class="dom" style="margin-top:3px">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' emails'+(d.emails_hs>0?' ('+d.emails_hs+' in HubSpot)':'')+'</div>'+
+        '<div class="pillrow" style="margin:8px 0 0">'+dPill(Number(d.calls),avgC,'calls')+dPill(Number(d.emails_front),avgE,'emails')+
+          (window.__pulseTeamAvg&&(window.__pulseTeamAvg.c||window.__pulseTeamAvg.e)?'<span class="pill">team today: '+window.__pulseTeamAvg.c+' calls &middot; '+window.__pulseTeamAvg.e+' emails avg</span>':'')+'</div>'+
         '<div style="display:flex;gap:6px;align-items:flex-end;margin-top:10px;overflow-x:auto">'+bars+'</div>'+
         qline+'</div>';
     } else {
-      detail='<div class="empty" style="padding:22px">No recorded activity on '+pDayLbl(PULSE_DAY)+'.</div>';
+      var vst2=visitsBy[em+"|"+PULSE_DAY];
+      detail=vst2
+        ? '<div class="empty" style="padding:22px">On a site visit'+(vst2[0]&&(vst2[0].company||vst2[0].domain)?' &mdash; '+esc(vst2[0].company||vst2[0].domain):'')+' &middot; no desk activity expected.</div>'
+        : '<div class="empty" style="padding:22px">No recorded activity on '+pDayLbl(PULSE_DAY)+'.</div>';
     }
     // ---- trends
     var rows=rep.rows;
@@ -1325,8 +1366,112 @@ function renderPulse(){
         '<div style="display:flex;gap:22px;flex-wrap:wrap">'+startChart+volChart+'</div>'+
       '</div></div>';
   });
-  if(!any) html+='<div class="empty">No activity from Ricky or Luke in this window.</div>';
+  if(!any) html+='<div class="empty">No sales activity recorded in this window.</div>';
   el.innerHTML=html;
+}
+// ---- Settings: commission structures + earnings (head only) ----------------
+var SET_DATA=null;
+function loadSettings(){
+  var el=document.getElementById("settingsboard"); if(!el) return;
+  el.innerHTML=spinner();
+  desk2Post({action:"commission",all:true},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the head of sales can see this.")+'</div>'; return; }
+    paintFreshness(r.tms);
+    SET_DATA=r; renderSettings();
+  });
+}
+function cssId(e){ return String(e).replace(/[^a-z0-9]/gi,'_'); }
+function schemeOf(email){ var s=(SET_DATA.schemes||[]).filter(function(x){return x.email===email;})[0]; return s?s.scheme:null; }
+function renderSettings(){
+  var el=document.getElementById("settingsboard"); if(!el||!SET_DATA) return;
+  var rows=(SET_DATA.report||[]);
+  el.innerHTML='<div class="panel flush"><div class="phead"><h3>Commission &mdash; customers&rsquo; first year of trading</h3><span class="hint">real TMS revenue &amp; margin &middot; accruing = still inside the 12 months</span></div><div class="plist">'+
+    rows.map(function(x){
+      return '<div class="actrow" style="flex-wrap:wrap">'+
+        '<div class="co" style="min-width:230px"><b style="font-size:14.5px">'+esc(x.rep)+'</b>'+
+        '<div class="dom">'+esc(x.scheme_label||'no scheme set')+'</div>'+
+        '<div class="seg" style="margin-top:5px"><button class="chip" onclick="setBreakdown(\''+esc(x.email)+'\')">Customer breakdown</button> <button class="chip" onclick="setEditor(\''+esc(x.email)+'\')">Edit scheme</button></div></div>'+
+        '<div class="lmmets">'+
+          '<div class="m"><b>'+nf(Number(x.customers))+'</b><span>customers</span></div>'+
+          '<div class="m"><b>'+nf(Number(x.accruing))+'</b><span>accruing</span></div>'+
+          '<div class="m" style="min-width:92px"><b>\u00a3'+nf(Math.round(x.y1_revenue))+'</b><span>yr-1 revenue</span></div>'+
+          '<div class="m" style="min-width:92px"><b style="color:#0A6B4A">\u00a3'+nf(Math.round(x.commission))+'</b><span>commission</span></div>'+
+        '</div>'+
+        '<div id="setx-'+cssId(x.email)+'" style="flex-basis:100%"></div>'+
+      '</div>';
+    }).join("")+'</div></div>'+
+    '<div class="panel"><h2>How it is calculated</h2><p class="sub" style="margin:0">A customer belongs to whoever the TMS names as salesperson. Year one runs 12 months from their first job; revenue comes from the monthly TMS series and the margin band from their real profit. Change a scheme above and every figure recalculates instantly.</p></div>';
+}
+function setBreakdown(email){ var box=document.getElementById('setx-'+cssId(email)); if(!box) return;
+  if(box.dataset.open==='bd'){ box.dataset.open=''; box.innerHTML=''; return; }
+  box.dataset.open='bd'; box.innerHTML='<div class="dom" style="padding:8px 0">Loading breakdown&hellip;</div>';
+  desk2Post({action:"commission",rep_email:email},function(r){
+    if(!r||!r.ok){ box.innerHTML='<div class="dom">Could not load.</div>'; return; }
+    var d=(r.detail||[]);
+    box.innerHTML='<div style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px">'+
+      (d.length?d.slice(0,15).map(function(c){
+        return '<div class="evid"><b>'+esc(c.customer_name)+'</b> <span class="faint">'+(c.still_accruing?'accruing until '+esc(String(c.y1_end)):'year complete')+'</span>'+
+          '<span class="src">\u00a3'+nf(Math.round(c.y1_revenue))+' yr-1 revenue &middot; '+c.margin_pct+'% margin &middot; rate '+(Math.round(Number(c.rate)*1000)/10)+'% &rarr; <b>\u00a3'+nf(Math.round(c.commission))+'</b></span></div>';
+      }).join(""):'<div class="dom">No attributed customers with year-1 revenue yet.</div>')+
+      (d.length>15?'<div class="dom" style="padding:6px 0">+'+(d.length-15)+' more customers</div>':'')+'</div>';
+  });
+}
+function setEditor(email){ var box=document.getElementById('setx-'+cssId(email)); if(!box) return;
+  if(box.dataset.open==='ed'){ box.dataset.open=''; box.innerHTML=''; return; }
+  box.dataset.open='ed';
+  var sch=schemeOf(email)||{type:'tiered_revenue'};
+  var id=cssId(email);
+  var bands=sch.bands||[[12,20,0.01],[21,30,0.02],[31,40,0.03],[41,50,0.04],[51,60,0.05],[61,100,0.06]];
+  box.innerHTML='<div style="margin-top:8px;border-top:1px solid var(--line-soft);padding-top:10px">'+
+    '<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">'+
+    '<select id="st-'+id+'" class="select" style="max-width:280px" onchange="document.getElementById(\'ms-'+id+'\').style.display=this.value===\'margin_share\'?\'\':\'none\';document.getElementById(\'tr-'+id+'\').style.display=this.value===\'tiered_revenue\'?\'\':\'none\'">'+
+      '<option value="margin_share"'+(sch.type==='margin_share'?' selected':'')+'>% of gross margin (first year)</option>'+
+      '<option value="tiered_revenue"'+(sch.type==='tiered_revenue'?' selected':'')+'>tiered % of revenue by margin band</option></select>'+
+    '<span id="ms-'+id+'" style="'+(sch.type==='margin_share'?'':'display:none')+'">margin share % <input id="msr-'+id+'" class="input" type="number" step="0.5" value="'+(((sch.rate||0.1))*100)+'" style="width:80px"></span>'+
+    '</div>'+
+    '<div id="tr-'+id+'" style="'+(sch.type==='tiered_revenue'?'':'display:none')+';margin-top:8px"><div class="dom">rate per margin band</div><div class="row" style="gap:10px;flex-wrap:wrap;margin-top:4px">'+
+      bands.map(function(b){ return '<span class="dom">'+b[0]+'&ndash;'+(b[1]>=100?'+':b[1])+'% margin: <input class="input trb-'+id+'" data-lo="'+b[0]+'" data-hi="'+b[1]+'" type="number" step="0.5" value="'+(b[2]*100)+'" style="width:64px">%</span>'; }).join("")+
+    '</div></div>'+
+    '<div style="margin-top:10px"><button class="btn btn-primary btn-sm" onclick="saveScheme(\''+esc(email)+'\')">Save scheme</button> <span id="sm-'+id+'" class="dom"></span></div></div>';
+}
+function saveScheme(email){
+  var id=cssId(email);
+  var type=document.getElementById('st-'+id).value;
+  var scheme;
+  if(type==='margin_share'){ var rt=Number(document.getElementById('msr-'+id).value);
+    scheme={type:'margin_share',rate:rt/100,label:rt+'% of gross margin, customer\u2019s first year'}; }
+  else{ var bands=[].slice.call(document.querySelectorAll('.trb-'+id)).map(function(inp){ return [Number(inp.dataset.lo),Number(inp.dataset.hi),Number(inp.value)/100]; });
+    scheme={type:'tiered_revenue',bands:bands,label:'tiered % of first-year revenue by margin'}; }
+  var m=document.getElementById('sm-'+id); if(m) m.textContent='Saving\u2026';
+  desk2Post({action:'commission_scheme_set',email:email,scheme:scheme},function(r){
+    if(m) m.textContent=(r&&r.ok)?'Saved.':'Could not save: '+((r&&r.error)||'');
+    if(r&&r.ok) loadSettings();
+  });
+}
+// ---- Site visits: log one, and plan who else is worth popping in on --------
+function planVisit(dom){ var box=document.getElementById('visitbox'); if(!box) return;
+  box.innerHTML='<div class="dom" style="padding:6px 0">Finding nearby accounts&hellip;</div>';
+  sb.auth.getSession().then(function(se){ if(!se.data.session) return;
+    fetch(URL_+"/functions/v1/visit-planner",{method:"POST",headers:{Authorization:"Bearer "+se.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify({domain:dom,radius_mi:6})})
+    .then(function(r){return r.json();}).then(function(r){
+      if(!r||!r.ok){ box.innerHTML='<div class="dom">'+esc((r&&r.error)||'No postcode on record for this company.')+'</div>'; return; }
+      box.innerHTML='<div class="msec" style="margin:10px 0 4px">Worth popping in near '+esc(r.target.postcode)+' &middot; within '+r.radius_mi+' miles</div>'+
+        ((r.results||[]).length? r.results.map(function(x){
+          return '<div class="evid"><b>'+esc(x.name||x.domain||'')+'</b> <span class="faint">'+x.miles+' mi &middot; '+esc(x.postcode)+'</span>'+
+            '<span class="src">'+(x.kind==='customer'?('Existing customer'+(x.rep?' &middot; rep '+esc(x.rep):'')):('Lead'+(x.fit!=null?' &middot; fit '+x.fit:'')+(x.owner?' &middot; '+esc(x.owner):'')))+
+            (x.domain?' &middot; <a href="#" onclick="event.preventDefault();closeModal();openCallLead(\''+esc(x.domain)+'\')">open</a>':'')+'</span></div>';
+        }).join('') : '<div class="dom">Nothing on record within '+r.radius_mi+' miles.</div>');
+    }).catch(function(){ box.innerHTML='<div class="dom">Could not reach the planner.</div>'; });
+  });
+}
+function logVisitForm(dom){ var box=document.getElementById('visitbox'); if(!box) return;
+  box.innerHTML='<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><input id="vd" type="date" class="input" value="'+new Date().toISOString().slice(0,10)+'" style="flex:0">'+
+  '<input id="vn" class="input" placeholder="Note (optional)" style="flex:1;min-width:160px"><button class="btn btn-primary btn-sm" onclick="logVisit(\''+esc(dom)+'\')">Save visit</button><span id="vmsg" class="dom"></span></div>';
+}
+function logVisit(dom){ var m=document.getElementById('vmsg'); if(m) m.textContent='Saving\u2026';
+  desk2Post({action:'visit_log',domain:dom,visit_date:val('vd'),note:val('vn')},function(r){
+    if(m) m.textContent=(r&&r.ok)?'Visit logged - Pulse and the day view will show it as context.':'Could not save.';
+  });
 }
 // ---- Customers: mine, converted, spending ----------------------------------
 function loadCustomers(){
@@ -1802,7 +1947,7 @@ function loadCallList(){
   deskPost({action:"list",limit:40},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
     // Only the head/admin should see the Team tab; the desk tells us the role.
-    if(r.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";  initViewAs(); }
+    if(r.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; var sz=document.getElementById("nvsettings"); if(sz) sz.style.display="";  initViewAs(); }
     CL=r.list||[];
     renderCallList();
   });
@@ -2121,6 +2266,11 @@ function openCallLead(dom){
       sec('Contacts',fact('Apollo & our records'),consPrev,cons)+
       sec('Call history',fact('our call log'),histPrev,hist)+
       '</div>'+
+      '<h3 class="msec">Visits</h3>'+
+      '<div class="outrow">'+
+        '<button class="chip" onclick="planVisit(\''+esc(dom)+'\')">Plan a visit &mdash; who else is nearby?</button>'+
+        '<button class="chip" onclick="logVisitForm(\''+esc(dom)+'\')">Log a visit</button>'+
+      '</div><div id="visitbox"></div>'+
       '<h3 class="msec">Anything to correct?</h3>'+
       '<p class="sub" style="margin:-4px 0 10px">Calls and emails record themselves. Only tap if the outcome needs saying.</p>'+
       '<div class="outrow">'+
@@ -2485,6 +2635,7 @@ function renderDash(p){
         '<button class="nv" data-v="calendar" onclick="setView(this)">Calendar</button>'+
         '<button class="nv" data-v="pulse" onclick="setView(this)" id="nvpulse" style="display:none">Pulse</button>'+
         '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam">Team</button>'+
+        '<button class="nv" data-v="settings" onclick="setView(this)" id="nvsettings" style="display:none">Settings</button>'+
         '<select id="viewas" class="input" style="display:none;margin-left:auto;max-width:190px;font-size:13px;padding:6px 10px" onchange="setViewAs(this.value)"></select>'+
         '<span id="freshchip" class="pill"></span>'+
       '</nav></div>'+
@@ -2506,6 +2657,7 @@ function renderDash(p){
     '<div id="view-accounts" class="view" style="display:none"><div class="page-head"><div><div class="t">All accounts</div><p class="sub">Every real company we know of, however it got here. Vendors, communities and one-off addresses are filtered out.</p></div></div><div id="acctboard">'+spinner()+'</div></div>'+
     '<div id="view-calllist" class="view" style="display:none"><div class="page-head"><div><div class="t">Cold list</div><p class="sub">Ranked by fit and by whether we can actually reach them. Log the outcome and a callback becomes a HubSpot task, so it reaches you in Front and on your phone.</p></div></div><div id="clboard">'+spinner()+'</div></div>'+
     '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Team</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
+    '<div id="view-settings" class="view" style="display:none"><div class="page-head"><div><div class="t">Settings</div><p class="sub">Commission structures per person, and what each has earned from their customers&rsquo; first year of trading. Only you see this.</p></div></div><div id="settingsboard">'+spinner()+'</div></div>'+
     '<div id="view-monitor" class="view" style="display:none"><div class="page-head"><div><div class="t">Monitor</div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p></div></div><div id="monboard">'+spinner()+'</div></div>'+
     '<div id="view-simulation" class="view" style="display:none"><div class="page-head"><div><div class="t">Simulation</div><p class="sub">Dry-run preview of the automatic CRM updates and reminders. Nothing is written until you go live.</p></div></div><div id="simboard">'+spinner()+'</div></div>'+
     '<div id="view-pipeline" class="view" style="display:none">'+
@@ -2540,7 +2692,7 @@ function bootDesk(){
       paintFreshness(r.tms);
       if(r.can_manage){
         var t=document.getElementById("nvteam");  if(t) t.style.display="";
-        var pz=document.getElementById("nvpulse"); if(pz) pz.style.display="";
+        var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; var sz=document.getElementById("nvsettings"); if(sz) sz.style.display="";
       }
     }
   });
