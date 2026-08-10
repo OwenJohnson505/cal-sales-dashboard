@@ -454,10 +454,16 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .psec .pbody{ padding:14px 16px 16px; }
 .psec .pbody p{ font-size:13.5px; color:var(--ink2); line-height:1.6; margin:0 0 8px; overflow-wrap:anywhere; }
 .psec .pbody p:last-child{ margin-bottom:0; }
-/* provenance chips: green solid = sourced fact, amber dashed = AI inference */
-.pv{ flex:none; font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border-radius:999px; padding:3px 9px; white-space:nowrap; }
-.pv.fact{ background:#F0F7F2; color:#0A6B4A; border:1px solid #BFE3CD; }
-.pv.inf{ background:#FFFBEB; color:#8A6410; border:1px dashed #DCC689; }
+/* provenance: a quiet word, not a badge - green = sourced, amber = inferred.
+   It must be readable when you look for it and invisible when you don't. */
+.pv{ flex:none; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; background:none; border:0; padding:0; }
+.pv.fact{ color:#0A6B4A; }
+.pv.inf{ color:#9A7014; }
+/* profile tabs: one segmented control, three focused pages */
+.mtabs{ display:flex; background:var(--color-base-300); border-radius:10px; padding:2px; margin:14px 0 12px; }
+.mtabs button{ flex:1; border:0; background:transparent; font:inherit; font-size:13px; font-weight:600; padding:7px 0; border-radius:8px; cursor:pointer; color:var(--ink2); transition:background .12s,color .12s; }
+.mtabs button.on{ background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12); color:var(--ink); }
+.mtab{ display:none; } .mtab.on{ display:block; }
 @media (prefers-reduced-motion: reduce){ .psec>summary .chev{ transition:none; } }
 
 /* ============================ threads / calls =========================== */
@@ -2296,6 +2302,12 @@ function renderCallRows(){
 // NB not openLead - the Leads tab already defines a function by that name and
 // the later definition silently wins, so the panel never rendered.
 // Uses the app's existing modal so the rep keeps their place in the list.
+function mTab(btn,k){
+  var bs=btn.parentElement.querySelectorAll("button");
+  for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===btn);
+  var ts=document.querySelectorAll("#cmodal .mtab");
+  for(var j=0;j<ts.length;j++) ts[j].classList.toggle("on",ts[j].getAttribute("data-t")===k);
+}
 function openCallLead(dom){
   var m=document.getElementById("cmodal"); if(!m) return;
   m.style.display="flex";
@@ -2474,6 +2486,17 @@ function openCallLead(dom){
       (ap.objection?'<div class="evid"><b>Likely objection &amp; the answer</b><span class="src">'+esc(ap.objection)+'</span></div>':'')+
       (ap.avoid?'<div class="evid"><b>Avoid</b><span class="src">'+esc(ap.avoid)+'</span></div>':'')):'';
 
+    // Companies House first: the overdue-accounts flag feeds the warnings
+    var ch=r.companies_house||null;
+    var chOverdue=ch&&ch.accounts_next_due&&(new Date(ch.accounts_next_due)<new Date());
+    var chBody=ch?(
+      '<div class="evid"><b>'+esc(ch.name||'')+' &middot; '+esc(ch.company_number||'')+'</b>'+
+      '<span class="src">'+esc(ch.status||'')+(ch.category?' &middot; '+esc(ch.category):'')+(ch.incorporated?' &middot; incorporated '+esc(String(ch.incorporated).slice(0,4)):'')+'</span></div>'+
+      (ch.address||ch.postcode?'<div class="evid"><b>Registered office</b><span class="src">'+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span></div>':'')+
+      (ch.sic?'<div class="evid"><b>Nature of business</b><span class="src">'+esc(ch.sic)+'</span></div>':'')+
+      (ch.accounts_next_due?'<div class="evid"><b>Accounts next due</b><span class="src">'+esc(String(ch.accounts_next_due))+(chOverdue?' &middot; <b style="color:#8F1D1D">OVERDUE</b>':'')+(ch.accounts_last_made?' &middot; last filed '+esc(String(ch.accounts_last_made)):'')+'</span></div>':'')
+    ):'';
+
     // brief-level warnings are call-changing; they sit above the fold
     var rel=(b&&b.relationship)||null;
     var warnList=((rel&&rel.warnings)||[]).slice();
@@ -2507,16 +2530,6 @@ function openCallLead(dom){
     hsa.forEach(function(a){ hsaCounts[a.type]=(hsaCounts[a.type]||0)+1; });
     var hsaPrev=Object.keys(hsaCounts).map(function(k){ return hsaCounts[k]+' '+k; }).join(' &middot; ')||'';
 
-    // Companies House: the official record - registered facts, not research
-    var ch=r.companies_house||null;
-    var chOverdue=ch&&ch.accounts_next_due&&(new Date(ch.accounts_next_due)<new Date());
-    var chBody=ch?(
-      '<div class="evid"><b>'+esc(ch.name||'')+' &middot; '+esc(ch.company_number||'')+'</b>'+
-      '<span class="src">'+esc(ch.status||'')+(ch.category?' &middot; '+esc(ch.category):'')+(ch.incorporated?' &middot; incorporated '+esc(String(ch.incorporated).slice(0,4)):'')+'</span></div>'+
-      (ch.address||ch.postcode?'<div class="evid"><b>Registered office</b><span class="src">'+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span></div>':'')+
-      (ch.sic?'<div class="evid"><b>Nature of business</b><span class="src">'+esc(ch.sic)+'</span></div>':'')+
-      (ch.accounts_next_due?'<div class="evid"><b>Accounts next due</b><span class="src">'+esc(String(ch.accounts_next_due))+(chOverdue?' &middot; <b style="color:#8F1D1D">OVERDUE</b>':'')+(ch.accounts_last_made?' &middot; last filed '+esc(String(ch.accounts_last_made)):'')+'</span></div>':'')
-    ):'';
     var reached=(r.contacts||[]).filter(function(c){return c.spoken_to||c.emailed;}).length;
     var consPrev=(r.contacts||[]).length?((r.contacts||[]).length+' named &middot; '+reached+' reached'):'none found yet';
     var lastAt=(r.attempts||[])[0];
@@ -2534,28 +2547,39 @@ function openCallLead(dom){
         '</div>'+
       '</div>'+
       (comp&&comp.what_they_do?'<p style="margin:6px 0 2px;font-size:14px;color:var(--ink2);line-height:1.55">'+esc(comp.what_they_do)+'</p>':'')+
-      warnHtml+
-      (ap.opening_line
-        ? '<div class="nextact" style="margin:12px 0 4px"><div><div class="lbl">Say this &middot; AI drafted</div><div class="dt">'+esc(ap.opening_line)+'</div></div></div>'
-        : '')+
-      '<div style="margin:12px 0 14px">'+
-      sec('Who they are',fact('their website & press'),comp?esc(String(comp.size_signal||comp.what_they_do||'').slice(0,90)):'',whoBody)+
+      // Three focused pages instead of one long stack: Call is everything you
+      // need with the phone in your hand; Company is the research; History is
+      // what has actually happened. Ten equal rows was scannable but daunting.
+      '<div class="mtabs">'+
+        '<button class="on" onclick="mTab(this,\'call\')">Call</button>'+
+        '<button onclick="mTab(this,\'co\')">Company</button>'+
+        '<button onclick="mTab(this,\'hist\')">History</button></div>'+
+      '<div class="mtab on" data-t="call">'+
+        warnHtml+
+        (ap.opening_line
+          ? '<div class="nextact" style="margin:12px 0 4px"><div><div class="lbl">Say this &middot; AI drafted</div><div class="dt">'+esc(ap.opening_line)+'</div></div></div>'
+          : '')+
+        (talkBody?'<h3 class="msec">Talking points <span class="pv inf">AI inferred</span></h3>'+talkBody:'')+
+        (pushBody?'<h3 class="msec">If they push back <span class="pv inf">AI inferred</span></h3>'+pushBody:'')+
+        (numsBody?'<h3 class="msec">Numbers <span class="pv fact">public records &amp; their site</span></h3>'+numsBody:'')+
+      '</div>'+
+      '<div class="mtab" data-t="co">'+
+      sec('Who they are',fact('their website & press'),comp?esc(String(comp.size_signal||comp.what_they_do||'').slice(0,90)):'',whoBody,true)+
       sec('Why the '+((bv&&bv.score!=null?bv.score:v.fit_score)||'score'),INF,bv?esc(String(bv.headline||'').slice(0,90)):esc(String(v.rationale||'').slice(0,90)),whyBody)+
-      sec('Talking points',INF,pts.length?esc(String((pts[0]||{}).point||'').slice(0,90)):'',talkBody)+
-      sec('If they push back',INF,'objection to expect &amp; what to avoid',pushBody)+
-      sec('Numbers',fact('public records & their site'),phone?(esc(phone)+' &middot; '+esc(phoneSrc||'')):'no number found',numsBody)+
       sec('Companies House',fact('official register'),ch?(esc(ch.status||'')+(ch.incorporated?' &middot; since '+String(ch.incorporated).slice(0,4):'')+(chOverdue?' &middot; accounts OVERDUE':'')):'',chBody)+
       formSec+
-      sec('HubSpot activity',fact('HubSpot log'),hsaPrev,hsaBody)+
-      sec('The story so far',INF,storyPrev,known)+
       sec('Contacts',fact('Apollo & our records'),consPrev,cons)+
-      sec('Call history',fact('our call log'),histPrev,hist)+
       '</div>'+
+      '<div class="mtab" data-t="hist">'+
+      sec('The story so far',INF,storyPrev,known,true)+
+      sec('HubSpot activity',fact('HubSpot log'),hsaPrev,hsaBody)+
+      sec('Call history',fact('our call log'),histPrev,hist)+
       '<h3 class="msec">Visits</h3>'+
       '<div class="outrow">'+
         '<button class="chip" onclick="planVisit(\''+esc(dom)+'\')">Plan a visit &mdash; who else is nearby?</button>'+
         '<button class="chip" onclick="logVisitForm(\''+esc(dom)+'\')">Log a visit</button>'+
       '</div><div id="visitbox"></div>'+
+      '</div>'+
       '<h3 class="msec">Anything to correct?</h3>'+
       '<p class="sub" style="margin:-4px 0 10px">Calls and emails record themselves. Only tap if the outcome needs saying.</p>'+
       '<div class="outrow">'+
