@@ -6,6 +6,10 @@
 <title>Cal Sameday - Sales Assistant</title>
 <link href="https://cdn.jsdelivr.net/npm/daisyui@5/daisyui.css" rel="stylesheet" type="text/css">
 <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
 <style>
 /* ============================ design tokens ============================ */
 /* Apple-language calm: their greys (#F5F5F7 page, #1D1D1F ink), ONE accent
@@ -33,7 +37,8 @@
 *{ box-sizing:border-box; }
 html,body{ max-width:100%; overflow-x:hidden; }
 body{ margin:0; background:var(--color-base-200); color:var(--ink); font-size:14.5px; line-height:1.6;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  /* SF on Apple hardware; Inter (the closest open face to SF) everywhere else */
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   -webkit-font-smoothing:antialiased; letter-spacing:-.006em; }
 h1,h2,h3{ letter-spacing:-.025em; }
 .muted{ color:var(--mut); } .faint{ color:var(--faint); }
@@ -45,7 +50,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
    and no authority; one rule lifts Pipeline, Leads and Cold outreach too, not
    just the screens added last. Nested tables (inside a panel or a modal) opt
    out so the card does not double up. */
-.tblwrap{ overflow-x:auto; background:#fff; border:1px solid var(--line);
+.tblwrap{ overflow-x:auto; background:#fff; border:0;
   border-radius:var(--radius-box); box-shadow:var(--sh-2); }
 .panel .tblwrap,.mbody .tblwrap{ background:none; border:0; border-radius:0; box-shadow:none; }
 .panel.flush .tblwrap{ margin:0; }
@@ -54,34 +59,65 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .tblwrap>.table thead th:last-child{ border-top-right-radius:var(--radius-box); }
 ::selection{ background:#CCE4FF; }
 
-/* ================================ topbar ================================ */
-.topbar{ position:sticky; top:0; z-index:40; background:rgba(255,255,255,.72); backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
-  border-bottom:1px solid rgba(0,0,0,.07); }
-.topbar-inner{ max-width:1240px; margin:0 auto; padding:11px 24px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
-.sbrand{ font-size:15.5px; font-weight:800; letter-spacing:-.03em; white-space:nowrap; display:flex; align-items:center; gap:10px; }
+/* =================== shell: sidebar (desktop) + tab bar ================= */
+/* The HIG pattern: primary sections live in a left sidebar on wide screens
+   and become a bottom tab bar on phones. Selection is a tinted fill, the
+   material is translucent, items are icon + label. */
+.shell{ display:flex; align-items:stretch; min-height:100dvh; }
+.sidebar{ flex:0 0 230px; position:sticky; top:0; height:100dvh; overflow-y:auto; z-index:40;
+  display:flex; flex-direction:column; padding:16px 12px 14px;
+  background:rgba(247,247,249,.88); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border-right:1px solid rgba(0,0,0,.06); }
+.sb-brand{ display:flex; align-items:center; gap:10px; font-size:15px; font-weight:700; letter-spacing:-.02em; padding:2px 10px 14px; }
 .blogo{ width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center;
-  font-size:13px; font-weight:700; color:#fff; background:var(--color-primary);
+  font-size:13px; font-weight:700; color:#fff; background:var(--color-primary); flex:none;
   box-shadow:0 2px 8px rgba(0,113,227,.28); }
-.navwrap{ overflow-x:auto; scrollbar-width:none; min-width:0; max-width:100%; } .navwrap::-webkit-scrollbar{ display:none; }
-.nav{ display:flex; gap:2px; }
-.nv{ border:0; background:transparent; color:var(--mut); font:inherit; font-size:13.5px; font-weight:600;
-  padding:7px 13px; border-radius:999px; cursor:pointer; white-space:nowrap; transition:color .14s,background .14s,transform .1s ease; }
-.nv:hover{ color:var(--ink); background:rgba(0,0,0,.05); }
-.nv:active{ transform:scale(.96); }
-/* the active tab reads like the selected segment of an Apple segmented control:
-   a white pill lifted off the translucent bar */
-.nv.on{ color:var(--ink); background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.10), inset 0 0 0 1px rgba(0,0,0,.04); }
-.topacts{ margin-left:auto; display:flex; gap:6px; align-items:center; }
+.sb-nav{ display:flex; flex-direction:column; gap:2px; }
+.sidebar .nv{ display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:0; background:transparent;
+  font:inherit; font-size:14px; font-weight:500; color:var(--ink2); padding:8px 12px; border-radius:10px; cursor:pointer;
+  transition:background .12s,color .12s,transform .1s ease; }
+.sidebar .nv i{ font-size:19px; line-height:1; color:var(--mut); transition:color .12s; }
+.sidebar .nv:hover{ background:rgba(0,0,0,.05); color:var(--ink); }
+.sidebar .nv:active{ transform:scale(.98); }
+.sidebar .nv.on{ background:rgba(0,113,227,.11); color:var(--color-primary); font-weight:600; }
+.sidebar .nv.on i{ color:var(--color-primary); }
+.sb-group{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:16px 12px 5px; }
+.sb-foot{ margin-top:auto; display:flex; flex-direction:column; gap:8px; padding:12px 4px 0; border-top:1px solid rgba(0,0,0,.06); }
+.sb-foot .pill{ text-align:center; }
+.main{ flex:1 1 auto; min-width:0; }
+.tabbar{ display:none; }
+/* the More sheet: the overflow sections, floating above the tab bar */
+.moresheet{ position:fixed; left:10px; right:10px; bottom:calc(66px + env(safe-area-inset-bottom)); z-index:46;
+  background:rgba(255,255,255,.96); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border-radius:16px; box-shadow:var(--sh-3); padding:8px; animation:msheet .22s cubic-bezier(.16,1,.3,1) both; }
+.moresheet .nv{ display:flex; align-items:center; gap:12px; width:100%; border:0; background:none; font:inherit;
+  font-size:15px; font-weight:500; color:var(--ink); padding:12px 14px; border-radius:10px; cursor:pointer; }
+.moresheet .nv i{ font-size:20px; line-height:1; color:var(--mut); }
+.moresheet .nv.on{ color:var(--color-primary); } .moresheet .nv.on i{ color:var(--color-primary); }
+.moresheet .nv:active{ background:var(--color-base-200); }
+@media (max-width:900px){
+  .sidebar{ display:none; }
+  .tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:45; display:flex;
+    background:rgba(255,255,255,.85); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border-top:1px solid rgba(0,0,0,.08); padding:6px 6px calc(7px + env(safe-area-inset-bottom)); }
+  .tabbar .nv{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; border:0; background:none;
+    font:inherit; font-size:10.5px; font-weight:600; color:var(--mut); padding:4px 2px; border-radius:10px; cursor:pointer; }
+  .tabbar .nv i{ font-size:22px; line-height:1; }
+  .tabbar .nv.on{ color:var(--color-primary); }
+  .content{ padding-bottom:88px; }
+}
 
 /* ================================= page ================================= */
 .content{ max-width:1240px; margin:0 auto; padding:26px 24px 60px; }
 .page-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:2px 0 20px; }
-.page-head .t{ font-size:26px; font-weight:700; letter-spacing:-.03em; line-height:1.15; }
+.page-head .t{ font-size:29px; font-weight:700; letter-spacing:-.035em; line-height:1.12; }
 .page-head .sub,.sub{ font-size:14px; color:var(--mut); }
 .page-head .sub{ margin:6px 0 0; max-width:660px; }
 
 /* ================================ panels ================================ */
-.panel{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:20px 22px; margin-bottom:18px; box-shadow:var(--sh-1); }
+/* Apple grouped-surface look: borderless white on the grey page, the shadow
+   is the edge. Hairlines live INSIDE surfaces, never around them. */
+.panel{ background:#fff; border:0; border-radius:var(--radius-box); padding:20px 22px; margin-bottom:18px; box-shadow:var(--sh-1); }
 .panel h2{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--faint); margin:0 0 15px; display:flex; align-items:center; gap:9px; }
 .panel.warn{ border-color:#F4C9C9; background:linear-gradient(180deg,#FFF9F9,#fff 70px); }
 
@@ -105,12 +141,12 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .askgo:hover{ filter:brightness(1.07); } .askgo:active{ transform:scale(.97); }
 .askgo:disabled{ opacity:.55; cursor:default; }
 .egs{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:18px; }
-.eg{ font-size:12.5px; color:var(--ink2); background:#fff; border:1px solid var(--line); border-radius:999px;
-  padding:6px 13px; cursor:pointer; transition:border-color .14s, color .14s; }
-.eg:hover{ border-color:var(--color-primary); color:var(--color-primary); }
+.eg{ font-size:12.5px; color:var(--ink2); background:rgba(120,120,128,.10); border:0; border-radius:999px;
+  padding:6px 13px; cursor:pointer; transition:background .14s, color .14s, transform .1s ease; }
+.eg:hover{ background:rgba(0,113,227,.12); color:var(--color-primary); }
 
 /* thinking state */
-.think{ max-width:680px; margin:30px auto 0; background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:22px 24px; box-shadow:var(--sh-2); }
+.think{ max-width:680px; margin:30px auto 0; background:#fff; border:0; border-radius:var(--radius-box); padding:22px 24px; box-shadow:var(--sh-2); }
 .think .row{ display:flex; align-items:center; gap:12px; font-size:14px; color:var(--ink2); }
 .think .bar{ height:4px; border-radius:99px; background:var(--color-base-300); margin-top:16px; overflow:hidden; }
 .think .bar i{ display:block; height:100%; width:34%; border-radius:99px; background:var(--color-primary);
@@ -120,7 +156,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 /* Live compile view. 99% of the wait is the web research, so the rep watches
    findings land one at a time rather than a spinner that says nothing. */
 .live{ max-width:860px; margin:26px auto 0; }
-.livehead{ display:flex; align-items:center; gap:11px; background:#fff; border:1px solid var(--line);
+.livehead{ display:flex; align-items:center; gap:11px; background:#fff; border:0;
   border-radius:var(--radius-box); padding:15px 19px; box-shadow:var(--sh-1); position:sticky; top:8px; z-index:5; }
 .livehead .msg{ font-size:14px; font-weight:650; color:var(--ink); }
 .livehead .el{ margin-left:auto; font-size:12.5px; color:var(--faint); font-variant-numeric:tabular-nums; }
@@ -129,7 +165,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
   background:var(--color-base-200); color:var(--faint); }
 .rail span.on{ background:#F0F6FF; color:var(--color-primary); }
 .rail span.ok{ background:#E7F8F0; color:#0A6B4A; }
-.lcard{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:16px 19px;
+.lcard{ background:#fff; border:0; border-radius:var(--radius-box); padding:16px 19px;
   box-shadow:var(--sh-1); margin-top:12px; animation:pop .28s ease both; }
 @keyframes pop{ from{ opacity:0; transform:translateY(7px) } to{ opacity:1; transform:none } }
 .lcard h4{ margin:0 0 10px; font-size:11.5px; font-weight:700; text-transform:uppercase;
@@ -155,8 +191,8 @@ h1,h2,h3{ letter-spacing:-.025em; }
    like decisions; the rest are quieter so the common path is obvious. */
 .outrow{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:9px; }
 .outrow.sec .chip{ font-weight:600; }
-.chip.danger{ color:#8F1D1D; border-color:#F3C9C9; }
-.chip.danger:hover{ border-color:#DC2626; background:#FEF2F2; }
+.chip.danger{ color:#8F1D1D; background:rgba(220,38,38,.09); }
+.chip.danger:hover{ background:rgba(220,38,38,.16); }
 .alertcard{ background:#FEF2F2; border:1px solid #F3C9C9; border-radius:var(--radius-box); padding:16px 19px; margin-bottom:16px; }
 .alertcard h4{ margin:0 0 8px; font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.07em; color:#8F1D1D; }
 .alertcard p{ margin:0 0 6px; font-size:13.5px; color:var(--ink2); line-height:1.55; }
@@ -198,7 +234,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 
 /* ============================ research brief ============================ */
 .brief{ max-width:1000px; margin:26px auto 0; }
-.bhead{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:24px 26px; box-shadow:var(--sh-2); margin-bottom:16px; }
+.bhead{ background:#fff; border:0; border-radius:var(--radius-box); padding:24px 26px; box-shadow:var(--sh-2); margin-bottom:16px; }
 .bhead .top{ display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
 .bhead .nm{ flex:1; min-width:220px; }
 .bhead h2{ font-size:25px; font-weight:700; margin:0 0 4px; letter-spacing:-.03em; overflow-wrap:anywhere; }
@@ -254,7 +290,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .heads b{ font-weight:750; }
 
 /* the action card - what the rep actually does next */
-.action{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); box-shadow:var(--sh-2); margin-bottom:16px; overflow:hidden; }
+.action{ background:#fff; border:0; border-radius:var(--radius-box); box-shadow:var(--sh-2); margin-bottom:16px; overflow:hidden; }
 .action .ah{ padding:18px 22px 0; }
 .action h3{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--faint); margin:0 0 14px; }
 .who{ display:flex; align-items:center; gap:12px; padding:0 22px 16px; flex-wrap:wrap; }
@@ -271,7 +307,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .nextbar .nd{ font-size:13.5px; color:var(--mut); flex:1 1 260px; min-width:0; line-height:1.45; }
 
 /* accordions - everything that is not needed at a glance */
-.acc{ background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:9px; box-shadow:var(--sh-1); }
+.acc{ background:#fff; border:0; border-radius:14px; margin-bottom:9px; box-shadow:var(--sh-1); }
 .acc>summary{ list-style:none; cursor:pointer; padding:14px 18px; display:flex; align-items:center; gap:10px;
   font-weight:650; font-size:14.5px; border-radius:14px; }
 .acc>summary::-webkit-details-marker{ display:none; }
@@ -288,7 +324,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 /* minmax(0,1fr) so an unbreakable URL can't inflate the track's min-content width */
 .bgrid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-bottom:16px; }
 @media (max-width:820px){ .bgrid{ grid-template-columns:minmax(0,1fr); } }
-.bcard{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:19px 21px; box-shadow:var(--sh-1); min-width:0; overflow-wrap:anywhere; }
+.bcard{ background:#fff; border:0; border-radius:var(--radius-box); padding:19px 21px; box-shadow:var(--sh-1); min-width:0; overflow-wrap:anywhere; }
 .bcard h3{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--faint); margin:0 0 12px; }
 .bcard p{ margin:0 0 10px; font-size:14px; color:var(--ink2); line-height:1.6; overflow-wrap:anywhere; }
 .bcard p:last-child{ margin-bottom:0; }
@@ -321,7 +357,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 /* ================================ stats ================================= */
 .statwrap{ overflow-x:auto; margin-bottom:18px; }
 .statgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
-.st{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); padding:15px 17px; box-shadow:var(--sh-1); }
+.st{ background:#fff; border:0; border-radius:var(--radius-box); padding:15px 17px; box-shadow:var(--sh-1); }
 .st .l{ font-size:12px; font-weight:600; color:var(--mut); }
 .st .v{ font-size:27px; font-weight:700; letter-spacing:-.03em; margin-top:5px; font-variant-numeric:tabular-nums; }
 .st .d{ font-size:11.5px; color:var(--faint); margin-top:2px; }
@@ -361,9 +397,11 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 /* =============================== controls =============================== */
 .daterow,.controls{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .controls{ margin-bottom:13px; } .controls .input{ flex:1; min-width:170px; }
-.chip,.dchip,.lt{ border:1px solid var(--line); background:#fff; border-radius:999px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink2); white-space:nowrap; transition:border-color .14s,color .14s,background .14s; }
-.chip:hover,.dchip:hover,.lt:hover{ border-color:#C4D2F6; }
-.chip.active,.dchip.active,.lt.active{ border-color:var(--color-primary); background:#F0F6FF; color:var(--color-primary); }
+/* iOS tinted-fill controls: grey fill at rest, blue tint when selected -
+   bordered chips are what made the old UI read as old */
+.chip,.dchip,.lt{ border:1px solid transparent; background:rgba(120,120,128,.10); border-radius:999px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink2); white-space:nowrap; transition:color .14s,background .14s,transform .1s ease; }
+.chip:hover,.dchip:hover,.lt:hover{ background:rgba(120,120,128,.17); }
+.chip.active,.dchip.active,.lt.active{ background:rgba(0,113,227,.12); color:var(--color-primary); }
 .count{ font-size:12px; color:var(--mut); margin:8px 0; }
 .foot{ font-size:11.5px; color:var(--faint); margin-top:12px; line-height:1.9; }
 .empty{ text-align:center; padding:30px 12px; color:var(--faint); font-size:13.5px; }
@@ -372,7 +410,7 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 /* ================================= auth ================================= */
 .authwrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
   background:radial-gradient(70% 60% at 50% 0%, #EAF3FF, var(--color-base-200) 60%); }
-.card-auth{ max-width:396px; width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:34px; box-shadow:var(--sh-3); text-align:center; }
+.card-auth{ max-width:396px; width:100%; background:#fff; border:0; border-radius:16px; padding:34px; box-shadow:var(--sh-3); text-align:center; }
 .card-auth .blogo{ width:46px; height:46px; border-radius:14px; font-size:19px; margin:0 auto 14px; }
 .card-auth h2{ margin:0 0 5px; font-size:20px; font-weight:800; }
 .card-auth p{ color:var(--mut); font-size:13.5px; margin:0 0 16px; }
@@ -469,8 +507,9 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .steplbl{ font-size:11px; color:var(--mut); }
 
 /* ============================== simulation ============================== */
-.simcard{ border:1px solid var(--line); border-radius:15px; padding:16px 18px; margin:12px 0; background:#fff; box-shadow:var(--sh-1); cursor:pointer; transition:border-color .14s, box-shadow .14s; }
-.simcard:hover{ border-color:#BBD6F5; box-shadow:var(--sh-2); }
+.simcard{ border:0; border-radius:14px; padding:16px 18px; margin:12px 0; background:#fff; box-shadow:var(--sh-1); cursor:pointer; transition:box-shadow .14s, transform .1s ease; }
+.simcard:hover{ box-shadow:var(--sh-2); }
+.simcard:active{ transform:scale(.995); }
 .simhead{ display:flex; align-items:flex-start; justify-content:space-between; gap:13px; }
 .simtitle{ font-weight:750; font-size:15px; line-height:1.4; overflow-wrap:anywhere; }
 .simctx{ font-size:13px; color:var(--ink2); margin:9px 0 0; line-height:1.55; }
@@ -494,18 +533,18 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .btn-primary{ background:var(--color-primary); border-color:var(--color-primary); color:#fff;
   box-shadow:0 1px 2px rgba(0,113,227,.30); }
 .btn-primary:hover{ background:#0077ED; border-color:#0077ED; filter:none; }
-.btn-soft{ background:#fff; border:1px solid var(--line); color:var(--ink); box-shadow:var(--sh-1); }
-.btn-soft:hover{ background:var(--color-base-200); border-color:#D9D9DE; }
+.btn-soft{ background:rgba(120,120,128,.12); border:1px solid transparent; color:var(--ink); box-shadow:none; }
+.btn-soft:hover{ background:rgba(120,120,128,.19); border-color:transparent; }
 .btn-ghost{ color:var(--ink2); }
 .btn-ghost:hover{ background:rgba(0,0,0,.05); border-color:transparent; }
 .chip:active,.dchip:active,.lt:active,.eg:active{ transform:scale(.95); }
 .chip,.dchip,.lt,.eg{ transition:border-color .14s,color .14s,background .14s,transform .1s ease; }
 .chip:hover,.dchip:hover,.lt:hover{ border-color:rgba(0,113,227,.35); }
 .chip.active,.dchip.active,.lt.active{ border-color:var(--color-primary); background:var(--tint); color:var(--color-primary); }
-/* fields: quiet until touched, then a soft blue halo instead of a hard outline */
-.input,.select,textarea.input{ border-radius:var(--radius-field); border:1px solid var(--line); background:#fff;
-  transition:border-color .14s, box-shadow .14s; }
-.input:focus,.input:focus-within,.select:focus,textarea.input:focus{ outline:0; border-color:var(--color-primary);
+/* fields: iOS search-field grey fill at rest; white + blue halo when active */
+.input,.select,textarea.input,textarea.textarea{ border-radius:var(--radius-field); border:1px solid transparent; background:rgba(120,120,128,.08);
+  transition:border-color .14s, box-shadow .14s, background .14s; }
+.input:focus,.input:focus-within,.select:focus,textarea.input:focus,textarea.textarea:focus{ outline:0; background:#fff; border-color:var(--color-primary);
   box-shadow:0 0 0 4px rgba(0,113,227,.12); }
 :where(button,a,summary,[onclick]):focus-visible{ outline:3px solid rgba(0,113,227,.40); outline-offset:2px; }
 /* rows you can open respond like buttons */
@@ -521,9 +560,8 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 }
 
 @media (max-width:760px){
-  .content{ padding:16px 14px 40px; }
-  .topbar-inner{ padding:9px 14px; gap:12px; }
-  .topacts{ margin-left:0; }
+  /* bottom padding clears the fixed tab bar */
+  .content{ padding:16px 14px 96px; }
   .askhero{ padding:30px 0 6px; } .askhero h1{ font-size:29px; } .askhero p{ font-size:14.5px; }
   .askbox{ padding-left:14px; } .askgo{ padding:11px 15px; }
   .bhead{ padding:19px; } .bhead h2{ font-size:21px; }
@@ -1075,7 +1113,10 @@ function automationsPanel(inst){
 }
 function setView(el){
   var v=el.getAttribute("data-v");
-  var b=document.querySelectorAll(".nav .nv"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i]===el);
+  // the same view can be reached from the sidebar, the tab bar or the More
+  // sheet - selection syncs by data-v so they never disagree
+  var b=document.querySelectorAll(".nv[data-v]"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i].getAttribute("data-v")===v);
+  var ms=document.getElementById("moresheet"); if(ms) ms.style.display="none";
   var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   if(v==="today") loadToday();
@@ -1093,6 +1134,8 @@ function setView(el){
   if(v==="simulation" && !SIMloaded) loadSim();
   if(v==="assistant"){ var q=document.getElementById("askq"); if(q) q.focus(); }
 }
+function revealMgmt(){ var mg=document.querySelectorAll(".mgmtonly"); for(var i=0;i<mg.length;i++) mg[i].style.display=""; }
+function toggleMore(){ var ms=document.getElementById("moresheet"); if(!ms) return; ms.style.display=(ms.style.display==="none"?"":"none"); }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
 var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2";
 function desk2Post(payload, cb){
@@ -1148,7 +1191,7 @@ function loadToday(){
 }
 function renderToday(el,got){
   var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
-  if(d.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; var sz=document.getElementById("nvsettings"); if(sz) sz.style.display="";  initViewAs(); }
+  if(d.can_manage){ window.CAN_MANAGE=true; revealMgmt(); initViewAs(); }
   var worked=list.filter(function(x){return x.status==="worked";}).length;
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
@@ -2037,7 +2080,7 @@ function loadCallList(){
   deskPost({action:"list",limit:40},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty"><div class="ei">&#9888;</div>'+esc((r&&r.error)||"Could not load the call list.")+'</div>'; return; }
     // Only the head/admin should see the Team tab; the desk tells us the role.
-    if(r.can_manage){ window.CAN_MANAGE=true; var t=document.getElementById("nvteam"); if(t) t.style.display=""; var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; var sz=document.getElementById("nvsettings"); if(sz) sz.style.display="";  initViewAs(); }
+    if(r.can_manage){ window.CAN_MANAGE=true; revealMgmt(); initViewAs(); }
     CL=r.list||[];
     renderCallList();
   });
@@ -2559,7 +2602,7 @@ function setViewAs(em){
   window.VIEW_AS=em||null;
   var sel=document.getElementById("viewas");
   if(sel){ sel.style.background=em?"#F0F6FF":""; sel.style.color=em?"#0060C7":""; sel.style.fontWeight=em?"650":""; }
-  var active=document.querySelector(".nv.active");
+  var active=document.querySelector(".nv.on[data-v]");
   if(active) setView(active); else location.hash="";
 }
 
@@ -2780,26 +2823,31 @@ function renderDash(p){
     stat("Emails",nf(s.emails),"sent + received in range")+
     stat("Calls",nf(s.calls),(s.companies_called||0)+" companies &middot; "+(s.avg_calls||0)+" avg")+
     '</div></div>';
-  h('<div class="topbar"><div class="topbar-inner">'+
-      '<span class="sbrand"><span class="blogo">C</span>Cal Sameday</span>'+
-      '<div class="navwrap"><nav class="nav">'+
-        // Owen's structure: Today (the call list), Customers (mine, converted),
-        // Leads (mine, engaged), Tasks (HubSpot's), Assistant, Calendar, Team.
-        '<button class="nv on" data-v="today" onclick="setView(this)">Today</button>'+
-        '<button class="nv" data-v="customers" onclick="setView(this)">Customers</button>'+
-        '<button class="nv" data-v="leadsmine" onclick="setView(this)">Leads</button>'+
-        '<button class="nv" data-v="tasks" onclick="setView(this)">Tasks</button>'+
-        '<button class="nv" data-v="assistant" onclick="setView(this)">Assistant</button>'+
-        '<button class="nv" data-v="calendar" onclick="setView(this)">Calendar</button>'+
-        '<button class="nv" data-v="pulse" onclick="setView(this)" id="nvpulse" style="display:none">Pulse</button>'+
-        '<button class="nv" data-v="team" onclick="setView(this)" id="nvteam">Team</button>'+
-        '<button class="nv" data-v="settings" onclick="setView(this)" id="nvsettings" style="display:none">Settings</button>'+
-        '<select id="viewas" class="input" style="display:none;margin-left:auto;max-width:190px;font-size:13px;padding:6px 10px" onchange="setViewAs(this.value)"></select>'+
+  // The HIG shell: a sidebar of primary sections on wide screens, a bottom
+  // tab bar (4 destinations + More) on phones. Same data-v wiring for both.
+  h('<div class="shell">'+
+    '<aside class="sidebar">'+
+      '<div class="sb-brand"><span class="blogo">C</span><span>Cal Sameday</span></div>'+
+      '<nav class="sb-nav nav">'+
+        '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i>Today</button>'+
+        '<button class="nv" data-v="tasks" onclick="setView(this)"><i class="ph ph-check-circle"></i>Tasks</button>'+
+        '<button class="nv" data-v="leadsmine" onclick="setView(this)"><i class="ph ph-chats-circle"></i>Leads</button>'+
+        '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i>Customers</button>'+
+        '<button class="nv" data-v="calendar" onclick="setView(this)"><i class="ph ph-calendar-blank"></i>Calendar</button>'+
+        '<button class="nv" data-v="assistant" onclick="setView(this)"><i class="ph ph-sparkle"></i>Assistant</button>'+
+        '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-users-three"></i>Team</button>'+
+        '<div class="sb-group mgmtonly" style="display:none">Manage</div>'+
+        '<button class="nv mgmtonly" style="display:none" data-v="pulse" onclick="setView(this)"><i class="ph ph-heartbeat"></i>Pulse</button>'+
+        '<button class="nv mgmtonly" style="display:none" data-v="settings" onclick="setView(this)"><i class="ph ph-gear"></i>Settings</button>'+
+      '</nav>'+
+      '<div class="sb-foot">'+
+        '<select id="viewas" class="select select-sm wfull" style="display:none" onchange="setViewAs(this.value)"></select>'+
         '<span id="freshchip" class="pill"></span>'+
-      '</nav></div>'+
-      '<div class="topacts">'+adminBtn+'<button class="btn btn-ghost btn-sm" onclick="out()">Sign out</button></div>'+
-    '</div></div>'+
-    '<div class="content">'+
+        adminBtn+
+        '<button class="btn btn-ghost btn-sm" onclick="out()">Sign out</button>'+
+      '</div>'+
+    '</aside>'+
+    '<main class="main"><div class="content">'+
     assistantView()+
     '<div id="view-cold" class="view" style="display:none">'+
       '<div class="page-head"><div><div class="t">Cold outreach</div><p class="sub">Your cold-email engine - sending health and campaign performance, synced from Instantly every 2 hours.</p></div></div>'+
@@ -2834,7 +2882,22 @@ function renderDash(p){
       '<div class="tblwrap"><table class="table table-sm"><thead><tr><th onclick="setSort(\'company\')">Company</th><th onclick="setSort(\'two_way\')">Status</th><th onclick="setSort(\'type\')">Type</th><th class="num" onclick="setSort(\'emails\')">Emails</th><th class="num" onclick="setSort(\'calls\')">Calls</th><th onclick="setSort(\'rep_list\')">Reps</th><th onclick="setSort(\'last_activity\')">Last activity</th></tr></thead><tbody id="rows"></tbody></table></div><div id="pager"></div>'+
       '<div class="foot">A company appears if a rep emailed it (outbound) with activity in the selected range. Inbound-only senders excluded. Source: Front + Aircall.</div>'+
     '</div>'+
-    '</div></div>');
+    '</div></div></main></div>'+
+    '<div id="moresheet" style="display:none" class="moresheet nav">'+
+      '<button class="nv" data-v="calendar" onclick="setView(this)"><i class="ph ph-calendar-blank"></i>Calendar</button>'+
+      '<button class="nv" data-v="assistant" onclick="setView(this)"><i class="ph ph-sparkle"></i>Assistant</button>'+
+      '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-users-three"></i>Team</button>'+
+      '<button class="nv mgmtonly" style="display:none" data-v="pulse" onclick="setView(this)"><i class="ph ph-heartbeat"></i>Pulse</button>'+
+      '<button class="nv mgmtonly" style="display:none" data-v="settings" onclick="setView(this)"><i class="ph ph-gear"></i>Settings</button>'+
+      '<button class="nv" onclick="out()"><i class="ph ph-sign-out"></i>Sign out</button>'+
+    '</div>'+
+    '<nav class="tabbar nav">'+
+      '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i><span>Today</span></button>'+
+      '<button class="nv" data-v="tasks" onclick="setView(this)"><i class="ph ph-check-circle"></i><span>Tasks</span></button>'+
+      '<button class="nv" data-v="leadsmine" onclick="setView(this)"><i class="ph ph-chats-circle"></i><span>Leads</span></button>'+
+      '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i><span>Customers</span></button>'+
+      '<button class="nv" onclick="toggleMore()"><i class="ph ph-dots-three-circle"></i><span>More</span></button>'+
+    '</nav>');
   flt();
   renderWorklist();
   bootDesk();
@@ -2848,10 +2911,7 @@ function bootDesk(){
   desk2Post({action:"meta"},function(r){
     if(r&&r.ok){
       paintFreshness(r.tms);
-      if(r.can_manage){
-        var t=document.getElementById("nvteam");  if(t) t.style.display="";
-        var pz=document.getElementById("nvpulse"); if(pz) pz.style.display=""; var sz=document.getElementById("nvsettings"); if(sz) sz.style.display="";
-      }
+      if(r.can_manage){ revealMgmt(); }
     }
   });
   // Activate the Today tab for real - the shell renders with the assistant
