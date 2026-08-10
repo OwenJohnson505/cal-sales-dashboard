@@ -1061,19 +1061,8 @@ function renderToday(el,got){
     stat("Today's leads",nf(list.length),"fresh, researched overnight")+
     stat("Worked",nf(worked),"of today's list",worked>=list.length&&list.length?"ok":"")+
     stat("Chase",nf(chase.length),"emailed 3+ days ago, silence",chase.length?"alarm":"")+
-    stat("Suggested tasks",nf(tasks.length),"found in calls & emails")+
+    stat("Suggested tasks",nf(tasks.length),"review them in the Tasks tab")+
     '</div></div>';
-
-  if(tasks.length){
-    html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#6D5AE6"></span><h3>Found in your conversations</h3><span class="hint">accept sends it to HubSpot</span></div><div class="plist">'+
-      tasks.map(function(t){
-        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
-          '<div class="dom">'+esc(t.domain)+(t.due_date?' &middot; due '+esc(t.due_date):'')+'</div>'+
-          (t.quote?'<div class="seg">&ldquo;'+esc(String(t.quote).slice(0,110))+'&rdquo;</div>':'')+'</div>'+
-          '<div class="rt"><button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
-          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
-      }).join("")+'</div></div>';
-  }
 
   if(chase.length){
     html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Waiting on a reply</h3><span class="hint">follow up or snooze</span></div><div class="plist">'+
@@ -1468,19 +1457,6 @@ function renderTasks(el,got){
     '<input id="ntdue" class="input" type="date" style="flex:0">'+
     '<button class="btn btn-primary" onclick="createTask()">Add</button></div>'+
     '<div id="ntmsg" class="foot"></div></div></div>';
-  if(sg.length){
-    html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#6D5AE6"></span><h3>Suggested from your conversations</h3><span class="hint">'+sg.length+'</span></div><div class="plist">'+
-      sg.map(function(t){
-        var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
-        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
-          '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
-          (t.quote?'<div class="seg">Because they said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+
-          '<div class="seg">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div></div>'+
-          '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
-          '<button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
-          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
-      }).join("")+'</div></div>';
-  }
   html+='<div class="panel flush"><div class="phead"><h3>Your HubSpot tasks</h3><span class="hint">'+(note?esc(note):hs.length)+'</span></div><div class="plist">'+
     (hs.length?hs.map(function(t){
       var due=t.due?new Date(Number(t.due)||t.due):null;
@@ -1492,6 +1468,24 @@ function renderTasks(el,got){
         '<button class="btn btn-soft btn-sm" onclick="hsTaskDone(\''+esc(t.id)+'\',this)">Done</button></div></div>';
     }).join("")
     :'<div class="empty">'+(note?esc(note):"No open tasks.")+'</div>')+'</div></div>';
+  // Suggestions live BELOW the real to-do list and start collapsed, so the
+  // tasks people actually committed to are never pushed off screen by the
+  // machine's ideas. One home for suggestions: here, not on Today.
+  if(sg.length){
+    html+='<details class="panel flush" style="padding:0"><summary style="cursor:pointer;padding:14px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
+      '<span class="bdot" style="background:#6D5AE6"></span><h3 style="margin:0;display:inline">'+sg.length+' suggested task'+(sg.length===1?'':'s')+'</h3>'+
+      '<span class="hint">found in your calls &amp; emails &middot; click to review</span></summary><div class="plist">'+
+      sg.map(function(t){
+        var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
+        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
+          '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
+          (t.quote?'<div class="seg">Because they said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+
+          '<div class="seg">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div></div>'+
+          '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
+          '<button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
+          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
+      }).join("")+'</div></details>';
+  }
   el.innerHTML=html;
 }
 function createTask(){
@@ -2352,7 +2346,6 @@ function renderDash(p){
     '</div></div>');
   flt();
   renderWorklist();
-  var q=document.getElementById("askq"); if(q) q.focus();
   bootDesk();
 }
 // Runs once after the shell renders, regardless of which tab is opened first:
@@ -2370,7 +2363,11 @@ function bootDesk(){
       }
     }
   });
-  loadToday();
+  // Activate the Today tab for real - the shell renders with the assistant
+  // view visible, so just loading data into a hidden #todayboard left users
+  // staring at the assistant until they clicked Today themselves.
+  var tb=document.querySelector('.nav .nv[data-v="today"]');
+  if(tb) setView(tb); else loadToday();
 }
 function setF(el){ filter=el.getAttribute("data-f"); var cs=el.parentElement.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){cs[i].classList.toggle("active",cs[i]===el);} PAGE=1; flt(); }
 function setSort(k){ if(sortK===k)sortDir*=-1; else {sortK=k; sortDir=(k==="company"||k==="rep_list"||k==="type")?1:-1;} PAGE=1; flt(); }
