@@ -71,7 +71,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .sb-brand{ display:flex; align-items:center; gap:10px; font-size:15px; font-weight:700; letter-spacing:-.02em; padding:2px 10px 14px; }
 .blogo{ width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center;
   font-size:13px; font-weight:700; color:#fff; background:var(--color-primary); flex:none;
-  box-shadow:0 2px 8px rgba(0,113,227,.28); }
+  box-shadow:0 1px 3px rgba(0,0,0,.16); }
 .sb-nav{ display:flex; flex-direction:column; gap:2px; }
 .sidebar .nv{ display:flex; align-items:center; gap:11px; width:100%; text-align:left; border:0; background:transparent;
   font:inherit; font-size:14px; font-weight:500; color:var(--ink2); padding:8px 12px; border-radius:10px; cursor:pointer;
@@ -137,7 +137,7 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .askbox input{ flex:1; border:0; outline:0; font:inherit; font-size:15.5px; background:transparent; color:var(--ink); min-width:0; padding:9px 0; }
 .askbox input::placeholder{ color:var(--faint); }
 .askgo{ border:0; border-radius:999px; background:var(--color-primary); color:#fff; font:inherit;
-  font-size:14.5px; font-weight:600; padding:11px 22px; cursor:pointer; white-space:nowrap; box-shadow:0 2px 10px rgba(0,113,227,.28); transition:filter .14s, transform .1s ease; }
+  font-size:14.5px; font-weight:600; padding:11px 22px; cursor:pointer; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.14); transition:filter .14s, transform .1s ease; }
 .askgo:hover{ filter:brightness(1.07); } .askgo:active{ transform:scale(.97); }
 .askgo:disabled{ opacity:.55; cursor:default; }
 .egs{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:18px; }
@@ -333,8 +333,8 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .alertbar.amber{ background:#FFFBEB; border:1px solid #F2DFAE; color:#7A4E07; }
 .alertbar.green{ background:#F0FDF6; border:1px solid #BFE8D3; color:#0A6B4A; }
 .alertbar b{ font-weight:750; }
-.quote{ background:var(--tint); border:1px solid var(--tint-line); border-left:3px solid var(--color-primary);
-  border-radius:0 12px 12px 0; padding:15px 18px; font-size:15.5px; line-height:1.55; color:var(--ink); margin:0 0 12px; }
+.quote{ background:var(--tint); border:0;
+  border-radius:12px; padding:15px 18px; font-size:15.5px; line-height:1.55; color:var(--ink); margin:0 0 12px; }
 .copybtn{ font-size:11.5px; font-weight:650; color:var(--color-primary); background:transparent; border:0; cursor:pointer; padding:0; }
 .tp{ display:flex; gap:11px; padding:11px 0; border-bottom:1px solid var(--line-soft); }
 .tp:last-child{ border-bottom:0; } .tp .n{ flex:none; width:21px; height:21px; border-radius:6px; background:var(--color-base-200);
@@ -442,13 +442,14 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .mbody .actrow .rt{ flex:0 0 auto; max-width:100%; }
 /* Lead profile: fold-away sections. Everything scans from the closed state -
    title, a one-line preview, and a provenance chip saying where it came from. */
-.psec{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-box); margin:9px 0; }
+/* iOS inset-grouped sections: grey groups on the white sheet, no borders */
+.psec{ background:var(--color-base-200); border:0; border-radius:12px; margin:8px 0; }
 .psec>summary{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px; padding:12px 16px; }
 .psec>summary::-webkit-details-marker{ display:none; }
 .psec>summary .pt{ font-size:13.5px; font-weight:700; color:var(--ink); white-space:nowrap; }
 .psec>summary .pp{ flex:1; min-width:0; font-size:12.5px; color:var(--mut); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .psec>summary .chev{ flex:none; color:var(--faint); font-size:11px; transition:transform .18s ease; }
-.psec[open]>summary{ border-bottom:1px solid var(--line-soft); }
+.psec[open]>summary{ border-bottom:1px solid rgba(0,0,0,.06); }
 .psec[open]>summary .chev{ transform:rotate(90deg); }
 .psec .pbody{ padding:14px 16px 16px; }
 .psec .pbody p{ font-size:13.5px; color:var(--ink2); line-height:1.6; margin:0 0 8px; overflow-wrap:anywhere; }
@@ -514,7 +515,7 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .simtitle{ font-weight:750; font-size:15px; line-height:1.4; overflow-wrap:anywhere; }
 .simctx{ font-size:13px; color:var(--ink2); margin:9px 0 0; line-height:1.55; }
 .simctx a{ color:var(--color-primary); font-weight:600; cursor:pointer; }
-.simquote{ font-size:13.5px; color:var(--ink2); font-style:italic; background:var(--tint); border-left:3px solid var(--color-primary); border-radius:0 10px 10px 0; padding:10px 13px; margin:12px 0 0; line-height:1.55; overflow-wrap:anywhere; }
+.simquote{ font-size:13.5px; color:var(--ink2); font-style:italic; background:var(--tint); border-radius:10px; padding:10px 13px; margin:12px 0 0; line-height:1.55; overflow-wrap:anywhere; }
 .simmeta{ font-size:12.5px; color:var(--mut); margin-top:11px; }
 .siminset{ background:#FAFBFD; border:1px solid var(--line-soft); border-radius:11px; padding:12px 14px; margin-top:11px; }
 .siminset-h{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); margin-bottom:8px; }
@@ -558,6 +559,58 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
+
+/* ===================== flow detail pass (tasks/cal/leads) =============== */
+/* Reminders-style completion circle: hollow ring, fills blue on tap, the
+   row fades out - completing a task is the row's primary gesture */
+.tickc{ width:23px; height:23px; border-radius:50%; border:1.7px solid #C7C7CC; background:transparent; flex:none;
+  cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0;
+  transition:border-color .12s, background .12s, transform .1s ease; }
+.tickc i{ font-size:13px; color:#fff; opacity:0; transition:opacity .12s; }
+.tickc:hover{ border-color:var(--color-primary); }
+.tickc:active{ transform:scale(.88); }
+.tickc.done{ background:var(--color-primary); border-color:var(--color-primary); }
+.tickc.done i{ opacity:1; }
+.chv{ color:#C7C7CC; font-size:15px; flex:none; }
+/* the new-task sheet: a big borderless title line, quiet notes, grouped rows */
+.sheetform .tin{ width:100%; border:0; outline:0; font:inherit; font-size:19px; font-weight:650; letter-spacing:-.02em;
+  padding:2px 0 8px; background:transparent; color:var(--ink); }
+.sheetform .tin::placeholder{ color:#B9B9BF; font-weight:600; }
+.sheetform .tnote{ width:100%; border:0; outline:0; font:inherit; font-size:14px; color:var(--ink2);
+  background:transparent; resize:vertical; min-height:48px; margin-bottom:6px; }
+.sheetform .tnote::placeholder{ color:var(--faint); }
+.frow{ display:flex; align-items:center; gap:12px; padding:11px 14px; background:var(--color-base-200); border-radius:12px; margin-top:8px; }
+.frow .fl{ font-size:14px; font-weight:600; flex:1; display:flex; gap:10px; align-items:center; color:var(--ink); }
+.frow .fl i{ font-size:18px; color:var(--mut); }
+.seg2{ display:flex; background:var(--color-base-300); border-radius:9px; padding:2px; }
+.seg2 button{ border:0; background:transparent; font:inherit; font-size:12.5px; font-weight:600; padding:5px 13px;
+  border-radius:7px; cursor:pointer; color:var(--ink2); transition:background .12s, color .12s; }
+.seg2 button.on{ background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12); color:var(--ink); }
+/* the calendar is a calendar: month grid, today ringed, activity per day */
+.calhead{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.calhead .mt{ font-size:22px; font-weight:700; letter-spacing:-.03em; }
+.calwk,.calgrid{ display:grid; grid-template-columns:repeat(7,1fr); }
+.calwk div{ font-size:10.5px; font-weight:700; color:var(--faint); text-align:center; padding:4px 0 8px; text-transform:uppercase; letter-spacing:.05em; }
+.calgrid{ gap:6px; }
+.calcell{ min-height:76px; background:#fff; border-radius:12px; box-shadow:var(--sh-1); padding:8px 9px;
+  cursor:pointer; display:flex; flex-direction:column; gap:5px; transition:box-shadow .12s, transform .1s ease; }
+.calcell:hover{ box-shadow:var(--sh-2); }
+.calcell:active{ transform:scale(.97); }
+.calcell.blank{ background:transparent; box-shadow:none; cursor:default; }
+.calcell.blank:hover{ box-shadow:none; }
+.calcell .dn{ font-size:12.5px; font-weight:600; color:var(--ink2); width:24px; height:24px; display:grid; place-items:center; border-radius:50%; }
+.calcell.today .dn{ background:var(--color-primary); color:#fff; font-weight:700; }
+.calcell.sel{ box-shadow:0 0 0 2px var(--color-primary), var(--sh-1); }
+.calcell .cb{ height:4px; border-radius:99px; background:var(--color-base-300); overflow:hidden; }
+.calcell .cb i{ display:block; height:100%; border-radius:99px; background:var(--color-primary); }
+.calcell .cnt{ font-size:10.5px; color:var(--faint); font-variant-numeric:tabular-nums; white-space:nowrap; }
+@media (max-width:700px){ .calcell{ min-height:58px; padding:6px 7px; } .calcell .cnt{ display:none; } }
+/* conversation threads read as messages, not bordered boxes */
+.bubwrap{ display:flex; flex-direction:column; gap:8px; max-height:440px; overflow:auto; padding-right:4px; }
+.bub{ max-width:86%; align-self:flex-end; background:var(--tint); border-radius:16px 16px 4px 16px; padding:9px 13px; }
+.bub.them{ align-self:flex-start; background:var(--color-base-200); border-radius:16px 16px 16px 4px; }
+.bub .bw{ font-size:10.5px; color:var(--faint); margin-bottom:3px; }
+.bub .bt{ font-size:13px; line-height:1.5; color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere; }
 
 @media (max-width:760px){
   /* bottom padding clears the fixed tab bar */
@@ -1642,7 +1695,7 @@ function renderCustomers(){
   if(mc&&mc.scheme){
     var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
     var top=(mc.detail||[])[0], nb=mc.new_business&&mc.new_business.last12?mc.new_business:null;
-    commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
+    commHtml='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
       '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
@@ -1654,7 +1707,7 @@ function renderCustomers(){
   }
   // AI 'keep an eye on' briefs - the accounts that need a call this week
   var watch=window.__custWatch||[];
-  var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
+  var watchHtml=watch.length?('<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
     watch.map(function(w){
       var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
       var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
@@ -1777,31 +1830,36 @@ function renderLmRows(){
   // the key numbers ARE the row: big, aligned, sortable - no squinting
   var met=function(n,l){ n=Number(n)||0; return '<div class="m'+(n?'':' dim')+'"><b>'+n+'</b><span>'+l+'</span></div>'; };
   box.innerHTML=shown.map(function(x){
-    var sb={positive:["#E7F8F0","#0A6B4A","positive"],mixed:["#FEF6E7","#7A4E07","mixed"],stale:["#F2F4F8","#5B6577","gone quiet"],negative:["#FEF2F2","#8F1D1D","negative"]}[x.engagement]||null;
-    var whenB="&mdash;", whenS="never engaged";
+    // engagement is state, so it reads as a dot + word, not another pill;
+    // only pills that change what the rep DOES survive on the row - the
+    // long tail of tags lives in the profile
+    var sb={positive:["#0E9F6E","warm"],mixed:["#C2740B","mixed"],stale:["#98989F","gone quiet"],negative:["#DC2626","negative"]}[x.engagement]||null;
+    var whenB="&ndash;", whenS="never engaged";
     if(x.last_touch){ var d=new Date(x.last_touch); whenB=d.getDate()+" "+M[d.getMonth()];
       whenS=(x.days_since===0?"today":(x.days_since!=null?x.days_since+"d ago":"")); }
     var insight=x.headline?String(x.headline):"";
-    if(x.next_step) insight+=(insight?" — ":"")+"Next: "+String(x.next_step);
+    if(x.next_step) insight+=(insight?" ":"")+"Next: "+String(x.next_step);
     var fx=x.facts||{};
     var open=x.domain?(' onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
-    return '<div class="actrow callrow'+(x.domain?' crow':'')+'"'+open+'>'+
-      '<div class="co"><b style="font-size:14.5px">'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
-      '<div class="pillrow" style="margin:4px 0 0">'+
-        (sb?'<span class="pill" style="background:'+sb[0]+';color:'+sb[1]+'">'+sb[2]+'</span>':'<span class="pill" style="color:var(--faint)">no read yet</span>')+
+    return '<div class="actrow callrow'+(x.domain?' crow':'')+'"'+open+' style="flex-wrap:nowrap">'+
+      '<div class="co"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+        '<b style="font-size:14.5px">'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
+        (sb?'<span class="dom" style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span class="bdot" style="width:7px;height:7px;background:'+sb[0]+'"></span>'+sb[1]+'</span>'
+           :'<span class="dom" style="white-space:nowrap">no read yet</span>')+
+        (team&&x.rep?'<span class="repchip" style="font-size:12px"><span class="avi" style="width:19px;height:19px;font-size:8.5px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
+      '</div>'+
+      '<div class="pillrow" style="margin:5px 0 0">'+
         (x.stage==='opportunity'?'<span class="pill" style="background:#F0F6FF;color:#0060C7">opportunity</span>':'')+
-        (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">Ball dropped</span>':'')+
+        (x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">ball dropped</span>':'')+
         (fx.uses_couriers==='confirmed'?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">confirmed courier user</span>':'')+
         (fx.current_supplier?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">uses '+esc(String(fx.current_supplier).slice(0,24))+'</span>':'')+
-        ((fx.tags||[]).slice(0,4).map(function(t){return '<span class="pill" style="background:#F2F4F8;color:#39435A">'+esc(String(t).slice(0,26))+'</span>';}).join(''))+
-        (x.other_owners?'<span class="pill" style="background:#FEF6E7;color:#7A4E07" title="the same company exists more than once in HubSpot">duplicate &middot; also on '+esc(String(x.other_owners).split(" ")[0])+'’s book'+(x.dup_newer?' (theirs is newer)':'')+'</span>':'')+
-        (team&&x.rep?'<span class="repchip"><span class="avi" style="width:20px;height:20px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'')+
+        (x.other_owners?'<span class="pill" style="background:#FEF6E7;color:#7A4E07" title="the same company exists more than once in HubSpot">duplicate: also on '+esc(String(x.other_owners).split(" ")[0])+'&rsquo;s book</span>':'')+
       '</div>'+
       (insight?'<div class="seg" style="margin-top:5px">'+esc(insight.slice(0,150))+'</div>':'')+'</div>'+
       '<div class="lmmets">'+
         '<div class="m'+(x.last_touch?'':' dim')+'"><b>'+whenB+'</b><span>'+esc(whenS)+'</span></div>'+
         met(x.calls,'calls')+met(x.emails,'emails')+met(x.notes,'notes')+
-      '</div></div>';
+      '</div>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</div>';
   }).join("")||'<div class="empty" style="padding:16px">Nothing matches that search.</div>';
   // page selector: every lead is reachable, not just the first screen
   if(pages>1){
@@ -1828,32 +1886,27 @@ function loadTasksView(){
 function renderTasks(el,got){
   var hs=(got.hs&&got.hs.tasks)||[], sg=(got.sugg&&got.sugg.tasks)||[];
   var note=got.hs&&got.hs.note;
+  var now=new Date();
+  var overdueN=hs.filter(function(t){ var d=t.due?new Date(Number(t.due)||t.due):null; return d&&d<now; }).length;
   var html='<div id="nexttoast2"></div>'+
-    '<div class="panel flush"><div class="phead"><h3>Add a task</h3><span class="hint">goes to HubSpot</span></div>'+
-    '<div style="padding:14px 20px 16px"><div class="row" style="gap:8px;flex-wrap:wrap">'+
-    '<input id="ntsub" class="input" placeholder="What needs doing?" style="flex:2;min-width:220px">'+
-    '<input id="ntdue" class="input" type="date" style="flex:0">'+
-    '<button class="btn btn-primary" onclick="createTask()">Add</button></div>'+
-    '<div id="ntmsg" class="foot"></div></div></div>';
-  html+='<div class="panel flush"><div class="phead"><h3>Your HubSpot tasks</h3><span class="hint">'+(note?esc(note):hs.length)+'</span></div><div class="plist">'+
+    '<div class="controls" style="margin-bottom:14px">'+
+      '<button class="btn btn-primary" onclick="newTaskSheet()"><i class="ph ph-plus" style="margin-right:6px;font-size:15px;vertical-align:-2px"></i>New task</button>'+
+      '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+'</span></div>';
+  html+='<div class="panel flush"><div class="phead"><h3>Your HubSpot tasks</h3><span class="hint">'+(note?esc(note):'tap the circle to complete')+'</span></div><div class="plist">'+
     (hs.length?hs.map(function(t){
       var due=t.due?new Date(Number(t.due)||t.due):null;
-      var overdue=due&&due<new Date();
-      // the company is the context - a bare subject line is useless
-      var who=t.company_name
-        ? '<span style="font-weight:700;color:var(--ink)">'+esc(t.company_name)+'</span>'+(t.domain?' <span class="faint">'+esc(t.domain)+'</span>':'')
-        : '<span class="faint" style="font-style:italic">no company linked in HubSpot</span>';
-      return '<div class="actrow'+(t.domain?' crow':'')+'"'+(t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"':'')+'>'+
-        '<div class="co"><div style="font-size:14px;margin-bottom:2px">'+who+'</div>'+
-        '<b>'+esc(t.subject||"(untitled)")+'</b>'+
-        '<div class="dom">'+(due?('due '+due.toISOString().slice(0,10)):'no date')+(t.priority==="HIGH"?' &middot; high priority':'')+
-          (t.contact_name?' &middot; contact: '+esc(t.contact_name):'')+'</div>'+
-        (t.body?'<div class="seg">'+esc(String(t.body).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,300))+'</div>':'')+'</div>'+
-        '<div class="rt">'+(overdue?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">overdue</span>':'')+
-        (t.domain?'<button class="chip" onclick="event.stopPropagation();openCallLead(\''+esc(t.domain)+'\')">Open company</button>':'')+
-        '<button class="btn btn-soft btn-sm" onclick="event.stopPropagation();hsTaskDone(\''+esc(t.id)+'\',this)">Done</button></div></div>';
+      var overdue=due&&due<now;
+      return '<div class="actrow'+(t.domain?' crow':'')+'" style="flex-wrap:nowrap"'+(t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"':'')+'>'+
+        '<button class="tickc" title="Mark done" onclick="event.stopPropagation();tickTask(this,\''+esc(t.id)+'\')"><i class="ph ph-check"></i></button>'+
+        '<div class="co"><b>'+esc(t.subject||"(untitled)")+'</b>'+
+        '<div class="dom">'+(t.company_name?esc(t.company_name):'no company linked')+(t.contact_name?' &middot; '+esc(t.contact_name):'')+'</div>'+
+        (t.body?'<div class="seg">'+esc(String(t.body).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,240))+'</div>':'')+'</div>'+
+        '<div class="rt" style="flex-wrap:nowrap">'+
+        (due?'<span class="dom" style="white-space:nowrap;'+(overdue?'color:#C0272C;font-weight:650':'')+'">'+fmtDue(due,overdue)+'</span>':'')+
+        (t.priority==="HIGH"?'<i class="ph-fill ph-flag" style="color:#C2740B;font-size:14px" title="high priority"></i>':'')+
+        (t.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</div></div>';
     }).join("")
-    :'<div class="empty">'+(note?esc(note):"No open tasks.")+'</div>')+'</div></div>';
+    :'<div class="empty"><div class="ei">&#10003;</div>'+(note?esc(note):"All clear. New tasks from HubSpot land here.")+'</div>')+'</div></div>';
   // Suggestions live BELOW the real to-do list and start collapsed, so the
   // tasks people actually committed to are never pushed off screen by the
   // machine's ideas. One home for suggestions: here, not on Today.
@@ -1874,21 +1927,50 @@ function renderTasks(el,got){
   }
   el.innerHTML=html;
 }
-function createTask(){
-  var s=(val("ntsub")||"").trim(); var d=val("ntdue")||null;
-  var m=document.getElementById("ntmsg");
+// "Sat 15 Nov" reads faster than 2026-11-15; today and tomorrow get named
+function fmtDue(d,overdue){
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var W=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var today=new Date(); var iso=d.toISOString().slice(0,10);
+  if(iso===today.toISOString().slice(0,10)) return overdue?"earlier today":"today";
+  if(iso===new Date(Date.now()+864e5).toISOString().slice(0,10)) return "tomorrow";
+  return (overdue?"overdue &middot; ":"")+W[d.getDay()]+" "+d.getDate()+" "+M[d.getMonth()];
+}
+// The new-task sheet: title first like Reminders, the details grouped below.
+function newTaskSheet(){
+  var m=document.getElementById("cmodal"); if(!m) return;
+  window.__ntpri="MEDIUM";
+  var tom=new Date(Date.now()+864e5).toISOString().slice(0,10);
+  m.style.display="flex";
+  m.innerHTML='<div class="mcard" style="max-width:470px"><div class="mhead"><b>New task</b><span class="mx" onclick="closeModal()">&times;</span></div>'+
+    '<div class="mbody sheetform">'+
+    '<input id="ntsub" class="tin" placeholder="What needs doing?">'+
+    '<textarea id="ntnote" class="tnote" placeholder="Notes (optional)"></textarea>'+
+    '<div class="frow"><span class="fl"><i class="ph ph-calendar-blank"></i>Due</span><input id="ntdue" type="date" class="input" style="padding:6px 10px;width:auto" value="'+tom+'"></div>'+
+    '<div class="frow"><span class="fl"><i class="ph ph-flag"></i>Priority</span><div class="seg2"><button class="on" onclick="priPick(this,\'MEDIUM\')">Normal</button><button onclick="priPick(this,\'HIGH\')">High</button></div></div>'+
+    '<p class="sub" style="margin:12px 2px 0;font-size:12.5px">Saves to your HubSpot task list, so it reaches Front and your phone too.</p>'+
+    '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-soft" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-primary" onclick="submitNewTask(this)">Add task</button></div>'+
+    '<div id="ntmsg" class="msg"></div></div></div>';
+  setTimeout(function(){ var i=document.getElementById("ntsub"); if(i) i.focus(); },80);
+}
+function priPick(b,v){ window.__ntpri=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
+function submitNewTask(btn){
+  var s=(val("ntsub")||"").trim(); var m=document.getElementById("ntmsg");
   if(!s){ if(m) m.textContent="Give the task a name first."; return; }
-  if(m) m.textContent="Adding...";
-  deskPost({action:"hstask_create",subject:s,due:d},function(r){
-    if(m) m.textContent=(r&&r.ok)?"Added to HubSpot - it will show in Front and on your phone.":"Could not add: "+((r&&r.error)||"error");
-    if(r&&r.ok){ var i=document.getElementById("ntsub"); if(i) i.value=""; setTimeout(loadTasksView,900); }
+  btn.disabled=true; if(m) m.textContent="Adding...";
+  deskPost({action:"hstask_create",subject:s,due:val("ntdue")||null,note:(val("ntnote")||"").trim()||null,priority:window.__ntpri||"MEDIUM"},function(r){
+    if(r&&r.ok){ closeModal(); showNext("Task added. It syncs to HubSpot, Front and your phone."); loadTasksView(); }
+    else { btn.disabled=false; if(m) m.textContent="Could not add: "+((r&&r.error)||"error"); }
   });
 }
-function hsTaskDone(id,btn){
-  if(btn) btn.disabled=true;
+// the tick fills, holds a beat so the change is felt, then the row fades
+function tickTask(btn,id){
+  btn.classList.add("done");
   deskPost({action:"hstask_done",id:id},function(r){
-    if(r&&r.ok){ var row=btn&&btn.closest(".actrow"); if(row) row.style.opacity=".35"; }
-    else if(btn) btn.disabled=false;
+    var row=btn.closest(".actrow");
+    if(r&&r.ok){ if(row){ row.style.transition="opacity .4s ease .3s"; row.style.opacity=".28"; row.style.pointerEvents="none"; } }
+    else btn.classList.remove("done");
   });
 }
 // ---- Calendar: what I did each day -----------------------------------------
@@ -1898,26 +1980,64 @@ function loadCalendar(){
   var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
   deskPost({action:"calendar",month:m},function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the calendar.")+'</div>'; return; }
-    var days=(r.days||[]);
-    var max=Math.max.apply(null,days.map(function(d){return d.calls+d.emails;}).concat([1]));
-    el.innerHTML='<div class="controls">'+
-      '<span class="pill" style="background:#F0F6FF;color:#0060C7">Viewing: your own activity</span>'+
-      '<button class="chip" onclick="calShift(-1)">&larr; previous</button>'+
-      '<span class="pill">'+esc(r.month)+'</span>'+
-      '<button class="chip" onclick="calShift(1)">next &rarr;</button></div>'+
-      '<div class="panel flush"><div class="phead"><h3>Daily activity</h3><span class="hint">calls &middot; emails &middot; outcomes</span></div><div class="plist">'+
-      days.filter(function(d){return new Date(d.day)<=new Date();}).map(function(d){
-        var tot=d.calls+d.emails;
-        var w=Math.round(100*tot/max);
-        return '<div class="actrow"><div class="co" style="flex:0 0 110px"><b>'+esc(String(d.day).slice(5))+'</b>'+
-          '<div class="dom">'+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d.day).getDay()]+'</div></div>'+
-          '<div style="flex:1;min-width:120px"><div style="height:10px;border-radius:99px;background:var(--color-base-200);overflow:hidden">'+
-          '<i style="display:block;height:100%;width:'+w+'%;background:#0071E3"></i></div></div>'+
-          '<div class="rt"><span class="pill">'+d.calls+' calls'+(d.answered?' ('+d.answered+' ans)':'')+'</span>'+
-          '<span class="pill">'+d.emails+' emails</span>'+
-          (d.outcomes?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.outcomes+' logged</span>':'')+'</div></div>';
-      }).join("")+'</div></div>';
+    var days=(r.days||[]); window.__calDays=days;
+    var by={}; for(var i=0;i<days.length;i++) by[days[i].day]=days[i];
+    var MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+    var first=new Date(m+"-01"), year=first.getFullYear(), mo=first.getMonth();
+    var startDow=(first.getDay()+6)%7; // Monday-first week, UK
+    var dim=new Date(year,mo+1,0).getDate();
+    var todayIso=new Date().toISOString().slice(0,10);
+    var maxT=1; for(var j=0;j<days.length;j++) maxT=Math.max(maxT,(Number(days[j].calls)||0)+(Number(days[j].emails)||0));
+    var cells='';
+    for(var b=0;b<startDow;b++) cells+='<div class="calcell blank"></div>';
+    for(var dd=1;dd<=dim;dd++){
+      var iso=m+"-"+("0"+dd).slice(-2);
+      var d=by[iso]; var tot=d?((Number(d.calls)||0)+(Number(d.emails)||0)):0;
+      var future=iso>todayIso;
+      if(future){ cells+='<div class="calcell blank"><span class="dn" style="color:#C7C7CC">'+dd+'</span></div>'; continue; }
+      cells+='<div class="calcell'+(iso===todayIso?' today':'')+'" id="cal-'+iso+'" onclick="calSelect(\''+iso+'\')">'+
+        '<span class="dn">'+dd+'</span>'+
+        (tot?('<span class="cb"><i style="width:'+Math.max(8,Math.round(100*tot/maxT))+'%"></i></span>'+
+              '<span class="cnt">'+(d.calls||0)+' calls &middot; '+(d.emails||0)+' em</span>')
+            :'')+
+        '</div>';
+    }
+    el.innerHTML='<div class="calhead"><span class="mt">'+MN[mo]+' '+year+'</span>'+
+      '<span style="margin-left:auto"></span>'+
+      '<button class="chip" onclick="calShift(-1)" title="Previous month">&#8249;</button>'+
+      '<button class="chip" onclick="calShift(1)" title="Next month">&#8250;</button></div>'+
+      '<div class="calwk"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>'+
+      '<div class="calgrid">'+cells+'</div><div id="caldetail"></div>';
+    // land on the most recent day that has anything to show
+    var pick=null;
+    for(var k=days.length-1;k>=0;k--){ var x=days[k];
+      if(x.day<=todayIso && ((Number(x.calls)||0)+(Number(x.emails)||0))>0 && (!pick||x.day>pick)) pick=x.day; }
+    if(pick) calSelect(pick);
   });
+}
+// tap a day, read the day - the grid shows shape, the card shows numbers
+function calSelect(iso){
+  var days=window.__calDays||[], d=null;
+  for(var i=0;i<days.length;i++) if(days[i].day===iso){ d=days[i]; break; }
+  var sel=document.querySelectorAll(".calcell.sel");
+  for(var s=0;s<sel.length;s++) sel[s].classList.remove("sel");
+  var c=document.getElementById("cal-"+iso); if(c) c.classList.add("sel");
+  var box=document.getElementById("caldetail"); if(!box) return;
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var W=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var dt=new Date(iso);
+  var lbl=W[dt.getDay()]+" "+dt.getDate()+" "+M[dt.getMonth()];
+  var bm=function(v,l,col){ return '<div class="m" style="text-align:left"><b style="display:block;font-size:24px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+(v||0)+'</b><span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+l+'</span></div>'; };
+  if(!d||((Number(d.calls)||0)+(Number(d.emails)||0))===0){
+    box.innerHTML='<div class="panel" style="margin-top:14px"><b>'+lbl+'</b><p class="sub" style="margin:5px 0 0">Nothing logged this day.</p></div>';
+    return;
+  }
+  var ansPct=d.calls?Math.round(100*(d.answered||0)/d.calls):0;
+  box.innerHTML='<div class="panel" style="margin-top:14px"><b>'+lbl+'</b>'+
+    '<div style="display:flex;gap:30px;flex-wrap:wrap;margin-top:12px">'+
+    bm(d.calls,'calls')+bm((d.answered||0)+(d.calls?' ('+ansPct+'%)':''),'answered')+
+    bm(d.emails,'emails')+bm(d.outcomes||0,'outcomes logged',d.outcomes?'#0A6B4A':null)+
+    '</div></div>';
 }
 function calShift(n){
   var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
@@ -1950,7 +2070,7 @@ function openTaskCtx(id){
       if(r.summary) bodyHtml+='<div class="seg" style="margin-bottom:10px"><b>Summary:</b> '+esc(r.summary)+'</div>';
       if(r.transcript){
         bodyHtml+='<details open><summary style="cursor:pointer;font-weight:600;font-size:13px;margin-bottom:6px">Full transcript</summary>'+
-          '<div style="white-space:pre-wrap;font-size:13px;line-height:1.55;color:#3A455B;max-height:420px;overflow:auto;border:1px solid var(--color-base-200);border-radius:8px;padding:12px 14px;background:var(--color-base-100)">'+esc(r.transcript)+'</div></details>';
+          '<div style="white-space:pre-wrap;font-size:13px;line-height:1.55;color:var(--ink2);max-height:420px;overflow:auto;border-radius:12px;padding:13px 15px;background:var(--color-base-200)">'+esc(r.transcript)+'</div></details>';
       } else if(!r.summary) bodyHtml+='<p class="muted">No transcript is available for this call.</p>';
     } else {
       var conv=r.conversation||{};
@@ -1958,13 +2078,14 @@ function openTaskCtx(id){
       if(conv.recipient_handle) bodyHtml+='<div class="dom" style="margin-bottom:8px">with '+esc(conv.recipient_name||conv.recipient_handle)+' &lt;'+esc(conv.recipient_handle)+'&gt;</div>';
       var ms=r.messages||[];
       if(ms.length){
-        bodyHtml+='<div style="display:flex;flex-direction:column;gap:8px;max-height:440px;overflow:auto;padding-right:4px">'+
+        // reads like the conversation it is: them on the left, us on the right
+        bodyHtml+='<div class="bubwrap">'+
           ms.map(function(msg){
             var when=msg.at?String(msg.at).slice(0,16).replace("T"," "):"";
             var inb=!!msg.inbound;
-            return '<div style="border:1px solid var(--color-base-200);border-left:3px solid '+(inb?"#0A6B4A":"#1D1D1F")+';border-radius:8px;padding:10px 13px;background:'+(inb?"#F4FAF7":"#fff")+'">'+
-              '<div class="dom" style="margin-bottom:4px"><b style="color:'+(inb?"#0A6B4A":"#1D1D1F")+'">'+esc(msg.author||(inb?"them":"Cal"))+'</b>'+(inb?' (them)':' (us)')+(when?' &middot; '+when:'')+'</div>'+
-              '<div style="font-size:13px;line-height:1.5;color:#3A455B;white-space:pre-wrap">'+esc(String(msg.text||"").slice(0,1500))+'</div></div>';
+            return '<div class="bub'+(inb?' them':'')+'">'+
+              '<div class="bw">'+esc(msg.author||(inb?"them":"Cal"))+(when?' &middot; '+when:'')+'</div>'+
+              '<div class="bt">'+esc(String(msg.text||"").slice(0,1500))+'</div></div>';
           }).join("")+'</div>';
       } else bodyHtml+='<p class="muted">No message bodies are available for this thread yet.</p>';
       if(r.front_link) bodyHtml+='<div style="margin-top:12px"><a class="btn btn-soft btn-sm" href="'+esc(r.front_link)+'" target="_blank" rel="noopener">Open &amp; reply in Front</a></div>';
@@ -1990,7 +2111,11 @@ function snoozeDom(dom,days,btn){
 }
 // After each step, say what happens next - the system moves the rep forward.
 function showNext(msg){
-  var t=document.getElementById("nexttoast"); if(!t) return;
+  // both Today and Tasks have a toast slot - use whichever is on screen
+  var c=[document.getElementById("nexttoast"),document.getElementById("nexttoast2")], t=null;
+  for(var i=0;i<c.length;i++){ if(c[i]&&c[i].offsetParent!==null){ t=c[i]; break; } }
+  if(!t) t=c[0]||c[1];
+  if(!t) return;
   t.innerHTML='<div class="lcard" style="border-color:#A9DEC6;background:#F4FBF7;margin-bottom:12px"><p style="margin:0"><b>Next:</b> '+esc(msg)+'</p></div>';
   clearTimeout(window.__ntt); window.__ntt=setTimeout(function(){ if(t) t.innerHTML=""; },6000);
 }
@@ -2110,7 +2235,7 @@ function renderCallList(){
   if(mc&&mc.scheme){
     var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
     var top=(mc.detail||[])[0], nb=mc.new_business&&mc.new_business.last12?mc.new_business:null;
-    commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
+    commHtml='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
       '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
@@ -2122,7 +2247,7 @@ function renderCallList(){
   }
   // AI 'keep an eye on' briefs - the accounts that need a call this week
   var watch=window.__custWatch||[];
-  var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
+  var watchHtml=watch.length?('<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
     watch.map(function(w){
       var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
       var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
@@ -2480,7 +2605,7 @@ function loadTeam(){
   if(mc&&mc.scheme){
     var tot=0, acc=0; (mc.detail||[]).forEach(function(c){ tot+=Number(c.commission)||0; if(c.still_accruing) acc++; });
     var top=(mc.detail||[])[0], nb=mc.new_business&&mc.new_business.last12?mc.new_business:null;
-    commHtml='<div class="panel flush" style="border-left:3px solid #0A6B4A"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
+    commHtml='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0A6B4A"></span><h3>Commission</h3><span class="hint">'+esc(mc.scheme.label||'')+'</span></div>'+
       '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:14px 20px 16px">'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:#0A6B4A">\u00a3'+nf(Math.round(tot))+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">earned from customers\u2019 first year</span></div>'+
       '<div class="m" style="text-align:left"><b style="display:block;font-size:22px;font-weight:750;color:var(--ink)">'+nf((mc.detail||[]).length)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">customers paying</span></div>'+
@@ -2492,7 +2617,7 @@ function loadTeam(){
   }
   // AI 'keep an eye on' briefs - the accounts that need a call this week
   var watch=window.__custWatch||[];
-  var watchHtml=watch.length?('<div class="panel flush" style="border-left:3px solid #C2740B"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
+  var watchHtml=watch.length?('<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Keep an eye on</h3><span class="hint">'+watch.length+' accounts &middot; refreshed nightly from spend, quotes and booking behaviour</span></div><div class="plist">'+
     watch.map(function(w){
       var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
       var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
@@ -2778,7 +2903,7 @@ function openLead(d){
   var pushed=l.status==="pushed";
   m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(l.name||l.domain)+'</b> <span class="muted">'+esc(l.domain)+'</span><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody">'+
     '<div class="cstats">'+esc(l.segment||"")+(l.score!=null?' &middot; fit score '+l.score:'')+(l.website?' &middot; <a class="link link-primary" href="'+esc(l.website)+'" target="_blank" rel="noopener">website</a>':'')+'</div>'+
-    (l.rationale?'<div class="flabel">Why this lead'+(l.source==='gemini_hunt'?' &middot; AI-scored':'')+'</div><div class="cstats" style="border-left:3px solid var(--color-primary);padding-left:11px">'+esc(l.rationale)+(l.evidence?'<div class="muted" style="margin-top:7px;font-style:italic">"'+esc(l.evidence)+'"</div>':'')+'</div>':'')+
+    (l.rationale?'<div class="flabel">Why this lead'+(l.source==='gemini_hunt'?' &middot; AI-scored':'')+'</div><div class="cstats" style="background:var(--tint);border-radius:10px;padding:10px 13px">'+esc(l.rationale)+(l.evidence?'<div class="muted" style="margin-top:7px;font-style:italic">"'+esc(l.evidence)+'"</div>':'')+'</div>':'')+
     '<div class="cstats">'+assigned+(pushed?' &middot; <span class="badge badge-soft badge-success badge-sm">In HubSpot</span>':'')+'</div>'+
     '<div class="flabel">Note (saved to the HubSpot record)</div><textarea id="leadnote" class="textarea wfull leadnote" placeholder="Add a note...">'+esc(l.note||"")+'</textarea>'+
     '<div class="leadbtns">'+
