@@ -35,7 +35,10 @@
   --sh-3:0 2px 6px rgba(0,0,0,.05), 0 20px 48px -14px rgba(0,0,0,.16);
 }
 *{ box-sizing:border-box; }
-html,body{ max-width:100%; overflow-x:hidden; }
+/* App frame: the PAGE never scrolls - the content column scrolls inside
+   itself, so the sidebar and tab bar hold still like a native app. */
+html,body{ height:100%; max-width:100%; }
+body{ overflow:hidden; }
 body{ margin:0; background:var(--color-base-200); color:var(--ink); font-size:14.5px; line-height:1.6;
   /* SF on Apple hardware; Inter (the closest open face to SF) everywhere else */
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -63,8 +66,8 @@ h1,h2,h3{ letter-spacing:-.025em; }
 /* The HIG pattern: primary sections live in a left sidebar on wide screens
    and become a bottom tab bar on phones. Selection is a tinted fill, the
    material is translucent, items are icon + label. */
-.shell{ display:flex; align-items:stretch; min-height:100dvh; }
-.sidebar{ flex:0 0 230px; position:sticky; top:0; height:100dvh; overflow-y:auto; z-index:40;
+.shell{ display:flex; align-items:stretch; height:100dvh; }
+.sidebar{ flex:0 0 230px; overflow-y:auto; z-index:40;
   display:flex; flex-direction:column; padding:16px 12px 14px;
   background:rgba(247,247,249,.88); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
   border-right:1px solid rgba(0,0,0,.06); }
@@ -82,9 +85,13 @@ h1,h2,h3{ letter-spacing:-.025em; }
 .sidebar .nv.on{ background:rgba(0,113,227,.11); color:var(--color-primary); font-weight:600; }
 .sidebar .nv.on i{ color:var(--color-primary); }
 .sb-group{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:16px 12px 5px; }
-.sb-foot{ margin-top:auto; display:flex; flex-direction:column; gap:8px; padding:12px 4px 0; border-top:1px solid rgba(0,0,0,.06); }
-.sb-foot .pill{ text-align:center; }
-.main{ flex:1 1 auto; min-width:0; }
+.sb-foot{ margin-top:auto; display:flex; flex-direction:column; gap:8px; padding:12px 4px 0; border-top:1px solid rgba(0,0,0,.06); min-width:0; }
+/* everything in the footer wraps or truncates inside the 230px column -
+   the freshness note was overflowing onto the nav */
+.sb-foot .pill{ text-align:center; white-space:normal; line-height:1.45; font-size:11.5px; overflow-wrap:anywhere; }
+.sb-foot .pill:empty{ display:none; }
+.sb-foot .select,.sb-foot .btn{ max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.main{ flex:1 1 auto; min-width:0; overflow-y:auto; overscroll-behavior:contain; }
 .tabbar{ display:none; }
 /* the More sheet: the overflow sections, floating above the tab bar */
 .moresheet{ position:fixed; left:10px; right:10px; bottom:calc(66px + env(safe-area-inset-bottom)); z-index:46;
@@ -2804,7 +2811,7 @@ function openTool(v){
   var t=document.getElementById("view-team"); if(t) t.style.display="none";
   if(v==="monitor" && !MONloaded) loadMonitor();
   if(v==="simulation" && !SIMloaded) loadSim();
-  window.scrollTo({top:0,behavior:"smooth"});
+  var mn=document.querySelector(".main"); if(mn) mn.scrollTo({top:0,behavior:"smooth"});
 }
 function resolveStaff(){
   var em=(val("newstaff")||"").trim(); var box=document.getElementById("staffres");
