@@ -2507,6 +2507,10 @@ function openCallLead(dom){
     // brief-level warnings are call-changing; they sit above the fold
     var rel=(b&&b.relationship)||null;
     var warnList=((rel&&rel.warnings)||[]).slice();
+    // warnings about OUR OWN data coverage (no emails on file, locked Apollo
+    // contacts, ownership) never make the call better - if the record is on
+    // the list, nobody owns it. Only operational facts about THEM survive.
+    warnList=warnList.filter(function(w){ return !/apollo|first.?name|locked|no emails?|on file|ownership|owned by|in crm|crm only|guess an address/i.test(String(w)); });
     if(chOverdue) warnList.unshift('Their statutory accounts are OVERDUE at Companies House (due '+String(ch.accounts_next_due)+') - a credit-risk flag; be careful with payment terms.');
     var warnHtml=warnList.length?('<div class="alertcard" style="background:#FEF6E7;border-color:#EAD9A9;margin:12px 0 4px"><h4 style="color:#7A4E07">Before you dial</h4>'+
       warnList.slice(0,3).map(function(w){return '<p>'+esc(w)+'</p>';}).join('')+'</div>'):'';
@@ -2545,6 +2549,30 @@ function openCallLead(dom){
       :(r.insight_pending&&st&&(Number(st.calls||0)+Number(st.emails||0))>=2?'assessing now &mdash; reopen shortly'
       :((!st||(Number(st.calls||0)+Number(st.emails||0))<2)?'fresh account &mdash; no contact yet':esc(st.state||'')));
 
+    // The four questions a rep needs answered before dialling: what they do
+    // (the header line), why our service fits, what buying signals exist,
+    // and who to ask for. Everything else is reference on the other tabs.
+    var whyShort=bv?String(bv.headline||''):String(v.rationale||'');
+    var intentPt=(pts[0]||{});
+    var intentShort=intentPt.point?(String(intentPt.point)+(intentPt.why_it_lands?' - '+String(intentPt.why_it_lands):'')):'';
+    var fullNamed=(r.contacts||[]).filter(function(c){return String(c.full_name||'').indexOf(' ')>0;});
+    var withEm=(r.contacts||[]).filter(function(c){return c.email;});
+    var consShort=(r.contacts||[]).length
+      ? (fullNamed.slice(0,3).map(function(c){return c.full_name+(c.title?' ('+String(c.title).split('(')[0].trim()+')':'');}).join(', ')||(''+(r.contacts||[]).length+' named'))
+        +((r.contacts||[]).length>3?' +'+((r.contacts||[]).length-3)+' more':'')
+        +(withEm.length?' · '+withEm.length+' with email':'')
+      : '';
+    var b4items=[];
+    if(whyShort) b4items.push(['Why them',whyShort,'<span class="pv inf">AI inferred</span>']);
+    if(intentShort) b4items.push(['Buying signals',intentShort,'<span class="pv inf">AI inferred</span>']);
+    if(consShort) b4items.push(['Who to ask for',consShort,'<span class="pv fact">Apollo &amp; our records</span>']);
+    var brief4=b4items.length?('<div style="background:var(--color-base-200);border-radius:12px;padding:3px 15px;margin:10px 0 4px">'+
+      b4items.map(function(it,i){
+        return '<div style="padding:10px 0;'+(i?'border-top:1px solid rgba(0,0,0,.05)':'')+'">'+
+          '<div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:3px">'+it[0]+' '+it[2]+'</div>'+
+          '<div style="font-size:13.5px;line-height:1.55;color:var(--ink)">'+esc(String(it[1]).slice(0,260))+'</div></div>';
+      }).join('')+'</div>'):'';
+
     body.innerHTML=warn+formAlert+
       '<div class="actrow" style="border:0;padding:0 0 2px">'+
         scoreRing(v.fit_score,"md")+
@@ -2562,17 +2590,15 @@ function openCallLead(dom){
         '<button onclick="mTab(this,\'co\')">Company</button>'+
         '<button onclick="mTab(this,\'hist\')">History</button></div>'+
       '<div class="mtab on" data-t="call">'+
+        brief4+
         warnHtml+
-        (ap.opening_line
-          ? '<div class="nextact" style="margin:12px 0 4px"><div><div class="lbl">Say this &middot; AI drafted</div><div class="dt">'+esc(ap.opening_line)+'</div></div></div>'
-          : '')+
-        (talkBody?'<h3 class="msec">Talking points <span class="pv inf">AI inferred</span></h3>'+talkBody:'')+
         (pushBody?'<h3 class="msec">If they push back <span class="pv inf">AI inferred</span></h3>'+pushBody:'')+
         (numsBody?'<h3 class="msec">Numbers <span class="pv fact">public records &amp; their site</span></h3>'+numsBody:'')+
       '</div>'+
       '<div class="mtab" data-t="co">'+
       sec('Who they are',fact('their website & press'),comp?esc(String(comp.size_signal||comp.what_they_do||'').slice(0,90)):'',whoBody,true)+
       sec('Why the '+((bv&&bv.score!=null?bv.score:v.fit_score)||'score'),INF,bv?esc(String(bv.headline||'').slice(0,90)):esc(String(v.rationale||'').slice(0,90)),whyBody)+
+      sec('Talking points',INF,pts.length?esc(String((pts[0]||{}).point||'').slice(0,90)):'',talkBody)+
       sec('Companies House',fact('official register'),ch?(esc(ch.status||'')+(ch.incorporated?' &middot; since '+String(ch.incorporated).slice(0,4):'')+(chOverdue?' &middot; accounts OVERDUE':'')):'',chBody)+
       formSec+
       sec('Contacts',fact('Apollo & our records'),consPrev,cons)+
