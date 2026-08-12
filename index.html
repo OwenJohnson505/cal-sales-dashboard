@@ -2387,6 +2387,11 @@ function openCallLead(dom){
       formAlert='<div class="alertcard"><h4>No account form on file</h4><p>They spend with Cal but never submitted an account form &mdash; payment terms and invoicing details are unconfirmed. Worth sending the form.</p></div>';
     }
 
+    // UK contacts only - a Bangkok operations director can't book a Warrington
+    // van. Overseas rows are hidden, with an honest count of what was hidden.
+    var UKRE=/united kingdom|england|scotland|wales|northern ireland/i;
+    var overseasN=(r.contacts||[]).filter(function(c){return c.city&&!UKRE.test(c.city);}).length;
+    r.contacts=(r.contacts||[]).filter(function(c){return !c.city||UKRE.test(c.city);});
     // Whether a contact has been reached is INFERRED from Front, Aircall and
     // HubSpot - never something a rep ticks.
     var cons=(r.contacts||[]).length
@@ -2510,7 +2515,8 @@ function openCallLead(dom){
     var hsaPrev=Object.keys(hsaCounts).map(function(k){ return hsaCounts[k]+' '+k; }).join(' &middot; ')||'';
 
     var reached=(r.contacts||[]).filter(function(c){return c.spoken_to||c.emailed;}).length;
-    var consPrev=(r.contacts||[]).length?((r.contacts||[]).length+' named &middot; '+reached+' reached'):'none found yet';
+    var consPrev=((r.contacts||[]).length?((r.contacts||[]).length+' named &middot; '+reached+' reached'):'none found yet')
+      +(overseasN?' &middot; '+overseasN+' overseas hidden':'');
     var lastAt=(r.attempts||[])[0];
     var histPrev=lastAt?(esc(String(lastAt.outcome).replace(/_/g,' '))+' &middot; '+esc(String(lastAt.created_at).slice(0,10))):'no calls logged yet';
     var storyPrev=ins?esc(String(ins.headline||ins.story||'').slice(0,90))
@@ -2529,8 +2535,7 @@ function openCallLead(dom){
       var cand=String(pts[pi].point||'')+(pts[pi].why_it_lands?' - '+String(pts[pi].why_it_lands):'');
       if(cand && !junkSignal.test(cand)){ intentShort=cand; break; }
     }
-    // contacts live ONCE, in the readable row format on Company - no comma
-    // wall duplicating them here
+    // contacts live ONCE, in the readable row format on the Contacts tab
     var b4items=[];
     if(intentShort) b4items.push(['Buying signals',intentShort,'<span class="pv inf">AI inferred</span>']);
     // where they are + registered facts + the sources, quiet, under the header
@@ -2541,6 +2546,7 @@ function openCallLead(dom){
       '<div class="dom" style="margin:9px 0 2px;display:flex;gap:14px;flex-wrap:wrap;align-items:center">'+
         '<a target="_blank" rel="noopener" href="https://'+esc(dom)+'" style="font-weight:600">Website &#8599;</a>'+
         (chUrl?'<a target="_blank" rel="noopener" href="'+chUrl+'" style="font-weight:600">Companies House &#8599;</a>':'')+
+        '<a target="_blank" rel="noopener" href="https://web.archive.org/web/2024*/'+esc(dom)+'" style="font-weight:600">Site history &#8599;</a>'+
         (ch&&ch.company_number?'<span>Company no '+esc(ch.company_number)+(ch.incorporated?' &middot; since '+esc(String(ch.incorporated).slice(0,4)):'')+'</span>':'')+
         (ch&&(ch.address||ch.postcode)?'<span>Registered: '+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span>':'')+
       '</div>';
@@ -2550,6 +2556,17 @@ function openCallLead(dom){
           '<div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:3px">'+it[0]+' '+it[2]+'</div>'+
           '<div style="font-size:13.5px;line-height:1.55;color:var(--ink)">'+esc(String(it[1]).slice(0,260))+'</div></div>';
       }).join('')+'</div>'):'';
+
+    // who owns it and when we last spoke sit NEXT TO THE NAME - nobody should
+    // have to read the profile to learn it is Nicola's account
+    var M2=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    var lcPill;
+    if(st&&st.last_touch){ var lcd=new Date(st.last_touch);
+      lcPill='last contact '+lcd.getDate()+' '+M2[lcd.getMonth()]+(st.days_since!=null?(st.days_since===0?' &middot; today':' &middot; '+st.days_since+'d ago'):'');
+    } else lcPill='never contacted';
+    if(head) head.innerHTML=esc(t.name||dom)+
+      (r.hs_record&&r.hs_record.owner_name?' <span class="pill" style="background:#F0F6FF;color:#0060C7;font-size:11.5px;vertical-align:2px">'+esc(r.hs_record.owner_name)+'</span>':'')+
+      ' <span class="pill" style="font-size:11.5px;vertical-align:2px'+(st&&st.last_touch?'':';color:var(--faint)')+'">'+lcPill+'</span>';
 
     body.innerHTML=warn+formAlert+
       '<div class="actrow" style="border:0;padding:0 0 2px">'+
@@ -2565,7 +2582,7 @@ function openCallLead(dom){
       // News (the press, with sources), History (what has actually happened).
       '<div class="mtabs">'+
         '<button class="on" onclick="mTab(this,\'call\')">Call</button>'+
-        '<button onclick="mTab(this,\'co\')">Company</button>'+
+        '<button onclick="mTab(this,\'co\')">Contacts</button>'+
         '<button onclick="mTab(this,\'news\')">News</button>'+
         '<button onclick="mTab(this,\'hist\')">History</button></div>'+
       '<div class="mtab on" data-t="call">'+
@@ -2574,7 +2591,6 @@ function openCallLead(dom){
       '</div>'+
       '<div class="mtab" data-t="co">'+
       sec('Contacts',fact('Apollo & our records'),consPrev,cons,true)+
-      formSec+
       '</div>'+
       '<div class="mtab" data-t="news">'+
       (newsHtml||'<div class="empty" style="padding:26px 12px">No press coverage found in the research run.</div>')+
@@ -2582,6 +2598,7 @@ function openCallLead(dom){
       '<div class="mtab" data-t="hist">'+
       (r.hs_record?'<div class="evid" style="padding:4px 0 12px"><b>On HubSpot'+(r.hs_record.owner_name?' &middot; owned by '+esc(r.hs_record.owner_name):' &middot; no owner set')+'</b>'+
         ((r.hs_record.lifecyclestage||r.hs_record.lead_status)?'<span class="src">'+esc([r.hs_record.lifecyclestage,r.hs_record.lead_status].filter(Boolean).join(' · '))+'</span>':'')+'</div>':'')+
+      formSec+
       sec('The story so far',INF,storyPrev,known,true)+
       sec('HubSpot activity',fact('HubSpot log'),hsaPrev,hsaBody)+
       sec('Call history',fact('our call log'),histPrev,hist)+
