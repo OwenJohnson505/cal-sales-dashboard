@@ -116,6 +116,9 @@ h1,h2,h3{ letter-spacing:-.025em; }
 
 /* ================================= page ================================= */
 .content{ max-width:1240px; margin:0 auto; padding:26px 24px 60px; }
+/* data-dense screens (the leads table) get the whole viewport, not the
+   reading-width cap - no horizontal scroll while half the screen sits empty */
+.content.wide{ max-width:1760px; }
 .page-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:2px 0 20px; }
 .page-head .t{ font-size:29px; font-weight:700; letter-spacing:-.035em; line-height:1.12; }
 .page-head .sub,.sub{ font-size:14px; color:var(--mut); }
@@ -632,6 +635,11 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .bub .bw{ font-size:10.5px; color:var(--faint); margin-bottom:3px; }
 .bub .bt{ font-size:13px; line-height:1.5; color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere; }
 
+/* leads table: denser cells than the reading tables - ten columns must fit
+   the viewport without a horizontal scroll */
+.lmtable th,.lmtable td{ padding:11px 10px; }
+.lmtable th:first-child,.lmtable td:first-child{ padding-left:20px; }
+.lmtable th:last-child,.lmtable td:last-child{ padding-right:14px; }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
@@ -1203,6 +1211,7 @@ function setView(el){
   var ms=document.getElementById("moresheet"); if(ms) ms.style.display="none";
   var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
+  var ct=document.querySelector(".content"); if(ct) ct.classList.toggle("wide", v==="leadsmine");
   if(v==="today") loadToday();
   if(v==="pulse") loadPulse();
   if(v==="customers") loadCustomers();
@@ -1814,12 +1823,13 @@ function loadLeadsMine(){
   el.innerHTML=spinner();
   // a lead = a company owned in HubSpot that isn't a customer yet; reps
   // (and view-as) get their own book, the head's own view gets everyone's
+  if(window.__lmAll===undefined) window.__lmAll=true;
   var payload={action:"leads"};
-  if(window.CAN_MANAGE && !window.VIEW_AS) payload.all=true;
+  if(window.CAN_MANAGE && !window.VIEW_AS && window.__lmAll) payload.all=true;
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmQ=""; window.__lmPage=1;
-    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null;
+    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
   });
@@ -1836,11 +1846,15 @@ function lmScaffold(){
   var el=document.getElementById("lmboard"); if(!el) return;
   lmMenuClose();
   var team=!!window.__lmTeam;
+  var canAll=window.CAN_MANAGE&&!window.VIEW_AS;
   el.innerHTML='<div class="panel flush"><div class="phead"><h3>'+(team?'HubSpot leads &mdash; whole team':'Your HubSpot leads')+'</h3>'+
+    (canAll?'<span style="display:inline-flex;gap:2px;background:#F5F5F7;border-radius:9px;padding:2px;margin-left:12px">'+
+      '<button class="chip" style="border:none;padding:4px 12px;font-size:12.5px;'+(window.__lmAll!==false?'background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:650':'background:transparent;color:var(--mut)')+'" onclick="lmViewAll(true)">Everyone</button>'+
+      '<button class="chip" style="border:none;padding:4px 12px;font-size:12.5px;'+(window.__lmAll===false?'background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:650':'background:transparent;color:var(--mut)')+'" onclick="lmViewAll(false)">Mine</button></span>':'')+
     '<input id="lmq" class="input" placeholder="Search company, domain, owner, tag..." value="'+esc(window.__lmQ||'')+'" oninput="lmSearch(this.value)" style="margin-left:auto;flex:1;max-width:440px;padding:9px 14px;font-size:14px;border-radius:10px">'+
     '<span class="hint" id="lmcount" style="white-space:nowrap"></span></div>'+
     lmActiveBar()+
-    '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm"><thead><tr>'+
+    '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm lmtable"><thead><tr>'+
       (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+lmFun('owner')+'</th>':'')+
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
       '<th onclick="lmSortH(\'status\')">Status'+lmArr('status')+lmFun('status')+'</th>'+
@@ -1874,16 +1888,22 @@ function lmOwnSet(v){ window.__lmOwner=v; window.__lmPage=1; lmScaffold(); }
 function lmTagCSet(v){ window.__lmTagC=v; window.__lmPage=1; lmScaffold(); }
 function lmTagASet(v){ window.__lmTagA=v; window.__lmPage=1; lmScaffold(); }
 function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmPage=1; lmScaffold(); }
+function lmViewAll(v){ window.__lmAll=v; loadLeadsMine(); }
+function lmExpandTags(dom){ window.__lmX=window.__lmX||{}; window.__lmX[dom]=!window.__lmX[dom]; renderLmRows(); }
+// sector labels don't move a sale and the account record holds them anyway
+var LM_SECTORS=['aerospace','manufacturing','construction','automotive','pharma','pharmaceutical','healthcare','retail','engineering','electronics','events','hospitality','fashion','printing','education','charity','logistics','ecommerce','e-commerce'];
+function lmUseful(t){ t=String(t).toLowerCase().trim(); return !(/ sector$/.test(t)||LM_SECTORS.indexOf(t)>=0); }
 // every tag a lead carries, split by species - one source of truth for the
 // pills, the filter test, and the funnel menu
 function lmAllTags(x){
   var fx=x.facts||{}, a=[], c=[];
-  if(x.stage==='opportunity') c.push('opportunity');
-  if(x.dropped_ball) c.push('ball dropped');
   if(fx.uses_couriers==='confirmed') c.push('confirmed courier user');
   if(fx.current_supplier) c.push('uses '+String(fx.current_supplier).slice(0,24));
-  (fx.tags||[]).slice(0,5).forEach(function(t){ c.push(String(t).slice(0,28)); });
+  if(fx.usage_frequency){ var v=String(fx.usage_frequency); c.push(v.length>30?v.slice(0,27)+'…':v); }
+  if(x.stage==='opportunity') c.push('opportunity');
+  if(x.dropped_ball) c.push('ball dropped');
   (x.utags||[]).forEach(function(u){ (u.kind==='action'?a:c).push(String(u.tag)); });
+  (fx.tags||[]).filter(lmUseful).slice(0,5).forEach(function(t){ c.push(String(t).slice(0,28)); });
   return { a:a, c:c };
 }
 function lmMenuClose(){ var m=document.getElementById('lmmenu'); if(m&&m.parentNode) m.parentNode.removeChild(m); }
@@ -1949,14 +1969,17 @@ function lmTagCells(x){
   // (the AI's reads, plus outlined user-added ones); action tags = what the
   // salesperson intends to DO with the account (visit, donut drop) - filled
   // ink, no conversation needed. Click filters that column; x untags.
+  // conversation tags run in order of sales importance: do they use couriers,
+  // who they use, how much, then everything else - capped at 4 with a "+N"
+  // expander so a chatty account can't swallow the row
   var fx=x.facts||{}; var act=[], conv=[];
   var tag=function(txt,bg,fg,title){ conv.push('<span class="pill" style="background:'+bg+';color:'+fg+';cursor:pointer"'+(title?' title="'+esc(title)+'"':'')+' onclick="event.stopPropagation();lmTagCSet(\''+esc(String(txt).replace(/'/g,''))+'\')">'+esc(txt)+'</span>'); };
-  if(x.stage==='opportunity') tag('opportunity','#F0F6FF','#0060C7');
-  if(x.dropped_ball) tag('ball dropped','#FEF2F2','#8F1D1D');
   if(fx.uses_couriers==='confirmed') tag('confirmed courier user','#E7F8F0','#0A6B4A');
   if(fx.current_supplier) tag('uses '+String(fx.current_supplier).slice(0,24),'#FEF6E7','#7A4E07');
-  (fx.tags||[]).slice(0,5).forEach(function(t){ tag(String(t).slice(0,28),'#F2F4F8','#3A455B'); });
-  if(x.other_owners) tag('duplicate: '+String(x.other_owners).split(' ')[0]+'’s book too','#FEF6E7','#7A4E07','the same company exists more than once in HubSpot');
+  if(fx.usage_frequency){ var vol=String(fx.usage_frequency);
+    tag(vol.length>30?vol.slice(0,27)+'…':vol,'#F0F6FF','#0060C7','how often they use couriers: '+vol); }
+  if(x.stage==='opportunity') tag('opportunity','#F0F6FF','#0060C7');
+  if(x.dropped_ball) tag('ball dropped','#FEF2F2','#8F1D1D');
   (x.utags||[]).forEach(function(u){
     var isAct=u.kind==='action';
     var st=isAct?'background:#1D1D1F;color:#fff':'background:#fff;color:#1D1D1F;box-shadow:inset 0 0 0 1.5px #1D1D1F';
@@ -1964,6 +1987,15 @@ function lmTagCells(x){
     (isAct?act:conv).push('<span class="pill" style="'+st+';cursor:pointer" title="added by '+esc(String(u.by||'').split('@')[0])+'" onclick="event.stopPropagation();'+(isAct?'lmTagASet':'lmTagCSet')+'(\''+safe+'\')">'+esc(u.tag)+
       '<span onclick="event.stopPropagation();lmTagRemove(\''+esc(x.domain)+'\',\''+safe+'\',\''+u.kind+'\')" style="opacity:.55;font-weight:700;padding-left:4px" title="remove">&times;</span></span>');
   });
+  (fx.tags||[]).filter(lmUseful).slice(0,5).forEach(function(t){ tag(String(t).slice(0,28),'#F2F4F8','#3A455B'); });
+  if(x.other_owners) tag('duplicate: '+String(x.other_owners).split(' ')[0]+'’s book too','#FEF6E7','#7A4E07','the same company exists more than once in HubSpot');
+  var CAP=4, exp=!!(window.__lmX&&window.__lmX[x.domain]);
+  if(conv.length>CAP){
+    var dq=esc(String(x.domain||'').replace(/'/g,''));
+    if(exp) conv.push('<span class="pill" style="background:transparent;color:var(--mut);cursor:pointer" onclick="event.stopPropagation();lmExpandTags(\''+dq+'\')">show less</span>');
+    else { var extra=conv.length-CAP; conv=conv.slice(0,CAP);
+      conv.push('<span class="pill" style="background:#F5F5F7;color:var(--ink2);cursor:pointer;font-weight:650" title="show all tags" onclick="event.stopPropagation();lmExpandTags(\''+dq+'\')">+'+extra+' more</span>'); }
+  }
   if(x.domain){
     var adder=function(label,kind,title){ return '<span class="pill" style="background:transparent;border:1px dashed #C7C7CC;color:var(--mut);cursor:pointer" title="'+title+'" onclick="event.stopPropagation();lmTagAdder(this,\''+esc(x.domain)+'\',\''+kind+'\')">'+label+'</span>'; };
     act.push(adder('+ action','action','add an action tag - something to do (visit, donut drop)'));
