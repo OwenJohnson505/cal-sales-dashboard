@@ -1930,7 +1930,7 @@ function renderTasks(el,got){
   if(sg.length){
     html+='<details class="panel flush" style="padding:0"><summary style="cursor:pointer;padding:14px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
       '<span class="bdot" style="background:#5E5CE6"></span><h3 style="margin:0;display:inline">'+sg.length+' suggested task'+(sg.length===1?'':'s')+'</h3>'+
-      '<span class="hint">found in your calls &amp; emails &middot; click to review</span></summary><div class="plist">'+
+      '<span class="hint">things you said you&rsquo;d do, with no sign yet they happened &middot; click to review</span></summary><div class="plist">'+
       sg.map(function(t){
         var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
         return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
