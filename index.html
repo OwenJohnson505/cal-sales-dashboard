@@ -2402,9 +2402,14 @@ function openCallLead(dom){
           else tags+='<span class="tag new">Not reached</span>';
           return '<div class="actrow"><div class="co"><b>'+esc(c.full_name)+'</b>'+
             (c.title?'<div class="dom">'+esc(c.title)+(c.city?' &middot; '+esc(c.city):'')+'</div>':'')+
+            (c.headline&&c.headline!==c.title?'<div class="seg" style="color:var(--mut)">'+esc(String(c.headline).slice(0,140))+'</div>':'')+
+            (c.role_objectives?'<div class="seg">Role focus: '+esc(String(c.role_objectives).slice(0,200))+
+              (c.posting_url?' <a target="_blank" rel="noopener" href="'+esc(c.posting_url)+'" style="font-weight:600">job ad &#8599;</a>':'')+'</div>':'')+
             (c.pitch_angle?'<div class="seg">Angle: '+esc(String(c.pitch_angle).slice(0,140))+'</div>':'')+
             (c.best_call_window?'<div class="seg">Best time: '+esc(c.best_call_window)+'</div>':'')+'</div>'+
             '<div class="rt">'+tags+
+            (c.linkedin_url?'<a class="chip" style="text-decoration:none" target="_blank" rel="noopener" href="'+esc(c.linkedin_url)+'">LinkedIn &#8599;</a>':'')+
+            (c.apollo_id?'<a class="chip" style="text-decoration:none" target="_blank" rel="noopener" href="https://app.apollo.io/#/people/'+esc(c.apollo_id)+'">Apollo &#8599;</a>':'')+
             (c.email?'<a class="btn btn-soft btn-sm" href="mailto:'+esc(c.email)+'">Email</a>':'<span class="nonum">no email</span>')+
             '</div></div>';
         }).join("")
