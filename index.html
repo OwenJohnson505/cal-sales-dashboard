@@ -2470,20 +2470,14 @@ function openCallLead(dom){
       news.slice(0,3).map(function(n){
         return '<div class="evid"><b>'+esc(n.headline||'')+'</b><span class="src">'+esc(n.source||'')+
           (n.date?' &middot; '+esc(n.date):'')+
-          (n.url?' &middot; <a target="_blank" rel="noopener" href="'+esc(n.url)+'">read the article</a>':'')+
-          (n.gist?'<br>'+esc(n.gist):'')+'</span></div>';
+          (n.gist?'<br>'+esc(n.gist):'')+
+          (n.url?'<br><a target="_blank" rel="noopener" href="'+esc(n.url)+'" style="font-weight:600">source &#8599;</a>':'')+'</span></div>';
       }).join('')):'';
 
     // Companies House first: the overdue-accounts flag feeds the warnings
+    // Companies House shrinks to one quiet line of registered facts under the
+    // header, linked to the register itself - not a section of its own
     var ch=r.companies_house||null;
-    var chOverdue=ch&&ch.accounts_next_due&&(new Date(ch.accounts_next_due)<new Date());
-    var chBody=ch?(
-      '<div class="evid"><b>'+esc(ch.name||'')+' &middot; '+esc(ch.company_number||'')+'</b>'+
-      '<span class="src">'+esc(ch.status||'')+(ch.category?' &middot; '+esc(ch.category):'')+(ch.incorporated?' &middot; incorporated '+esc(String(ch.incorporated).slice(0,4)):'')+'</span></div>'+
-      (ch.address||ch.postcode?'<div class="evid"><b>Registered office</b><span class="src">'+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span></div>':'')+
-      (ch.sic?'<div class="evid"><b>Nature of business</b><span class="src">'+esc(ch.sic)+'</span></div>':'')+
-      (ch.accounts_next_due?'<div class="evid"><b>Accounts next due</b><span class="src">'+esc(String(ch.accounts_next_due))+(chOverdue?' &middot; <b style="color:#8F1D1D">OVERDUE</b>':'')+(ch.accounts_last_made?' &middot; last filed '+esc(String(ch.accounts_last_made)):'')+'</span></div>':'')
-    ):'';
 
     // Owen's call: no coaching blocks. Warnings, objections and "avoid" are
     // gone - reps know how businesses work. Facts only, they do the thinking.
@@ -2494,7 +2488,7 @@ function openCallLead(dom){
       dials.filter(function(s){return s.number!==phone;}).slice(0,4).map(function(s){
         return '<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(s.display||s.number)+'</b>'+
           '<div class="dom">'+esc(s.label||(s.phone_class==='mobile'?'Mobile they list publicly':'Listed on their site'))+'</div>'+
-          '<div class="seg" style="color:var(--faint)">from '+esc(hostOf(s.source_url))+' &middot; their public contact page</div></div>'+
+          '<div class="seg" style="color:var(--faint)">from <a target="_blank" rel="noopener" href="'+esc(s.source_url)+'">'+esc(hostOf(s.source_url))+' &#8599;</a></div></div>'+
           '<div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(s.number)+'">Call</a></div></div>';
       }).join('')):'';
 
@@ -2535,15 +2529,21 @@ function openCallLead(dom){
       var cand=String(pts[pi].point||'')+(pts[pi].why_it_lands?' - '+String(pts[pi].why_it_lands):'');
       if(cand && !junkSignal.test(cand)){ intentShort=cand; break; }
     }
-    var withEm=(r.contacts||[]).filter(function(c){return c.email;});
-    // every contact, visible - "+7 more" hid the people the rep needed
-    var consShort=(r.contacts||[]).length
-      ? (r.contacts||[]).map(function(c){return c.full_name+(c.title?' ('+String(c.title).split('(')[0].trim()+')':'');}).join(', ')
-        +(withEm.length?' · '+withEm.length+' with email':'')
-      : '';
+    // contacts live ONCE, in the readable row format on Company - no comma
+    // wall duplicating them here
     var b4items=[];
     if(intentShort) b4items.push(['Buying signals',intentShort,'<span class="pv inf">AI inferred</span>']);
-    if(consShort) b4items.push(['Who to ask for',consShort,'<span class="pv fact">Apollo &amp; our records</span>']);
+    // where they are + registered facts + the sources, quiet, under the header
+    var locs=(comp&&comp.uk_locations)||[];
+    var chUrl=(ch&&ch.company_number)?('https://find-and-update.company-information.service.gov.uk/company/'+encodeURIComponent(ch.company_number)):null;
+    var metaHtml=
+      (locs.length?'<div class="pillrow" style="margin:8px 0 0">'+locs.slice(0,6).map(function(l){return '<span class="pill">'+esc(l)+'</span>';}).join('')+'</div>':'')+
+      '<div class="dom" style="margin:9px 0 2px;display:flex;gap:14px;flex-wrap:wrap;align-items:center">'+
+        '<a target="_blank" rel="noopener" href="https://'+esc(dom)+'" style="font-weight:600">Website &#8599;</a>'+
+        (chUrl?'<a target="_blank" rel="noopener" href="'+chUrl+'" style="font-weight:600">Companies House &#8599;</a>':'')+
+        (ch&&ch.company_number?'<span>Company no '+esc(ch.company_number)+(ch.incorporated?' &middot; since '+esc(String(ch.incorporated).slice(0,4)):'')+'</span>':'')+
+        (ch&&(ch.address||ch.postcode)?'<span>Registered: '+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span>':'')+
+      '</div>';
     var brief4=b4items.length?('<div style="background:var(--color-base-200);border-radius:12px;padding:3px 15px;margin:10px 0 4px">'+
       b4items.map(function(it,i){
         return '<div style="padding:10px 0;'+(i?'border-top:1px solid rgba(0,0,0,.05)':'')+'">'+
@@ -2560,12 +2560,13 @@ function openCallLead(dom){
         '</div>'+
       '</div>'+
       (comp&&comp.what_they_do?'<p style="margin:6px 0 2px;font-size:14px;color:var(--ink2);line-height:1.55">'+esc(comp.what_they_do)+'</p>':'')+
-      // Three focused pages instead of one long stack: Call is everything you
-      // need with the phone in your hand; Company is the research; History is
-      // what has actually happened. Ten equal rows was scannable but daunting.
+      metaHtml+
+      // Four focused pages: Call (signal + numbers), Company (people + terms),
+      // News (the press, with sources), History (what has actually happened).
       '<div class="mtabs">'+
         '<button class="on" onclick="mTab(this,\'call\')">Call</button>'+
         '<button onclick="mTab(this,\'co\')">Company</button>'+
+        '<button onclick="mTab(this,\'news\')">News</button>'+
         '<button onclick="mTab(this,\'hist\')">History</button></div>'+
       '<div class="mtab on" data-t="call">'+
         brief4+
@@ -2574,10 +2575,13 @@ function openCallLead(dom){
       '<div class="mtab" data-t="co">'+
       sec('Contacts',fact('Apollo & our records'),consPrev,cons,true)+
       formSec+
-      sec('Companies House',fact('official register'),ch?(esc(ch.status||'')+(ch.incorporated?' &middot; since '+String(ch.incorporated).slice(0,4):'')+(chOverdue?' &middot; accounts OVERDUE':'')):'',chBody)+
-      (newsHtml?sec('In the news',fact('press'),news[0]?esc(String(news[0].headline||'').slice(0,90)):'',newsHtml):'')+
+      '</div>'+
+      '<div class="mtab" data-t="news">'+
+      (newsHtml||'<div class="empty" style="padding:26px 12px">No press coverage found in the research run.</div>')+
       '</div>'+
       '<div class="mtab" data-t="hist">'+
+      (r.hs_record?'<div class="evid" style="padding:4px 0 12px"><b>On HubSpot'+(r.hs_record.owner_name?' &middot; owned by '+esc(r.hs_record.owner_name):' &middot; no owner set')+'</b>'+
+        ((r.hs_record.lifecyclestage||r.hs_record.lead_status)?'<span class="src">'+esc([r.hs_record.lifecyclestage,r.hs_record.lead_status].filter(Boolean).join(' · '))+'</span>':'')+'</div>':'')+
       sec('The story so far',INF,storyPrev,known,true)+
       sec('HubSpot activity',fact('HubSpot log'),hsaPrev,hsaBody)+
       sec('Call history',fact('our call log'),histPrev,hist)+
