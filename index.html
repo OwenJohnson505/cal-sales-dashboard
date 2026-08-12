@@ -618,6 +618,13 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .calcell .cb i{ display:block; height:100%; border-radius:99px; background:var(--color-primary); }
 .calcell .cnt{ font-size:10.5px; color:var(--faint); font-variant-numeric:tabular-nums; white-space:nowrap; }
 @media (max-width:700px){ .calcell{ min-height:58px; padding:6px 7px; } .calcell .cnt{ display:none; } }
+/* suggestions read as cards, not a compressed list - each commitment gets
+   room: title, source line, the exchange in its own well, then actions */
+.sggrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; padding:14px 20px 18px; }
+.sgcard{ background:var(--color-base-200); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; gap:9px; }
+.sgcard b{ font-size:14px; line-height:1.35; }
+.sgquote{ background:#fff; border-radius:10px; padding:10px 13px; font-size:13px; color:var(--ink2); line-height:1.55; }
+.sgacts{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:auto; }
 /* conversation threads read as messages, not bordered boxes */
 .bubwrap{ display:flex; flex-direction:column; gap:8px; max-height:440px; overflow:auto; padding-right:4px; }
 .bub{ max-width:86%; align-self:flex-end; background:var(--tint); border-radius:16px 16px 4px 16px; padding:9px 13px; }
@@ -1930,16 +1937,19 @@ function renderTasks(el,got){
   if(sg.length){
     html+='<details class="panel flush" style="padding:0"><summary style="cursor:pointer;padding:14px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
       '<span class="bdot" style="background:#5E5CE6"></span><h3 style="margin:0;display:inline">'+sg.length+' suggested task'+(sg.length===1?'':'s')+'</h3>'+
-      '<span class="hint">things you said you&rsquo;d do, with no sign yet they happened &middot; click to review</span></summary><div class="plist">'+
+      '<span class="hint">things you said you&rsquo;d do, with no sign yet they happened &middot; click to review</span></summary>'+
+      '<div class="sggrid">'+
       sg.map(function(t){
         var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
-        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
+        return '<div class="sgcard"><b>'+esc(t.title)+'</b>'+
           '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
-          (t.quote?'<div class="seg">From the exchange: &ldquo;'+esc(String(t.quote))+'&rdquo;</div>':'')+
-          '<div class="seg" style="color:var(--faint)">Accept creates a HubSpot task '+dueTxt+', assigned to you &middot; the full record is one click away.</div></div>'+
-          '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
+          (t.quote?'<div class="sgquote">&ldquo;'+esc(String(t.quote))+'&rdquo;</div>':'')+
+          (t.action_email?'<div><a class="chip" style="text-decoration:none" href="mailto:'+esc(t.action_email)+'"><i class="ph ph-envelope-simple" style="vertical-align:-2px;margin-right:5px"></i>'+esc(t.action_email)+'</a></div>':'')+
+          '<div class="sgacts"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
           '<button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
-          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
+          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div>'+
+          '<div class="dom" style="color:var(--faint)">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div>'+
+          '</div>';
       }).join("")+'</div></details>';
   }
   if(wait.length){
