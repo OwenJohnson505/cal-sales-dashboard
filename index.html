@@ -1920,6 +1920,10 @@ function renderTasks(el,got){
         (t.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</div></div>';
     }).join("")
     :'<div class="empty"><div class="ei">&#10003;</div>'+(note?esc(note):"All clear. New tasks from HubSpot land here.")+'</div>')+'</div></div>';
+  // "They said THEY'D act" is not a task - it is a watch. Split it out so
+  // the rep never reads someone else's promise as their own to-do.
+  var wait=sg.filter(function(t){return t.kind==='waiting';});
+  sg=sg.filter(function(t){return t.kind!=='waiting';});
   // Suggestions live BELOW the real to-do list and start collapsed, so the
   // tasks people actually committed to are never pushed off screen by the
   // machine's ideas. One home for suggestions: here, not on Today.
@@ -1935,6 +1939,19 @@ function renderTasks(el,got){
           '<div class="seg">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div></div>'+
           '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
           '<button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
+          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
+      }).join("")+'</div></details>';
+  }
+  if(wait.length){
+    html+='<details class="panel flush" style="padding:0"><summary style="cursor:pointer;padding:14px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
+      '<span class="bdot" style="background:#98989F"></span><h3 style="margin:0;display:inline">Waiting on their side ('+wait.length+')</h3>'+
+      '<span class="hint">they said they&rsquo;d act &middot; clears itself when they do, nudges you if it goes quiet</span></summary><div class="plist">'+
+      wait.map(function(t){
+        return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
+          '<div class="dom">'+esc(t.domain)+(t.due_date?' &middot; worth a nudge from '+esc(t.due_date):'')+'</div>'+
+          (t.quote?'<div class="seg">They said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+'</div>'+
+          '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
+          '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Remind me'+(t.due_date?' then':'')+'</button>'+
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
       }).join("")+'</div></details>';
   }
