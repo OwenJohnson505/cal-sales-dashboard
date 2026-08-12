@@ -607,20 +607,32 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .calhead .mt{ font-size:22px; font-weight:700; letter-spacing:-.03em; }
 .calwk,.calgrid{ display:grid; grid-template-columns:repeat(7,1fr); }
 .calwk div{ font-size:10.5px; font-weight:700; color:var(--faint); text-align:center; padding:4px 0 8px; text-transform:uppercase; letter-spacing:.05em; }
-.calgrid{ gap:6px; }
-.calcell{ min-height:76px; background:#fff; border-radius:12px; box-shadow:var(--sh-1); padding:8px 9px;
-  cursor:pointer; display:flex; flex-direction:column; gap:5px; transition:box-shadow .12s, transform .1s ease; }
+.calgrid{ gap:8px; }
+.calcell{ min-height:118px; background:#fff; border-radius:12px; box-shadow:var(--sh-1); padding:9px 10px;
+  cursor:pointer; display:flex; flex-direction:column; gap:4px; transition:box-shadow .12s, transform .1s ease; }
 .calcell:hover{ box-shadow:var(--sh-2); }
 .calcell:active{ transform:scale(.97); }
-.calcell.blank{ background:transparent; box-shadow:none; cursor:default; }
+.calcell.blank{ background:transparent; box-shadow:none; cursor:default; min-height:0; }
 .calcell.blank:hover{ box-shadow:none; }
-.calcell .dn{ font-size:12.5px; font-weight:600; color:var(--ink2); width:24px; height:24px; display:grid; place-items:center; border-radius:50%; }
+.calcell .dn{ font-size:12.5px; font-weight:600; color:var(--ink2); width:24px; height:24px; display:grid; place-items:center; border-radius:50%; flex:none; }
+.calcell.future .dn{ color:var(--faint); }
 .calcell.today .dn{ background:var(--color-primary); color:#fff; font-weight:700; }
 .calcell.sel{ box-shadow:0 0 0 2px var(--color-primary), var(--sh-1); }
+/* what's ON the day: tasks due + planned visits, as slim entries */
+.calev{ font-size:11px; font-weight:600; line-height:1.35; padding:2.5px 7px; border-radius:6px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.calev.task{ background:#F0F6FF; color:#0060C7; }
+.calev.task.over{ background:#FEF2F2; color:#8F1D1D; }
+.calev.visit{ background:#E7F8F0; color:#0A6B4A; }
+.calev.more{ background:transparent; color:var(--faint); padding:1px 7px 0; }
+/* the productivity bar lives at the foot of the tile */
+.calcell .prod{ margin-top:auto; display:flex; flex-direction:column; gap:3px; }
 .calcell .cb{ height:4px; border-radius:99px; background:var(--color-base-300); overflow:hidden; }
 .calcell .cb i{ display:block; height:100%; border-radius:99px; background:var(--color-primary); }
 .calcell .cnt{ font-size:10.5px; color:var(--faint); font-variant-numeric:tabular-nums; white-space:nowrap; }
-@media (max-width:700px){ .calcell{ min-height:58px; padding:6px 7px; } .calcell .cnt{ display:none; } }
+.callegend{ display:flex; gap:16px; align-items:center; font-size:11.5px; color:var(--mut); }
+.callegend .bdot{ width:8px; height:8px; }
+@media (max-width:700px){ .calcell{ min-height:64px; padding:6px 7px; } .calcell .cnt{ display:none; } .calev{ display:none; } }
 /* suggestions read as cards, not a compressed list - each commitment gets
    room: title, source line, the exchange in its own well, then actions */
 .sggrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; padding:14px 20px 18px; }
@@ -1211,7 +1223,7 @@ function setView(el){
   var ms=document.getElementById("moresheet"); if(ms) ms.style.display="none";
   var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
-  var ct=document.querySelector(".content"); if(ct) ct.classList.toggle("wide", v==="leadsmine");
+  var ct=document.querySelector(".content"); if(ct) ct.classList.toggle("wide", v==="leadsmine"||v==="calendar");
   if(v==="today") loadToday();
   if(v==="pulse") loadPulse();
   if(v==="customers") loadCustomers();
@@ -2331,44 +2343,78 @@ function loadCalendar(){
   var el=document.getElementById("calboard"); if(!el) return;
   el.innerHTML=spinner();
   var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
-  deskPost({action:"calendar",month:m},function(r){
-    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the calendar.")+'</div>'; return; }
-    var days=(r.days||[]); window.__calDays=days;
-    var by={}; for(var i=0;i<days.length;i++) by[days[i].day]=days[i];
-    var MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
-    var first=new Date(m+"-01"), year=first.getFullYear(), mo=first.getMonth();
-    var startDow=(first.getDay()+6)%7; // Monday-first week, UK
-    var dim=new Date(year,mo+1,0).getDate();
-    var todayIso=new Date().toISOString().slice(0,10);
-    var maxT=1; for(var j=0;j<days.length;j++) maxT=Math.max(maxT,(Number(days[j].calls)||0)+(Number(days[j].emails)||0));
-    var cells='';
-    for(var b=0;b<startDow;b++) cells+='<div class="calcell blank"></div>';
-    for(var dd=1;dd<=dim;dd++){
-      var iso=m+"-"+("0"+dd).slice(-2);
-      var d=by[iso]; var tot=d?((Number(d.calls)||0)+(Number(d.emails)||0)):0;
-      var future=iso>todayIso;
-      if(future){ cells+='<div class="calcell blank"><span class="dn" style="color:#C7C7CC">'+dd+'</span></div>'; continue; }
-      cells+='<div class="calcell'+(iso===todayIso?' today':'')+'" id="cal-'+iso+'" onclick="calSelect(\''+iso+'\')">'+
-        '<span class="dn">'+dd+'</span>'+
-        (tot?('<span class="cb"><i style="width:'+Math.max(8,Math.round(100*tot/maxT))+'%"></i></span>'+
-              '<span class="cnt">'+(d.calls||0)+' calls &middot; '+(d.emails||0)+' em</span>')
-            :'')+
-        '</div>';
-    }
-    el.innerHTML='<div class="calhead"><span class="mt">'+MN[mo]+' '+year+'</span>'+
-      '<span style="margin-left:auto"></span>'+
-      '<button class="chip" onclick="calShift(-1)" title="Previous month">&#8249;</button>'+
-      '<button class="chip" onclick="calShift(1)" title="Next month">&#8250;</button></div>'+
-      '<div class="calwk"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>'+
-      '<div class="calgrid">'+cells+'</div><div id="caldetail"></div>';
-    // land on the most recent day that has anything to show
-    var pick=null;
-    for(var k=days.length-1;k>=0;k--){ var x=days[k];
-      if(x.day<=todayIso && ((Number(x.calls)||0)+(Number(x.emails)||0))>0 && (!pick||x.day>pick)) pick=x.day; }
-    if(pick) calSelect(pick);
-  });
+  var first=new Date(m+"-01");
+  var lastIso=m+"-"+("0"+new Date(first.getFullYear(),first.getMonth()+1,0).getDate()).slice(-2);
+  // three sources, one month: activity (what happened), HubSpot tasks (what's
+  // due), site visits (where you're going). Outlook/Teams meetings join this
+  // merge once the Graph app exists - Front has no calendar API; its calendar
+  // IS the Office 365 one.
+  var got={}, need=3;
+  function fin(k,r){ got[k]=r; if(--need===0) renderCalendar(el,m,got); }
+  deskPost({action:"calendar",month:m},function(r){ fin("act",r); });
+  deskPost({action:"hstasks"},function(r){ fin("tasks",r); });
+  desk2Post({action:"visits",from:m+"-01",to:lastIso},function(r){ fin("visits",r); });
 }
-// tap a day, read the day - the grid shows shape, the card shows numbers
+function renderCalendar(el,m,got){
+  var r=got.act;
+  if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the calendar.")+'</div>'; return; }
+  var days=(r.days||[]); window.__calDays=days;
+  var by={}; for(var i=0;i<days.length;i++) by[days[i].day]=days[i];
+  // tasks by due day (HubSpot due is epoch ms), visits by date
+  var tBy={}, vBy={};
+  ((got.tasks&&got.tasks.tasks)||[]).forEach(function(t){
+    var d=t.due?new Date(Number(t.due)||t.due):null; if(!d||isNaN(d)) return;
+    var iso=localISO(d); (tBy[iso]=tBy[iso]||[]).push(t);
+  });
+  ((got.visits&&got.visits.visits)||[]).forEach(function(v){
+    var iso=String(v.visit_date||"").slice(0,10); if(!iso) return;
+    (vBy[iso]=vBy[iso]||[]).push(v);
+  });
+  window.__calTasks=tBy; window.__calVisits=vBy;
+  var MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var first=new Date(m+"-01"), year=first.getFullYear(), mo=first.getMonth();
+  var startDow=(first.getDay()+6)%7; // Monday-first week, UK
+  var dim=new Date(year,mo+1,0).getDate();
+  var todayIso=localISO(new Date());
+  var maxT=1; for(var j=0;j<days.length;j++) maxT=Math.max(maxT,(Number(days[j].calls)||0)+(Number(days[j].emails)||0));
+  var cells='';
+  for(var b=0;b<startDow;b++) cells+='<div class="calcell blank"></div>';
+  for(var dd=1;dd<=dim;dd++){
+    var iso=m+"-"+("0"+dd).slice(-2);
+    var d=by[iso]; var tot=d?((Number(d.calls)||0)+(Number(d.emails)||0)):0;
+    var future=iso>todayIso;
+    // what's on: tasks first (overdue reads red), then visits, max 3 lines
+    var evs=[];
+    (tBy[iso]||[]).forEach(function(t){ evs.push('<span class="calev task'+(iso<todayIso?' over':'')+'" title="'+esc(t.subject||'task')+'">'+esc(t.subject||'task')+'</span>'); });
+    (vBy[iso]||[]).forEach(function(v){ evs.push('<span class="calev visit" title="site visit: '+esc(custName(v.company||v.domain||''))+'">'+esc(custName(v.company||v.domain||'visit'))+'</span>'); });
+    var extra=evs.length-3;
+    if(extra>0){ evs=evs.slice(0,3); evs.push('<span class="calev more">+'+extra+' more</span>'); }
+    cells+='<div class="calcell'+(iso===todayIso?' today':'')+(future?' future':'')+'" id="cal-'+iso+'" onclick="calSelect(\''+iso+'\')">'+
+      '<span class="dn">'+dd+'</span>'+evs.join('')+
+      (!future&&tot?('<span class="prod"><span class="cb"><i style="width:'+Math.max(8,Math.round(100*tot/maxT))+'%"></i></span>'+
+            '<span class="cnt">'+(d.calls||0)+' calls &middot; '+(d.emails||0)+' em</span></span>')
+          :'')+
+      '</div>';
+  }
+  el.innerHTML='<div class="calhead"><span class="mt">'+MN[mo]+' '+year+'</span>'+
+    '<span class="callegend" style="margin-left:18px">'+
+      '<span><span class="bdot" style="background:#0060C7"></span> HubSpot task due</span>'+
+      '<span><span class="bdot" style="background:#0A6B4A"></span> Site visit</span>'+
+      '<span>bar = calls + emails that day</span></span>'+
+    '<span style="margin-left:auto"></span>'+
+    '<button class="chip" onclick="calShift(-1)" title="Previous month">&#8249;</button>'+
+    '<button class="chip" onclick="calShift(1)" title="Next month">&#8250;</button></div>'+
+    '<div class="calwk"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>'+
+    '<div class="calgrid">'+cells+'</div><div id="caldetail"></div>';
+  // land on today in the current month, else the busiest recent day
+  if(todayIso.slice(0,7)===m){ calSelect(todayIso); return; }
+  var pick=null;
+  for(var k=days.length-1;k>=0;k--){ var x=days[k];
+    if(((Number(x.calls)||0)+(Number(x.emails)||0))>0 && (!pick||x.day>pick)) pick=x.day; }
+  if(pick) calSelect(pick);
+}
+// tap a day, read the day - the grid shows shape, the card shows the plan
+// (tasks + visits) and then the numbers
 function calSelect(iso){
   var days=window.__calDays||[], d=null;
   for(var i=0;i<days.length;i++) if(days[i].day===iso){ d=days[i]; break; }
@@ -2380,17 +2426,34 @@ function calSelect(iso){
   var W=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   var dt=new Date(iso);
   var lbl=W[dt.getDay()]+" "+dt.getDate()+" "+M[dt.getMonth()];
+  var todayIso=localISO(new Date());
+  var tasks=(window.__calTasks||{})[iso]||[], visits=(window.__calVisits||{})[iso]||[];
   var bm=function(v,l,col){ return '<div class="m" style="text-align:left"><b style="display:block;font-size:24px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+(v||0)+'</b><span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+l+'</span></div>'; };
-  if(!d||((Number(d.calls)||0)+(Number(d.emails)||0))===0){
-    box.innerHTML='<div class="panel" style="margin-top:14px"><b>'+lbl+'</b><p class="sub" style="margin:5px 0 0">Nothing logged this day.</p></div>';
+  var plan='';
+  if(tasks.length) plan+='<div style="margin-top:12px"><div class="msec" style="margin:0 0 6px">Tasks due</div>'+
+    tasks.map(function(t){
+      return '<div class="frow" style="margin-top:6px'+(t.domain?';cursor:pointer':'')+'"'+(t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"':'')+'><span class="fl"><i class="ph '+({CALL:'ph-phone',EMAIL:'ph-envelope-simple'}[t.type]||'ph-check-square')+'"></i>'+esc(t.subject||'(untitled)')+
+        (iso<todayIso?' <span class="pill" style="background:#FEF2F2;color:#8F1D1D;margin-left:6px">overdue</span>':'')+'</span>'+
+        (t.company_name?'<span class="hint">'+esc(t.company_name)+'</span>':'')+'</div>';
+    }).join('')+'</div>';
+  if(visits.length) plan+='<div style="margin-top:12px"><div class="msec" style="margin:0 0 6px">Site visits</div>'+
+    visits.map(function(v){
+      return '<div class="frow" style="margin-top:6px"><span class="fl"><i class="ph ph-map-pin"></i>'+esc(custName(v.company||v.domain||'visit'))+
+        (v.postcode?' <span class="hint">'+esc(v.postcode)+'</span>':'')+'</span>'+
+        (v.note?'<span class="hint" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(v.note)+'</span>':'')+'</div>';
+    }).join('')+'</div>';
+  var act='';
+  if(d&&((Number(d.calls)||0)+(Number(d.emails)||0))>0){
+    var ansPct=d.calls?Math.round(100*(d.answered||0)/d.calls):0;
+    act='<div style="display:flex;gap:30px;flex-wrap:wrap;margin-top:14px">'+
+      bm(d.calls,'calls')+bm((d.answered||0)+(d.calls?' ('+ansPct+'%)':''),'answered')+
+      bm(d.emails,'emails')+bm(d.outcomes||0,'outcomes logged',d.outcomes?'#0A6B4A':null)+'</div>';
+  }
+  if(!plan&&!act){
+    box.innerHTML='<div class="panel" style="margin-top:14px"><b>'+lbl+'</b><p class="sub" style="margin:5px 0 0">'+(iso>todayIso?'Nothing scheduled yet.':'Nothing logged this day.')+'</p></div>';
     return;
   }
-  var ansPct=d.calls?Math.round(100*(d.answered||0)/d.calls):0;
-  box.innerHTML='<div class="panel" style="margin-top:14px"><b>'+lbl+'</b>'+
-    '<div style="display:flex;gap:30px;flex-wrap:wrap;margin-top:12px">'+
-    bm(d.calls,'calls')+bm((d.answered||0)+(d.calls?' ('+ansPct+'%)':''),'answered')+
-    bm(d.emails,'emails')+bm(d.outcomes||0,'outcomes logged',d.outcomes?'#0A6B4A':null)+
-    '</div></div>';
+  box.innerHTML='<div class="panel" style="margin-top:14px"><b>'+lbl+'</b>'+plan+act+'</div>';
 }
 function calShift(n){
   var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
