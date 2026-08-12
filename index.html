@@ -1819,7 +1819,7 @@ function loadLeadsMine(){
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmQ=""; window.__lmPage=1;
-    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmTagF=null;
+    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null;
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
   });
@@ -1829,7 +1829,7 @@ function loadLeadsMine(){
 // the same place. One prominent search box up top.
 function lmArr(k){ return window.__lmSort===k?(' <span style="font-size:9px">'+(window.__lmDir>0?'&#9650;':'&#9660;')+'</span>'):''; }
 function lmFun(k){
-  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='tags'&&window.__lmTagF);
+  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='ctags'&&window.__lmTagC)||(k==='atags'&&window.__lmTagA);
   return '<i class="ph '+(on?'ph-funnel-simple-fill on':'ph-funnel-simple')+' lmfun" title="filter" onclick="event.stopPropagation();lmMenu(\''+k+'\',this)"></i>';
 }
 function lmScaffold(){
@@ -1844,7 +1844,8 @@ function lmScaffold(){
       (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+lmFun('owner')+'</th>':'')+
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
       '<th onclick="lmSortH(\'status\')">Status'+lmArr('status')+lmFun('status')+'</th>'+
-      '<th>Tags'+lmFun('tags')+'</th>'+
+      '<th>Conversation tags'+lmFun('ctags')+'</th>'+
+      '<th>Action tags'+lmFun('atags')+'</th>'+
       '<th class="num" onclick="lmSortH(\'recent\')">Last engagement'+lmArr('recent')+'</th>'+
       '<th class="num" onclick="lmSortH(\'calls\')">Calls'+lmArr('calls')+'</th>'+
       '<th class="num" onclick="lmSortH(\'emails\')">Emails'+lmArr('emails')+'</th>'+
@@ -1859,7 +1860,8 @@ function lmActiveBar(){
   var parts=[], lbl={positive:'warm',mixed:'mixed',stale:'gone quiet',negative:'negative',none:'no read yet'};
   if(window.__lmEng) parts.push('<button class="chip active" onclick="lmEngSet(null)">'+esc(lbl[window.__lmEng]||window.__lmEng)+' &times;</button>');
   if(window.__lmOwner) parts.push('<button class="chip active" onclick="lmOwnSet(null)">'+esc(window.__lmOwner)+' &times;</button>');
-  if(window.__lmTagF) parts.push('<button class="chip active" onclick="lmTagSet(null)">'+esc(window.__lmTagF)+' &times;</button>');
+  if(window.__lmTagC) parts.push('<button class="chip active" onclick="lmTagCSet(null)">'+esc(window.__lmTagC)+' &times;</button>');
+  if(window.__lmTagA) parts.push('<button class="chip active" style="background:#1D1D1F;border-color:#1D1D1F" onclick="lmTagASet(null)">'+esc(window.__lmTagA)+' &times;</button>');
   if(!parts.length) return '';
   return '<div class="controls" style="padding:8px 20px;border-bottom:1px solid var(--line-soft);align-items:center">'+
     '<span class="hint" style="margin-right:2px">Filtered to</span>'+parts.join('')+
@@ -1869,9 +1871,9 @@ function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); window.__lmPage=
 function lmNorm(s){ return String(s||"").replace(/'/g,''); }
 function lmEngSet(v){ window.__lmEng=v; window.__lmPage=1; lmScaffold(); }
 function lmOwnSet(v){ window.__lmOwner=v; window.__lmPage=1; lmScaffold(); }
-function lmTagSet(v){ window.__lmTagF=v; window.__lmPage=1; lmScaffold(); }
-function lmTag(t){ lmTagSet(String(t||"")); }
-function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmTagF=null; window.__lmPage=1; lmScaffold(); }
+function lmTagCSet(v){ window.__lmTagC=v; window.__lmPage=1; lmScaffold(); }
+function lmTagASet(v){ window.__lmTagA=v; window.__lmPage=1; lmScaffold(); }
+function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmPage=1; lmScaffold(); }
 // every tag a lead carries, split by species - one source of truth for the
 // pills, the filter test, and the funnel menu
 function lmAllTags(x){
@@ -1887,7 +1889,8 @@ function lmAllTags(x){
 function lmMenuClose(){ var m=document.getElementById('lmmenu'); if(m&&m.parentNode) m.parentNode.removeChild(m); }
 function lmMenuPick(key,v){
   v=(v===''?null:v);
-  if(key==='owner') lmOwnSet(v); else if(key==='status') lmEngSet(v); else lmTagSet(v);
+  if(key==='owner') lmOwnSet(v); else if(key==='status') lmEngSet(v);
+  else if(key==='atags') lmTagASet(v); else lmTagCSet(v);
 }
 function lmMenu(key,ic){
   if(document.getElementById('lmmenu')){ lmMenuClose(); return; }
@@ -1909,18 +1912,19 @@ function lmMenu(key,ic){
     [['positive','Warm'],['mixed','Mixed'],['stale','Gone quiet'],['negative','Negative'],['none','No read yet']].forEach(function(p){
       items.push(mk(p[1],sc[p[0]],window.__lmEng===p[0],p[0]));
     });
-  } else {
-    var ac={}, cc={};
-    L.forEach(function(x){ var g=lmAllTags(x);
-      g.a.forEach(function(t){ ac[t]=(ac[t]||0)+1; });
-      g.c.forEach(function(t){ cc[t]=(cc[t]||0)+1; }); });
-    items.push(mk('Any tag',null,!window.__lmTagF,''));
+  } else if(key==='atags'){
+    var ac={};
+    L.forEach(function(x){ lmAllTags(x).a.forEach(function(t){ ac[t]=(ac[t]||0)+1; }); });
+    items.push(mk('Any action tag',null,!window.__lmTagA,''));
     var aks=Object.keys(ac).sort();
-    if(aks.length){ items.push('<div class="lmmh">Action</div>');
-      aks.forEach(function(t){ items.push(mk(t,ac[t],window.__lmTagF===t,t)); }); }
-    var cks=Object.keys(cc).sort(function(x,y){ return cc[y]-cc[x]||x.localeCompare(y); }).slice(0,25);
-    if(cks.length){ items.push('<div class="lmmh">Conversation</div>');
-      cks.forEach(function(t){ items.push(mk(t,cc[t],window.__lmTagF===t,t)); }); }
+    if(aks.length) aks.forEach(function(t){ items.push(mk(t,ac[t],window.__lmTagA===t,t)); });
+    else items.push('<div class="lmmi" style="cursor:default;color:var(--mut)">No action tags yet &mdash; add one with + action</div>');
+  } else {
+    var cc={};
+    L.forEach(function(x){ lmAllTags(x).c.forEach(function(t){ cc[t]=(cc[t]||0)+1; }); });
+    items.push(mk('Any tag',null,!window.__lmTagC,''));
+    Object.keys(cc).sort(function(x,y){ return cc[y]-cc[x]||x.localeCompare(y); }).slice(0,25)
+      .forEach(function(t){ items.push(mk(t,cc[t],window.__lmTagC===t,t)); });
   }
   var m=document.createElement('div'); m.id='lmmenu';
   var r=ic.getBoundingClientRect();
@@ -1940,13 +1944,13 @@ function lmSortH(k){
 }
 function lmPage(p){ window.__lmPage=p; renderLmRows();
   var box=document.getElementById("lmrows"); if(box) box.scrollIntoView({block:"start",behavior:"smooth"}); }
-function lmTags(x){
-  // two rows in the cell: ACTION tags (filled ink = something we intend to
-  // DO: visit, donut drop) on top, conversation tags below - the AI's reads
-  // plus user-added evidence (white, black outline = a human added it).
-  // Clicking any tag filters the table by it; each row has its own adder.
+function lmTagCells(x){
+  // two COLUMNS: conversation tags = key information from the conversations
+  // (the AI's reads, plus outlined user-added ones); action tags = what the
+  // salesperson intends to DO with the account (visit, donut drop) - filled
+  // ink, no conversation needed. Click filters that column; x untags.
   var fx=x.facts||{}; var act=[], conv=[];
-  var tag=function(txt,bg,fg,title){ conv.push('<span class="pill" style="background:'+bg+';color:'+fg+';cursor:pointer"'+(title?' title="'+esc(title)+'"':'')+' onclick="event.stopPropagation();lmTag(\''+esc(String(txt).replace(/'/g,''))+'\')">'+esc(txt)+'</span>'); };
+  var tag=function(txt,bg,fg,title){ conv.push('<span class="pill" style="background:'+bg+';color:'+fg+';cursor:pointer"'+(title?' title="'+esc(title)+'"':'')+' onclick="event.stopPropagation();lmTagCSet(\''+esc(String(txt).replace(/'/g,''))+'\')">'+esc(txt)+'</span>'); };
   if(x.stage==='opportunity') tag('opportunity','#F0F6FF','#0060C7');
   if(x.dropped_ball) tag('ball dropped','#FEF2F2','#8F1D1D');
   if(fx.uses_couriers==='confirmed') tag('confirmed courier user','#E7F8F0','#0A6B4A');
@@ -1957,17 +1961,16 @@ function lmTags(x){
     var isAct=u.kind==='action';
     var st=isAct?'background:#1D1D1F;color:#fff':'background:#fff;color:#1D1D1F;box-shadow:inset 0 0 0 1.5px #1D1D1F';
     var safe=esc(String(u.tag).replace(/'/g,''));
-    (isAct?act:conv).push('<span class="pill" style="'+st+';cursor:pointer" title="added by '+esc(String(u.by||'').split('@')[0])+'" onclick="event.stopPropagation();lmTag(\''+safe+'\')">'+esc(u.tag)+
+    (isAct?act:conv).push('<span class="pill" style="'+st+';cursor:pointer" title="added by '+esc(String(u.by||'').split('@')[0])+'" onclick="event.stopPropagation();'+(isAct?'lmTagASet':'lmTagCSet')+'(\''+safe+'\')">'+esc(u.tag)+
       '<span onclick="event.stopPropagation();lmTagRemove(\''+esc(x.domain)+'\',\''+safe+'\',\''+u.kind+'\')" style="opacity:.55;font-weight:700;padding-left:4px" title="remove">&times;</span></span>');
   });
   if(x.domain){
     var adder=function(label,kind,title){ return '<span class="pill" style="background:transparent;border:1px dashed #C7C7CC;color:var(--mut);cursor:pointer" title="'+title+'" onclick="event.stopPropagation();lmTagAdder(this,\''+esc(x.domain)+'\',\''+kind+'\')">'+label+'</span>'; };
     act.push(adder('+ action','action','add an action tag - something to do (visit, donut drop)'));
-    conv.push(adder('+ tag','conversation','add a conversation tag - something learned'));
+    conv.push(adder('+ tag','conversation','add a conversation tag - key information learned'));
   }
-  if(!act.length&&!conv.length) return '<span class="faint">&ndash;</span>';
-  return '<div class="pillrow" style="margin:0;gap:4px">'+act.join('')+'</div>'+
-         '<div class="pillrow" style="margin:5px 0 0;gap:4px">'+conv.join('')+'</div>';
+  var row=function(arr){ return arr.length?'<div class="pillrow" style="margin:0;gap:4px">'+arr.join('')+'</div>':'<span class="faint">&ndash;</span>'; };
+  return { c:row(conv), a:row(act) };
 }
 // inline tag adder: the row it lives on decides the species, so it's just
 // type + Add, with an x (or Escape, or clicking away) to back out
@@ -2022,9 +2025,10 @@ function renderLmRows(){
   if(window.__lmEng==='none') ls=ls.filter(function(x){ return !x.engagement; });
   else if(window.__lmEng) ls=ls.filter(function(x){ return x.engagement===window.__lmEng; });
   if(window.__lmOwner) ls=ls.filter(function(x){ return String(x.rep||'').split(' ')[0]===window.__lmOwner; });
-  if(window.__lmTagF){ var tf=lmNorm(window.__lmTagF);
-    ls=ls.filter(function(x){ var g=lmAllTags(x);
-      return g.a.some(function(t){return lmNorm(t)===tf;})||g.c.some(function(t){return lmNorm(t)===tf;}); }); }
+  if(window.__lmTagC){ var tc=lmNorm(window.__lmTagC);
+    ls=ls.filter(function(x){ return lmAllTags(x).c.some(function(t){return lmNorm(t)===tc;}); }); }
+  if(window.__lmTagA){ var ta=lmNorm(window.__lmTagA);
+    ls=ls.filter(function(x){ return lmAllTags(x).a.some(function(t){return lmNorm(t)===ta;}); }); }
   var srt=window.__lmSort||"recent", dir=window.__lmDir||-1;
   var cmp={
     calls:function(a,b){ return (Number(a.calls)||0)-(Number(b.calls)||0); },
@@ -2057,11 +2061,13 @@ function renderLmRows(){
         '<div class="dom">'+esc(x.domain||'')+'</div>'+
         (insight?'<div class="dom" style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px" title="'+esc(insight)+'">'+esc(insight)+'</div>':'')+'</td>'+
       '<td style="white-space:nowrap">'+(sb?'<span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)"><span class="bdot" style="width:7px;height:7px;background:'+sb[0]+'"></span>'+sb[1]+'</span>':'<span class="faint" style="font-size:12.5px">no read yet</span>')+'</td>'+
-      '<td style="min-width:240px;max-width:360px">'+lmTags(x)+'</td>'+
+      (function(){ var tg=lmTagCells(x);
+        return '<td style="min-width:200px;max-width:320px">'+tg.c+'</td>'+
+               '<td style="min-width:110px;max-width:210px">'+tg.a+'</td>'; })()+
       '<td class="num" style="white-space:nowrap">'+(x.last_touch?('<b>'+whenB+'</b><div class="dom">'+esc(whenS)+'</div>'):'<span class="faint">never</span>')+'</td>'+
       num(x.calls)+num(x.emails)+num(x.notes)+
       '<td>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
-  }).join("")||'<tr><td colspan="9"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
+  }).join("")||'<tr><td colspan="10"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
   // page selector: every lead is reachable, not just the first screen
   var pager=document.getElementById("lmpager");
   if(pager){
