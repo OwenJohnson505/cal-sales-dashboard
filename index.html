@@ -2557,16 +2557,32 @@ function openCallLead(dom){
           '<div style="font-size:13.5px;line-height:1.55;color:var(--ink)">'+esc(String(it[1]).slice(0,260))+'</div></div>';
       }).join('')+'</div>'):'';
 
-    // who owns it and when we last spoke sit NEXT TO THE NAME - nobody should
-    // have to read the profile to learn it is Nicola's account
+    // who owns it and when we last TRIED sit NEXT TO THE NAME. Every record
+    // counts as contact - local calls/emails, the HubSpot log, HubSpot's own
+    // engagement stamp. "Never contacted" only when there is truly nothing;
+    // attempts that never got through say "no progress", not "never".
     var M2=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    var lastAny=st&&st.last_touch?new Date(st.last_touch):null;
+    var nowD=new Date();
+    if(r.hs_activity&&r.hs_activity.length){
+      var ha=new Date(r.hs_activity[0].occurred_at);
+      if(ha<=nowD&&(!lastAny||ha>lastAny)) lastAny=ha;
+    }
+    if(r.hs_record&&r.hs_record.last_engagement){
+      var he=new Date(r.hs_record.last_engagement);
+      if(he<=nowD&&(!lastAny||he>lastAny)) lastAny=he;
+    }
+    var spoke=!!(st&&(st.last_spoke_at||(Number(st.calls_answered)||0)>0));
     var lcPill;
-    if(st&&st.last_touch){ var lcd=new Date(st.last_touch);
-      lcPill='last contact '+lcd.getDate()+' '+M2[lcd.getMonth()]+(st.days_since!=null?(st.days_since===0?' &middot; today':' &middot; '+st.days_since+'d ago'):'');
+    if(lastAny){
+      var dAgo=Math.max(0,Math.floor((nowD-lastAny)/864e5));
+      lcPill=(spoke?'last contact ':'no progress &middot; last try ')+lastAny.getDate()+' '+M2[lastAny.getMonth()]+
+        (lastAny.getFullYear()!==nowD.getFullYear()?' '+lastAny.getFullYear():'')+
+        (dAgo===0?' &middot; today':' &middot; '+dAgo+'d ago');
     } else lcPill='never contacted';
     if(head) head.innerHTML=esc(t.name||dom)+
       (r.hs_record&&r.hs_record.owner_name?' <span class="pill" style="background:#F0F6FF;color:#0060C7;font-size:11.5px;vertical-align:2px">'+esc(r.hs_record.owner_name)+'</span>':'')+
-      ' <span class="pill" style="font-size:11.5px;vertical-align:2px'+(st&&st.last_touch?'':';color:var(--faint)')+'">'+lcPill+'</span>';
+      ' <span class="pill" style="font-size:11.5px;vertical-align:2px'+(lastAny?'':';color:var(--faint)')+'">'+lcPill+'</span>';
 
     body.innerHTML=warn+formAlert+
       '<div class="actrow" style="border:0;padding:0 0 2px">'+
