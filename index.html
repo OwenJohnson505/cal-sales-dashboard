@@ -2464,34 +2464,15 @@ function openCallLead(dom){
       : '<div class="empty" style="padding:16px">No call logged yet.</div>';
 
     var pts=(b&&b.approach&&b.approach.talking_points)||[];
-    var talkBody=pts.length?pts.slice(0,5).map(function(p){
-      return '<div class="evid"><b>'+esc(p.point)+'</b><span class="src">'+esc(p.why_it_lands||"")+'</span></div>';
-    }).join(""):"";
-
     var comp=(b&&b.company)||null;
     var news=(b&&b.news)||[];
-    var newsHtml=news.length?('<div class="msec" style="margin:12px 0 6px">In the news</div>'+
+    var newsHtml=news.length?(
       news.slice(0,3).map(function(n){
         return '<div class="evid"><b>'+esc(n.headline||'')+'</b><span class="src">'+esc(n.source||'')+
           (n.date?' &middot; '+esc(n.date):'')+
           (n.url?' &middot; <a target="_blank" rel="noopener" href="'+esc(n.url)+'">read the article</a>':'')+
           (n.gist?'<br>'+esc(n.gist):'')+'</span></div>';
       }).join('')):'';
-    var whoBody=comp?(
-      (comp.size_signal?'<p>'+esc(comp.size_signal)+'</p>':'')+
-      ((comp.uk_locations||[]).length?'<div class="pillrow" style="margin:4px 0 0">'+(comp.uk_locations||[]).map(function(l){return '<span class="pill">'+esc(l)+'</span>';}).join('')+'</div>':'')+
-      newsHtml):'';
-    var bv=(b&&b.verdict)||null;
-    var whyBody=bv?(
-      (bv.headline?'<p><b>'+esc(bv.headline)+'</b></p>':'')+
-      (bv.reasoning?'<p>'+esc(bv.reasoning)+' <span class="pv inf" style="vertical-align:1px">AI inferred</span></p>':'')+
-      ((bv.evidence||[]).length?'<div class="msec" style="margin:12px 0 4px">The evidence</div>'+(bv.evidence||[]).map(function(e){return '<div class="evid"><b>'+esc(e.fact||'')+'</b>'+(e.source?'<span class="src">Source: '+esc(e.source)+'</span>':'')+'</div>';}).join(''):'')+
-      (bv.confidence?'<p style="margin-top:8px;color:var(--faint);font-size:12.5px">Research confidence: '+esc(bv.confidence)+'</p>':''))
-      :(v.rationale?'<p>'+esc(v.rationale)+'</p>':'');
-    var ap=(b&&b.approach)||{};
-    var pushBody=(ap.objection||ap.avoid)?(
-      (ap.objection?'<div class="evid"><b>Likely objection &amp; the answer</b><span class="src">'+esc(ap.objection)+'</span></div>':'')+
-      (ap.avoid?'<div class="evid"><b>Avoid</b><span class="src">'+esc(ap.avoid)+'</span></div>':'')):'';
 
     // Companies House first: the overdue-accounts flag feeds the warnings
     var ch=r.companies_house||null;
@@ -2504,16 +2485,9 @@ function openCallLead(dom){
       (ch.accounts_next_due?'<div class="evid"><b>Accounts next due</b><span class="src">'+esc(String(ch.accounts_next_due))+(chOverdue?' &middot; <b style="color:#8F1D1D">OVERDUE</b>':'')+(ch.accounts_last_made?' &middot; last filed '+esc(String(ch.accounts_last_made)):'')+'</span></div>':'')
     ):'';
 
-    // brief-level warnings are call-changing; they sit above the fold
+    // Owen's call: no coaching blocks. Warnings, objections and "avoid" are
+    // gone - reps know how businesses work. Facts only, they do the thinking.
     var rel=(b&&b.relationship)||null;
-    var warnList=((rel&&rel.warnings)||[]).slice();
-    // warnings about OUR OWN data coverage (no emails on file, locked Apollo
-    // contacts, ownership) never make the call better - if the record is on
-    // the list, nobody owns it. Only operational facts about THEM survive.
-    warnList=warnList.filter(function(w){ return !/apollo|first.?name|locked|no emails?|on file|ownership|owned by|in crm|crm only|guess an address/i.test(String(w)); });
-    if(chOverdue) warnList.unshift('Their statutory accounts are OVERDUE at Companies House (due '+String(ch.accounts_next_due)+') - a credit-risk flag; be careful with payment terms.');
-    var warnHtml=warnList.length?('<div class="alertcard" style="background:#FEF6E7;border-color:#EAD9A9;margin:12px 0 4px"><h4 style="color:#7A4E07">Before you dial</h4>'+
-      warnList.slice(0,3).map(function(w){return '<p>'+esc(w)+'</p>';}).join('')+'</div>'):'';
 
     var numsBody=(phone||dials.length)?(
       (phone?'<div class="actrow" style="padding:7px 0"><div class="co"><b>'+esc(phone)+'</b><div class="dom">Main number &middot; from '+esc(phoneSrc||'company record')+'</div></div><div class="rt"><a class="btn btn-soft btn-sm tel" href="tel:'+esc(phone)+'">Call</a></div></div>':'')+
@@ -2549,21 +2523,25 @@ function openCallLead(dom){
       :(r.insight_pending&&st&&(Number(st.calls||0)+Number(st.emails||0))>=2?'assessing now &mdash; reopen shortly'
       :((!st||(Number(st.calls||0)+Number(st.emails||0))<2)?'fresh account &mdash; no contact yet':esc(st.state||'')));
 
-    // The four questions a rep needs answered before dialling: what they do
-    // (the header line), why our service fits, what buying signals exist,
-    // and who to ask for. Everything else is reference on the other tabs.
-    var whyShort=bv?String(bv.headline||''):String(v.rationale||'');
-    var intentPt=(pts[0]||{});
-    var intentShort=intentPt.point?(String(intentPt.point)+(intentPt.why_it_lands?' - '+String(intentPt.why_it_lands):'')):'';
-    var fullNamed=(r.contacts||[]).filter(function(c){return String(c.full_name||'').indexOf(' ')>0;});
+    // The briefing card is facts the header does not already carry: a real
+    // buying signal (about THEM, never our proximity) and every contact.
+    // "Why them" is gone - the score, segment and description already say it.
+    // a buying signal is evidence about THEM (growth, orders, sites, hiring,
+    // delivery problems) - anything about Cal's own service or proximity is
+    // pitch, not signal, and shows nothing rather than filler
+    var junkSignal=/\b(miles?|minutes?|half an hour|proximity|close by|nearby|warrington|\bcal\b|cal's|point.to.point|chain of custody|no hub|sortation|one vehicle|dedicated vans?|same.day (collection|cover|capacity) can)\b/i;
+    var intentShort='';
+    for(var pi=0;pi<pts.length;pi++){
+      var cand=String(pts[pi].point||'')+(pts[pi].why_it_lands?' - '+String(pts[pi].why_it_lands):'');
+      if(cand && !junkSignal.test(cand)){ intentShort=cand; break; }
+    }
     var withEm=(r.contacts||[]).filter(function(c){return c.email;});
+    // every contact, visible - "+7 more" hid the people the rep needed
     var consShort=(r.contacts||[]).length
-      ? (fullNamed.slice(0,3).map(function(c){return c.full_name+(c.title?' ('+String(c.title).split('(')[0].trim()+')':'');}).join(', ')||(''+(r.contacts||[]).length+' named'))
-        +((r.contacts||[]).length>3?' +'+((r.contacts||[]).length-3)+' more':'')
+      ? (r.contacts||[]).map(function(c){return c.full_name+(c.title?' ('+String(c.title).split('(')[0].trim()+')':'');}).join(', ')
         +(withEm.length?' · '+withEm.length+' with email':'')
       : '';
     var b4items=[];
-    if(whyShort) b4items.push(['Why them',whyShort,'<span class="pv inf">AI inferred</span>']);
     if(intentShort) b4items.push(['Buying signals',intentShort,'<span class="pv inf">AI inferred</span>']);
     if(consShort) b4items.push(['Who to ask for',consShort,'<span class="pv fact">Apollo &amp; our records</span>']);
     var brief4=b4items.length?('<div style="background:var(--color-base-200);border-radius:12px;padding:3px 15px;margin:10px 0 4px">'+
@@ -2577,8 +2555,8 @@ function openCallLead(dom){
       '<div class="actrow" style="border:0;padding:0 0 2px">'+
         scoreRing(v.fit_score,"md")+
         '<div class="co"><b>'+esc(v.segment||"Unclassified")+'</b><div class="dom">'+esc(dom)+(rel&&rel.status?' &middot; '+esc(rel.status):'')+'</div></div>'+
-        '<div class="rt" style="flex-direction:column;align-items:flex-end;gap:3px">'+
-          (phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a><span class="faint" style="font-size:11px">number from '+esc(phoneSrc||'company record')+'</span>':'<span class="nonum">no number on file</span>')+
+        '<div class="rt" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:0 0 auto;max-width:45%">'+
+          (phone?'<a class="btn btn-primary tel" href="tel:'+esc(phone)+'">Call '+esc(phone)+'</a><span class="faint" style="font-size:11px;text-align:right;white-space:normal">number from '+esc(phoneSrc||'company record')+'</span>':'<span class="nonum">no number on file</span>')+
         '</div>'+
       '</div>'+
       (comp&&comp.what_they_do?'<p style="margin:6px 0 2px;font-size:14px;color:var(--ink2);line-height:1.55">'+esc(comp.what_they_do)+'</p>':'')+
@@ -2591,17 +2569,13 @@ function openCallLead(dom){
         '<button onclick="mTab(this,\'hist\')">History</button></div>'+
       '<div class="mtab on" data-t="call">'+
         brief4+
-        warnHtml+
-        (pushBody?'<h3 class="msec">If they push back <span class="pv inf">AI inferred</span></h3>'+pushBody:'')+
         (numsBody?'<h3 class="msec">Numbers <span class="pv fact">public records &amp; their site</span></h3>'+numsBody:'')+
       '</div>'+
       '<div class="mtab" data-t="co">'+
-      sec('Who they are',fact('their website & press'),comp?esc(String(comp.size_signal||comp.what_they_do||'').slice(0,90)):'',whoBody,true)+
-      sec('Why the '+((bv&&bv.score!=null?bv.score:v.fit_score)||'score'),INF,bv?esc(String(bv.headline||'').slice(0,90)):esc(String(v.rationale||'').slice(0,90)),whyBody)+
-      sec('Talking points',INF,pts.length?esc(String((pts[0]||{}).point||'').slice(0,90)):'',talkBody)+
-      sec('Companies House',fact('official register'),ch?(esc(ch.status||'')+(ch.incorporated?' &middot; since '+String(ch.incorporated).slice(0,4):'')+(chOverdue?' &middot; accounts OVERDUE':'')):'',chBody)+
+      sec('Contacts',fact('Apollo & our records'),consPrev,cons,true)+
       formSec+
-      sec('Contacts',fact('Apollo & our records'),consPrev,cons)+
+      sec('Companies House',fact('official register'),ch?(esc(ch.status||'')+(ch.incorporated?' &middot; since '+String(ch.incorporated).slice(0,4):'')+(chOverdue?' &middot; accounts OVERDUE':'')):'',chBody)+
+      (newsHtml?sec('In the news',fact('press'),news[0]?esc(String(news[0].headline||'').slice(0,90)):'',newsHtml):'')+
       '</div>'+
       '<div class="mtab" data-t="hist">'+
       sec('The story so far',INF,storyPrev,known,true)+
