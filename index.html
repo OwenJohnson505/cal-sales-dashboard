@@ -1833,6 +1833,14 @@ function lmScaffold(){
       (owners.length?'<span class="hint" style="margin:0 2px 0 12px">Owner</span>'+owners.map(function(o){
         return '<button class="chip'+(window.__lmOwner===o?' active':'')+'" onclick="lmOwn(\''+esc(o)+'\',this)">'+esc(o)+'</button>';
       }).join(''):'')+
+      (function(){
+        // one chip per action tag in play - the do-list cuts across the book
+        var at={}; (window.__lm||[]).forEach(function(x){ (x.utags||[]).forEach(function(u){ if(u.kind==='action') at[u.tag]=(at[u.tag]||0)+1; }); });
+        var ks=Object.keys(at).sort();
+        return ks.length?('<span class="hint" style="margin:0 2px 0 12px">Action</span>'+ks.map(function(t){
+          return '<button class="chip" style="background:#1D1D1F;color:#fff;border-color:#1D1D1F" onclick="lmTag(\''+esc(String(t).replace(/'/g,''))+'\')">'+esc(t)+' &middot; '+at[t]+'</button>';
+        }).join('')):'';
+      })()+
     '</div>'+
     '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm"><thead><tr>'+
       (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+'</th>':'')+
@@ -1866,7 +1874,9 @@ function lmPage(p){ window.__lmPage=p; renderLmRows();
   var box=document.getElementById("lmrows"); if(box) box.scrollIntoView({block:"start",behavior:"smooth"}); }
 function lmTags(x){
   // every insight the read produced, in one generous cell - clicking a tag
-  // filters the table by it
+  // filters the table by it. Two species of USER tag on top of the AI's:
+  // conversation tags (white, black outline = a human added evidence) and
+  // action tags (filled ink = something we intend to DO: visit, donut drop)
   var fx=x.facts||{}; var out=[];
   var tag=function(txt,bg,fg,title){ out.push('<span class="pill" style="background:'+bg+';color:'+fg+';cursor:pointer"'+(title?' title="'+esc(title)+'"':'')+' onclick="event.stopPropagation();lmTag(\''+esc(String(txt).replace(/'/g,''))+'\')">'+esc(txt)+'</span>'); };
   if(x.stage==='opportunity') tag('opportunity','#F0F6FF','#0060C7');
@@ -1875,7 +1885,43 @@ function lmTags(x){
   if(fx.current_supplier) tag('uses '+String(fx.current_supplier).slice(0,24),'#FEF6E7','#7A4E07');
   (fx.tags||[]).slice(0,5).forEach(function(t){ tag(String(t).slice(0,28),'#F2F4F8','#3A455B'); });
   if(x.other_owners) tag('duplicate: '+String(x.other_owners).split(' ')[0]+'’s book too','#FEF6E7','#7A4E07','the same company exists more than once in HubSpot');
+  (x.utags||[]).forEach(function(u){
+    var st=u.kind==='action'?'background:#1D1D1F;color:#fff':'background:#fff;color:#1D1D1F;box-shadow:inset 0 0 0 1.5px #1D1D1F';
+    var safe=esc(String(u.tag).replace(/'/g,''));
+    out.push('<span class="pill" style="'+st+';cursor:pointer" title="added by '+esc(String(u.by||'').split('@')[0])+'" onclick="event.stopPropagation();lmTag(\''+safe+'\')">'+esc(u.tag)+
+      '<span onclick="event.stopPropagation();lmTagRemove(\''+esc(x.domain)+'\',\''+safe+'\',\''+u.kind+'\')" style="opacity:.55;font-weight:700;padding-left:4px" title="remove">&times;</span></span>');
+  });
+  if(x.domain) out.push('<span class="pill" style="background:transparent;border:1px dashed #C7C7CC;color:var(--mut);cursor:pointer" title="add a tag" onclick="event.stopPropagation();lmTagAdder(this,\''+esc(x.domain)+'\')">+</span>');
   return out.join('');
+}
+// inline tag adder: type, then pick which species it is
+function lmTagAdder(el,dom){
+  var wrap=document.createElement('span');
+  wrap.style.cssText='display:inline-flex;gap:4px;align-items:center';
+  wrap.innerHTML='<input style="font:inherit;font-size:12px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);background:#fff;width:110px" placeholder="tag name...">'+
+    '<button class="chip" style="padding:3px 9px;font-size:11px" title="conversation tag - something learned">Conv</button>'+
+    '<button class="chip" style="padding:3px 9px;font-size:11px;background:#1D1D1F;color:#fff" title="action tag - something to do (visit, donut drop)">Action</button>';
+  el.parentNode.replaceChild(wrap,el);
+  wrap.addEventListener('click',function(e){ e.stopPropagation(); });
+  var inp=wrap.querySelector('input'); inp.focus();
+  function save(kind){
+    var t=(inp.value||'').trim().slice(0,40);
+    if(!t){ renderLmRows(); return; }
+    desk2Post({action:'tag_add',domain:dom,tag:t,kind:kind},function(r){
+      if(r&&r.ok){ var l=(window.__lm||[]).filter(function(x){return x.domain===dom;})[0];
+        if(l){ l.utags=l.utags||[]; l.utags.push({tag:t,kind:kind,by:'you'}); } }
+      lmScaffold();
+    });
+  }
+  wrap.querySelectorAll('button')[0].onclick=function(e){ e.stopPropagation(); save('conversation'); };
+  wrap.querySelectorAll('button')[1].onclick=function(e){ e.stopPropagation(); save('action'); };
+  inp.onkeydown=function(e){ if(e.key==='Enter'){ e.stopPropagation(); save('conversation'); } if(e.key==='Escape') renderLmRows(); };
+}
+function lmTagRemove(dom,tag,kind){
+  desk2Post({action:'tag_remove',domain:dom,tag:tag,kind:kind},function(){});
+  var l=(window.__lm||[]).filter(function(x){return x.domain===dom;})[0];
+  if(l&&l.utags) l.utags=l.utags.filter(function(u){ return !(u.tag===tag&&u.kind===kind); });
+  lmScaffold();
 }
 function renderLmRows(){
   var box=document.getElementById("lmrows"), cnt=document.getElementById("lmcount");
@@ -1885,6 +1931,7 @@ function renderLmRows(){
     var fx=x.facts||{};
     var hay=(String(x.company||"")+" "+String(x.domain||"")+" "+String(x.rep||"")+" "
       +String(x.headline||"")+" "+String(fx.current_supplier||"")+" "+((fx.tags||[]).join(" "))
+      +" "+((x.utags||[]).map(function(u){return u.tag;}).join(" "))
       +(x.stage==='opportunity'?' opportunity':'')+(x.dropped_ball?' ball dropped':'')
       +(fx.uses_couriers==='confirmed'?' confirmed courier user':'')).toLowerCase();
     return hay.indexOf(q)>=0; });
