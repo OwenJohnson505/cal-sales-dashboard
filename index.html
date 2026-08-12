@@ -1994,19 +1994,38 @@ function fmtDue(d,overdue){
 function newTaskSheet(){
   var m=document.getElementById("cmodal"); if(!m) return;
   // HubSpot's own vocabulary so nothing surprises the rep on the other side:
-  // type Call / Email / To-do, priority Low / Medium / High, due date required
-  window.__ntpri="MEDIUM"; window.__nttype="TODO";
+  // type Call / Email / To-do, priority Low / Medium / High, due date required.
+  // Due offers the phrases people actually think in; the picker stays for a
+  // specific date. Linking to a lead or account is a search, not homework.
+  window.__ntpri="MEDIUM"; window.__nttype="TODO"; window.__ntdom=null;
   var tom=new Date(Date.now()+864e5).toISOString().slice(0,10);
   m.style.display="flex";
-  m.innerHTML='<div class="mcard" style="max-width:470px"><div class="mhead"><b>New task</b><span class="mx" onclick="closeModal()">&times;</span></div>'+
+  m.innerHTML='<div class="mcard" style="max-width:520px"><div class="mhead"><b>New task</b><span class="mx" onclick="closeModal()">&times;</span></div>'+
     '<div class="mbody sheetform">'+
     '<input id="ntsub" class="tin" placeholder="What needs doing?">'+
     '<textarea id="ntnote" class="tnote" placeholder="Notes (optional)"></textarea>'+
+    '<div class="frow" style="flex-direction:column;align-items:stretch;gap:7px">'+
+      '<span class="fl"><i class="ph ph-buildings"></i>Link to a lead or account</span>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+        '<input id="ntacct" class="input" placeholder="Search company or domain..." oninput="acctHunt(this.value)" style="flex:1;padding:7px 11px">'+
+        '<button id="ntacctclear" class="chip" style="display:none" onclick="acctClear()">&times;</button></div>'+
+      '<div id="ntacctres"></div>'+
+    '</div>'+
     '<div class="frow"><span class="fl"><i class="ph ph-squares-four"></i>Type</span><div class="seg2">'+
       '<button onclick="typePick(this,\'CALL\')">Call</button>'+
       '<button onclick="typePick(this,\'EMAIL\')">Email</button>'+
       '<button class="on" onclick="typePick(this,\'TODO\')">To-do</button></div></div>'+
-    '<div class="frow"><span class="fl"><i class="ph ph-calendar-blank"></i>Due</span><input id="ntdue" type="date" class="input" style="padding:6px 10px;width:auto" value="'+tom+'" required></div>'+
+    '<div class="frow" style="flex-direction:column;align-items:stretch;gap:8px">'+
+      '<span class="fl"><i class="ph ph-calendar-blank"></i>Due</span>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+        '<button class="chip active" onclick="duePick(this,1)">Tomorrow</button>'+
+        '<button class="chip" onclick="duePick(this,2)">2 days</button>'+
+        '<button class="chip" onclick="duePick(this,\'week\')">Next week</button>'+
+        '<button class="chip" onclick="duePick(this,\'month\')">Next month</button>'+
+        '<button class="chip" onclick="duePick(this,\'quarter\')">Next quarter</button>'+
+        '<input id="ntdue" type="date" class="input" style="padding:6px 10px;width:auto" value="'+tom+'" onchange="dueManual(this)" required>'+
+      '</div>'+
+    '</div>'+
     '<div class="frow"><span class="fl"><i class="ph ph-flag"></i>Priority</span><div class="seg2">'+
       '<button onclick="priPick(this,\'LOW\')">Low</button>'+
       '<button class="on" onclick="priPick(this,\'MEDIUM\')">Medium</button>'+
@@ -2019,14 +2038,59 @@ function newTaskSheet(){
 }
 function priPick(b,v){ window.__ntpri=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
 function typePick(b,v){ window.__nttype=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
+// the phrases people think in, resolved to real dates. Formatted locally -
+// toISOString() shifts a local-midnight date back a day in UK summer time.
+function localISO(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function duePick(b,spec){
+  var d=new Date();
+  if(spec==='week'){ d.setDate(d.getDate()+((8-d.getDay())%7||7)); }               // next Monday
+  else if(spec==='month'){ d=new Date(d.getFullYear(), d.getMonth()+1, 1); }        // 1st of next month
+  else if(spec==='quarter'){ d=new Date(d.getFullYear(), (Math.floor(d.getMonth()/3)+1)*3, 1); } // next quarter start
+  else { d.setDate(d.getDate()+spec); }
+  var i=document.getElementById("ntdue"); if(i) i.value=localISO(d);
+  var bs=b.parentElement.querySelectorAll(".chip"); for(var k=0;k<bs.length;k++) bs[k].classList.toggle("active",bs[k]===b);
+}
+function dueManual(inp){ var bs=inp.parentElement.querySelectorAll(".chip"); for(var k=0;k<bs.length;k++) bs[k].classList.remove("active"); }
+// account linking: search everything we know, one tap to attach
+function acctHunt(q){
+  clearTimeout(window.__ntht);
+  var res=document.getElementById("ntacctres");
+  q=String(q||"").trim();
+  if(q.length<2){ if(res) res.innerHTML=''; return; }
+  window.__ntht=setTimeout(function(){
+    deskPost({action:"accounts",q:q,limit:6},function(r){
+      if(!res) return;
+      var rows=(r&&r.accounts)||[];
+      res.innerHTML=rows.length?('<div style="background:#fff;border-radius:10px;overflow:hidden">'+
+        rows.map(function(x){
+          var nm=String(x.company||x.name||x.domain||'').replace(/'/g,'');
+          return '<button style="display:block;width:100%;text-align:left;border:0;background:none;font:inherit;cursor:pointer;padding:9px 13px;border-top:1px solid var(--line-soft)" '+
+            'onclick="acctPick(\''+esc(x.domain)+'\',\''+esc(nm)+'\')"><b style="font-size:13.5px">'+esc(x.company||x.name||x.domain)+'</b>'+
+            '<span class="dom" style="margin-left:8px">'+esc(x.domain)+(x.relationship?' &middot; '+esc(x.relationship):'')+'</span></button>';
+        }).join('')+'</div>')
+        :'<div class="dom" style="padding:6px 2px">Nothing matches yet - keep typing.</div>';
+    });
+  },250);
+}
+function acctPick(d,n){
+  window.__ntdom=d;
+  var res=document.getElementById("ntacctres"); if(res) res.innerHTML='';
+  var i=document.getElementById("ntacct"); if(i){ i.value=n+' ('+d+')'; i.readOnly=true; }
+  var c=document.getElementById("ntacctclear"); if(c) c.style.display='';
+}
+function acctClear(){
+  window.__ntdom=null;
+  var i=document.getElementById("ntacct"); if(i){ i.readOnly=false; i.value=''; i.focus(); }
+  var c=document.getElementById("ntacctclear"); if(c) c.style.display='none';
+}
 function submitNewTask(btn){
   var s=(val("ntsub")||"").trim(); var m=document.getElementById("ntmsg");
   if(!s){ if(m) m.textContent="Give the task a name first."; return; }
   // HubSpot requires a due date - the field defaults to tomorrow and refills
   var due=val("ntdue")||new Date(Date.now()+864e5).toISOString().slice(0,10);
   btn.disabled=true; if(m) m.textContent="Adding...";
-  deskPost({action:"hstask_create",subject:s,due:due,note:(val("ntnote")||"").trim()||null,priority:window.__ntpri||"MEDIUM",task_type:window.__nttype||"TODO"},function(r){
-    if(r&&r.ok){ closeModal(); showNext("Task added. It syncs to HubSpot, Front and your phone."); loadTasksView(); }
+  deskPost({action:"hstask_create",subject:s,due:due,note:(val("ntnote")||"").trim()||null,priority:window.__ntpri||"MEDIUM",task_type:window.__nttype||"TODO",domain:window.__ntdom||null},function(r){
+    if(r&&r.ok){ closeModal(); showNext("Task added"+(window.__ntdom?" and linked to "+window.__ntdom:"")+". It syncs to HubSpot, Front and your phone."); loadTasksView(); }
     else { btn.disabled=false; if(m) m.textContent="Could not add: "+((r&&r.error)||"error"); }
   });
 }
