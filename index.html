@@ -155,6 +155,32 @@ h1,h2,h3{ letter-spacing:-.025em; }
   padding:6px 13px; cursor:pointer; transition:background .14s, color .14s, transform .1s ease; }
 .eg:hover{ background:rgba(0,113,227,.12); color:var(--color-primary); }
 
+/* the assistant's morning briefing: what's on before you ask anything */
+.briefcard{ max-width:680px; margin:0 auto 22px; background:#fff; border-radius:var(--radius-box); box-shadow:var(--sh-1); padding:16px 20px; text-align:left; }
+.briefcard h4{ margin:0 0 10px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); display:flex; align-items:center; gap:8px; }
+.briefcard .brow{ display:flex; align-items:baseline; gap:9px; font-size:13.5px; padding:5px 0; border-top:1px solid var(--color-base-200); }
+.briefcard .brow:first-of-type{ border-top:0; }
+.briefcard .brow .bt{ font-weight:700; font-variant-numeric:tabular-nums; color:#5B21B6; flex:none; }
+.briefcard .brow .bl{ color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.briefcard .brow .bh{ color:var(--faint); font-size:12px; margin-left:auto; flex:none; }
+.briefcard .brow a.pill{ text-decoration:none; flex:none; margin-left:auto; }
+/* the chat itself */
+.chatlog{ max-width:680px; margin:0 auto 14px; text-align:left; }
+.cmsg{ margin:10px 0; }
+.cmsg.user{ display:flex; justify-content:flex-end; }
+.cmsg.user span{ background:var(--color-primary); color:#fff; border-radius:16px 16px 4px 16px; padding:9px 15px; font-size:14px; max-width:85%; line-height:1.45; }
+.cmsg.ai{ background:#fff; border-radius:14px; box-shadow:var(--sh-1); padding:13px 17px; font-size:14px; line-height:1.55; }
+.cmsg.ai .tl{ font-size:11.5px; color:var(--faint); margin-bottom:6px; }
+.cmsg.ai .tl i{ margin-right:4px; }
+.cmsg.ai p{ margin:0 0 8px; } .cmsg.ai p:last-child{ margin-bottom:0; }
+.cmsg.ai ul{ margin:0 0 8px; padding-left:20px; } .cmsg.ai li{ margin:3px 0; }
+.actchip{ margin-top:10px; background:#F3EFFB; border-radius:10px; padding:10px 13px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.actchip .as{ font-size:13px; color:#3B1D77; flex:1; min-width:200px; }
+.actchip button{ border:0; font:inherit; font-size:12.5px; font-weight:700; padding:6px 13px; border-radius:8px; cursor:pointer; }
+.actchip .go{ background:#5B21B6; color:#fff; } .actchip .no{ background:transparent; color:#5B21B6; }
+.actchip.done{ background:#E7F8F0; } .actchip.done .as{ color:#0A6B4A; }
+.actchip.failed{ background:#FEF2F2; } .actchip.failed .as{ color:#8F1D1D; }
+
 /* thinking state */
 .think{ max-width:680px; margin:30px auto 0; background:#fff; border:0; border-radius:var(--radius-box); padding:22px 24px; box-shadow:var(--sh-2); }
 .think .row{ display:flex; align-items:center; gap:12px; font-size:14px; color:var(--ink2); }
@@ -765,25 +791,153 @@ async function out(){ await sb.auth.signOut(); boot(); }
 /* =========================== ASSISTANT (home) =========================== */
 var STEPS=["Reading their website...","Checking Cal's own records...","Looking for the right people...","Mapping their sites to Cal's coverage...","Working out the angle...","Writing the brief..."];
 function setExample(t){ var i=document.getElementById("askq"); if(i){ i.value=t; i.focus(); } }
-function askKey(e){ if(e.key==="Enter") runAsk(); }
+function askKey(e){ if(e.key==="Enter") sendChat(); }
 function assistantView(){
   return '<div id="view-assistant" class="view">'+
     '<div class="askhero">'+
       '<div class="eyebrow">Sales assistant</div>'+
-      '<h1>Who are we selling to?</h1>'+
-      '<p>Paste a work email, a website, or just a company name. I\'ll research them, score the fit, tell you who to call and how to open.</p>'+
+      '<h1>What do you need?</h1>'+
+      '<p>Ask about your accounts, pipeline, calls, emails and meetings &mdash; or run a deep research brief on any company. It can draft follow-ups and set tasks, with your say-so.</p>'+
+      '<div id="briefcard"></div>'+
+      '<div id="chatlog" class="chatlog"></div>'+
       '<div class="askwrap"><div class="askbox">'+
-        '<input id="askq" placeholder="ops@company.co.uk   ·   company.co.uk   ·   Company Ltd" onkeydown="askKey(event)" autocomplete="off">'+
-        '<button class="askgo" id="askbtn" onclick="runAsk()">Research</button>'+
+        '<input id="askq" placeholder="Ask anything   ·   or paste a company to research" onkeydown="askKey(event)" autocomplete="off">'+
+        '<button class="askgo" id="chatbtn" onclick="sendChat()">Ask</button>'+
+        '<button class="askgo" id="askbtn" style="background:var(--color-base-300);color:var(--ink)" onclick="runAsk()" title="Full web research brief on a company">Research</button>'+
       '</div></div>'+
       '<div class="egs">'+
-        '<span class="eg" onclick="setExample(\'scott-med.co.uk\')">scott-med.co.uk</span>'+
-        '<span class="eg" onclick="setExample(\'Alliance Healthcare\')">Alliance Healthcare</span>'+
-        '<span class="eg" onclick="setExample(\'thomasplanthire.co.uk\')">thomasplanthire.co.uk</span>'+
+        '<span class="eg" onclick="quickAsk(\'Prep me for my next meeting\')">Prep my next meeting</span>'+
+        '<span class="eg" onclick="quickAsk(\'Which of my accounts have gone quiet and are worth a call?\')">Who\'s gone quiet?</span>'+
+        '<span class="eg" onclick="quickAsk(\'What am I waiting on and what is due today?\')">What\'s due today?</span>'+
+        '<span class="eg" onclick="setExample(\'Draft a follow-up email for \')">Draft a follow-up&hellip;</span>'+
       '</div>'+
     '</div>'+
     '<div id="askout"></div>'+
   '</div>';
+}
+/* ---- chat over the book: streaming tool-loop via sales-agent -------------- */
+var AGENT_URL=null, AGENT={session:null,busy:false,n:0,acts:{}};
+var TOOLNAMES={my_accounts:"checking your accounts",my_leads:"reading the pipeline",company_profile:"pulling the company record",chase_list:"checking who's waiting on us",open_tasks:"reading your tasks",meetings:"reading your calendar",recent_calls:"reading call summaries",geo_area:"mapping the area",scoreboard:"reading the scoreboard",sql_query:"querying the database"};
+function quickAsk(t){ var i=document.getElementById("askq"); if(i) i.value=t; sendChat(); }
+// tiny markdown: bold, bullets, paragraphs - enough for the model's answers
+function fmtMd(t){
+  var s=esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  var lines=s.split(/\n/), out=[], list=[];
+  function flush(){ if(list.length){ out.push('<ul><li>'+list.join('</li><li>')+'</li></ul>'); list=[]; } }
+  for(var i=0;i<lines.length;i++){
+    var L=lines[i];
+    var m=L.match(/^\s*(?:[-•*]|\d+[.)])\s+(.*)$/);
+    if(m){ list.push(m[1]); continue; }
+    flush();
+    if(L.trim()) out.push('<p>'+L+'</p>');
+  }
+  flush();
+  return out.join('');
+}
+function sendChat(){
+  if(AGENT.busy) return;
+  var q=(val("askq")||"").trim(); if(!q) return;
+  var log=document.getElementById("chatlog"); if(!log) return;
+  document.getElementById("askq").value="";
+  AGENT.busy=true; var cb=document.getElementById("chatbtn"); if(cb){ cb.disabled=true; cb.textContent="…"; }
+  log.insertAdjacentHTML("beforeend",'<div class="cmsg user"><span>'+esc(q)+'</span></div>');
+  var n=++AGENT.n;
+  log.insertAdjacentHTML("beforeend",'<div class="cmsg ai" id="cm-'+n+'"><div class="tl" id="ct-'+n+'"><span class="loading loading-spinner" style="width:12px;height:12px"></span> thinking&hellip;</div><div id="cb-'+n+'"></div></div>');
+  var el=document.getElementById("cm-"+n); if(el) el.scrollIntoView({behavior:"smooth",block:"end"});
+  var acc="", toolSeen=[];
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session){ AGENT.busy=false; return login(); }
+    var payload={action:"chat",text:q,session_id:AGENT.session};
+    if(window.VIEW_AS) payload.rep_email=window.VIEW_AS;
+    fetch(URL_+"/functions/v1/sales-agent",{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){
+        var rd=r.body.getReader(), dec=new TextDecoder(), buf="";
+        function pump(){ return rd.read().then(function(x){
+          if(x.done){ finish(); return; }
+          buf+=dec.decode(x.value,{stream:true});
+          var lines=buf.split("\n"); buf=lines.pop();
+          for(var i=0;i<lines.length;i++){ if(!lines[i].trim()) continue;
+            var ev; try{ ev=JSON.parse(lines[i]); }catch(_){ continue; }
+            handle(ev);
+          }
+          return pump();
+        }); }
+        return pump();
+      }).catch(function(){ handle({type:"error",error:"Connection lost - your question may still be running; ask again in a moment."}); finish(); });
+  });
+  function handle(ev){
+    var tl=document.getElementById("ct-"+n), bd=document.getElementById("cb-"+n);
+    if(ev.type==="started"){ AGENT.session=ev.session_id; }
+    else if(ev.type==="tool"){
+      var nm=TOOLNAMES[ev.name]||ev.name;
+      if(toolSeen.indexOf(nm)<0) toolSeen.push(nm);
+      if(tl) tl.innerHTML='<span class="loading loading-spinner" style="width:12px;height:12px"></span> '+esc(toolSeen.join(" · "));
+    }
+    else if(ev.type==="delta"){ acc+=ev.text; if(bd) bd.innerHTML=fmtMd(acc); }
+    else if(ev.type==="action"){
+      AGENT.acts[ev.id]={kind:ev.kind,params:ev.params};
+      var host=document.getElementById("cm-"+n);
+      if(host) host.insertAdjacentHTML("beforeend",
+        '<div class="actchip" id="act-'+esc(ev.id)+'"><span class="as">'+esc(ev.summary||ev.kind)+'</span>'+
+        '<button class="go" onclick="confirmAct(\''+esc(ev.id)+'\')">Confirm</button>'+
+        '<button class="no" onclick="dismissAct(\''+esc(ev.id)+'\')">Dismiss</button></div>');
+    }
+    else if(ev.type==="error"){ if(bd) bd.innerHTML=fmtMd(acc)+ '<p style="color:#8F1D1D">'+esc(ev.error||"Something went wrong.")+'</p>'; }
+    else if(ev.type==="done"){ if(tl){ tl.innerHTML=toolSeen.length?('<i class="ph ph-check"></i>'+esc(toolSeen.join(" · "))):""; if(!toolSeen.length) tl.style.display="none"; } }
+    var host2=document.getElementById("cm-"+n); if(host2) host2.scrollIntoView({behavior:"auto",block:"end"});
+  }
+  function finish(){
+    AGENT.busy=false; var b=document.getElementById("chatbtn"); if(b){ b.disabled=false; b.textContent="Ask"; }
+    var tl=document.getElementById("ct-"+n);
+    if(tl && tl.innerHTML.indexOf("spinner")>-1){ tl.innerHTML=toolSeen.length?('<i class="ph ph-check"></i>'+esc(toolSeen.join(" · "))):""; }
+  }
+}
+function agentAct(id, undo){
+  var a=AGENT.acts[id]; var chip=document.getElementById("act-"+id);
+  if(!a||!chip) return;
+  chip.querySelectorAll("button").forEach(function(b){ b.disabled=true; });
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(URL_+"/functions/v1/sales-agent",{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify({action:"act",kind:a.kind,params:a.params})})
+      .then(function(r){return r.json();}).then(function(r){
+        if(r&&r.ok){ chip.className="actchip done"; chip.innerHTML='<span class="as"><i class="ph ph-check-circle"></i> Done'+(r.result&&r.result.hubspot_task?' &mdash; HubSpot task created':'')+(r.result&&r.result.until?' &mdash; snoozed until '+esc(r.result.until):'')+'</span>'; }
+        else{ chip.className="actchip failed"; chip.innerHTML='<span class="as">Failed: '+esc((r&&(r.result&&r.result.error))||"could not complete")+'</span>'; }
+      }).catch(function(){ chip.className="actchip failed"; chip.innerHTML='<span class="as">Failed: connection error</span>'; });
+  });
+}
+function confirmAct(id){ agentAct(id); }
+function dismissAct(id){ var c=document.getElementById("act-"+id); if(c) c.remove(); delete AGENT.acts[id]; }
+/* ---- the briefing: what's on today, before you ask ------------------------ */
+function loadBriefing(){
+  var el=document.getElementById("briefcard"); if(!el||el.dataset.loaded) return;
+  el.dataset.loaded="1";
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return;
+    var payload={action:"briefing"}; if(window.VIEW_AS) payload.rep_email=window.VIEW_AS;
+    fetch(URL_+"/functions/v1/sales-agent",{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(function(r){
+        if(!r||!r.ok) { el.style.display="none"; return; }
+        var rows="";
+        (r.meetings||[]).forEach(function(m){
+          var tm=m.is_all_day?"all day":new Date(m.starts_at).toTimeString().slice(0,5);
+          rows+='<div class="brow"><span class="bt">'+esc(tm)+'</span><span class="bl">'+esc(m.subject||"(no subject)")+'</span>'+
+            (m.join?'<a class="pill" style="background:#F3EFFB;color:#5B21B6" href="'+esc(m.join)+'" target="_blank" rel="noopener">Join</a>':(m.location?'<span class="bh">'+esc(m.location)+'</span>':''))+'</div>';
+        });
+        (r.chase||[]).slice(0,3).forEach(function(c){
+          rows+='<div class="brow"><span class="bt" style="color:#B45309">reply</span><span class="bl">'+esc(custName(c.company||c.domain||c.counterparty||""))+(c.subject?' &mdash; '+esc(String(c.subject).slice(0,50)):'')+'</span><span class="bh">'+esc(String(c.days_waiting||c.hrs_waiting||""))+(c.days_waiting?'d waiting':'')+'</span></div>';
+        });
+        (r.tasks_due||[]).slice(0,3).forEach(function(t){
+          rows+='<div class="brow"><span class="bt" style="color:#0060C7">task</span><span class="bl">'+esc(t.title||"")+'</span><span class="bh">due '+esc(t.due_date||"")+'</span></div>';
+        });
+        (r.watch||[]).forEach(function(w){
+          rows+='<div class="brow"><span class="bt" style="color:#8F1D1D">watch</span><span class="bl">'+esc(w.customer_name+": "+(w.headline||""))+'</span></div>';
+        });
+        if(!rows){ el.style.display="none"; return; }
+        var d=new Date(r.date+"T12:00:00");
+        el.className="briefcard";
+        el.innerHTML='<h4><i class="ph ph-sun-dim"></i>Today &middot; '+["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()]+' '+d.getDate()+' '+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]+'</h4>'+rows;
+      }).catch(function(){ el.style.display="none"; });
+  });
 }
 // The function replies with NDJSON (one JSON object per line): status lines
 // while it works, then a final result line. It cannot be read with r.json() -
@@ -1239,7 +1393,7 @@ function setView(el){
   if(v==="leads" && !LEADSloaded) loadLeads();
   if(v==="monitor" && !MONloaded) loadMonitor();
   if(v==="simulation" && !SIMloaded) loadSim();
-  if(v==="assistant"){ var q=document.getElementById("askq"); if(q) q.focus(); }
+  if(v==="assistant"){ var q=document.getElementById("askq"); if(q) q.focus(); loadBriefing(); }
 }
 function revealMgmt(){ var mg=document.querySelectorAll(".mgmtonly"); for(var i=0;i<mg.length;i++) mg[i].style.display=""; }
 function toggleMore(){ var ms=document.getElementById("moresheet"); if(!ms) return; ms.style.display=(ms.style.display==="none"?"":"none"); }
