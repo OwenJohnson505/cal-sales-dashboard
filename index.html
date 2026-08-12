@@ -1935,8 +1935,8 @@ function renderTasks(el,got){
         var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
         return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
           '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
-          (t.quote?'<div class="seg">Because they said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+
-          '<div class="seg">Accept creates a HubSpot task '+dueTxt+', assigned to you.</div></div>'+
+          (t.quote?'<div class="seg">From the exchange: &ldquo;'+esc(String(t.quote))+'&rdquo;</div>':'')+
+          '<div class="seg" style="color:var(--faint)">Accept creates a HubSpot task '+dueTxt+', assigned to you &middot; the full record is one click away.</div></div>'+
           '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
           '<button class="btn btn-primary btn-sm" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Accept</button>'+
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
@@ -1949,7 +1949,7 @@ function renderTasks(el,got){
       wait.map(function(t){
         return '<div class="actrow"><div class="co"><b>'+esc(t.title)+'</b>'+
           '<div class="dom">'+esc(t.domain)+(t.due_date?' &middot; worth a nudge from '+esc(t.due_date):'')+'</div>'+
-          (t.quote?'<div class="seg">They said: &ldquo;'+esc(String(t.quote).slice(0,120))+'&rdquo;</div>':'')+'</div>'+
+          (t.quote?'<div class="seg">They said: &ldquo;'+esc(String(t.quote))+'&rdquo;</div>':'')+'</div>'+
           '<div class="rt"><button class="chip" onclick="openTaskCtx(\''+esc(t.id)+'\')">See the '+(t.source==='call'?'call':'conversation')+'</button>'+
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'accepted\',this)">Remind me'+(t.due_date?' then':'')+'</button>'+
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
