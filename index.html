@@ -1938,6 +1938,20 @@ function renderTasks(el,got){
           '<button class="chip" onclick="taskSet(\''+esc(t.id)+'\',\'dismissed\',this)">Dismiss</button></div></div>';
       }).join("")+'</div></details>';
   }
+  // suggestions the system cleared ITSELF because it saw the follow-up happen
+  // - shown with the evidence, so nobody wonders where a suggestion went
+  var cl=(got.sugg&&got.sugg.cleared)||[];
+  if(cl.length){
+    html+='<details class="panel flush" style="padding:0"><summary style="cursor:pointer;padding:14px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
+      '<span class="bdot" style="background:#0E9F6E"></span><h3 style="margin:0;display:inline">'+cl.length+' cleared themselves this week</h3>'+
+      '<span class="hint">the follow-up already happened &middot; re-checked hourly against calls &amp; emails</span></summary><div class="plist">'+
+      cl.map(function(t){
+        return '<div class="actrow" style="flex-wrap:nowrap"><span class="tickc done" style="cursor:default"><i class="ph ph-check"></i></span>'+
+          '<div class="co"><b>'+esc(t.title)+'</b><div class="dom">'+esc(t.domain||'')+'</div>'+
+          (t.resolved_reason?'<div class="seg">'+esc(t.resolved_reason)+'</div>':'')+'</div>'+
+          '<div class="rt"><span class="dom" style="white-space:nowrap">'+esc(String(t.resolved_at||'').slice(8,10))+'/'+esc(String(t.resolved_at||'').slice(5,7))+'</span></div></div>';
+      }).join("")+'</div></details>';
+  }
   el.innerHTML=html;
 }
 // "Sat 15 Nov" reads faster than 2026-11-15; today and tomorrow get named
