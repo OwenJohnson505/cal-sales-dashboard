@@ -1993,27 +1993,39 @@ function fmtDue(d,overdue){
 // The new-task sheet: title first like Reminders, the details grouped below.
 function newTaskSheet(){
   var m=document.getElementById("cmodal"); if(!m) return;
-  window.__ntpri="MEDIUM";
+  // HubSpot's own vocabulary so nothing surprises the rep on the other side:
+  // type Call / Email / To-do, priority Low / Medium / High, due date required
+  window.__ntpri="MEDIUM"; window.__nttype="TODO";
   var tom=new Date(Date.now()+864e5).toISOString().slice(0,10);
   m.style.display="flex";
   m.innerHTML='<div class="mcard" style="max-width:470px"><div class="mhead"><b>New task</b><span class="mx" onclick="closeModal()">&times;</span></div>'+
     '<div class="mbody sheetform">'+
     '<input id="ntsub" class="tin" placeholder="What needs doing?">'+
     '<textarea id="ntnote" class="tnote" placeholder="Notes (optional)"></textarea>'+
-    '<div class="frow"><span class="fl"><i class="ph ph-calendar-blank"></i>Due</span><input id="ntdue" type="date" class="input" style="padding:6px 10px;width:auto" value="'+tom+'"></div>'+
-    '<div class="frow"><span class="fl"><i class="ph ph-flag"></i>Priority</span><div class="seg2"><button class="on" onclick="priPick(this,\'MEDIUM\')">Normal</button><button onclick="priPick(this,\'HIGH\')">High</button></div></div>'+
-    '<p class="sub" style="margin:12px 2px 0;font-size:12.5px">Saves to your HubSpot task list, so it reaches Front and your phone too.</p>'+
+    '<div class="frow"><span class="fl"><i class="ph ph-squares-four"></i>Type</span><div class="seg2">'+
+      '<button onclick="typePick(this,\'CALL\')">Call</button>'+
+      '<button onclick="typePick(this,\'EMAIL\')">Email</button>'+
+      '<button class="on" onclick="typePick(this,\'TODO\')">To-do</button></div></div>'+
+    '<div class="frow"><span class="fl"><i class="ph ph-calendar-blank"></i>Due</span><input id="ntdue" type="date" class="input" style="padding:6px 10px;width:auto" value="'+tom+'" required></div>'+
+    '<div class="frow"><span class="fl"><i class="ph ph-flag"></i>Priority</span><div class="seg2">'+
+      '<button onclick="priPick(this,\'LOW\')">Low</button>'+
+      '<button class="on" onclick="priPick(this,\'MEDIUM\')">Medium</button>'+
+      '<button onclick="priPick(this,\'HIGH\')">High</button></div></div>'+
+    '<p class="sub" style="margin:12px 2px 0;font-size:12.5px">Saves to your HubSpot task list with a reminder on the due date, so it reaches Front and your phone too.</p>'+
     '<div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn btn-soft" onclick="closeModal()">Cancel</button>'+
     '<button class="btn btn-primary" onclick="submitNewTask(this)">Add task</button></div>'+
     '<div id="ntmsg" class="msg"></div></div></div>';
   setTimeout(function(){ var i=document.getElementById("ntsub"); if(i) i.focus(); },80);
 }
 function priPick(b,v){ window.__ntpri=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
+function typePick(b,v){ window.__nttype=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
 function submitNewTask(btn){
   var s=(val("ntsub")||"").trim(); var m=document.getElementById("ntmsg");
   if(!s){ if(m) m.textContent="Give the task a name first."; return; }
+  // HubSpot requires a due date - the field defaults to tomorrow and refills
+  var due=val("ntdue")||new Date(Date.now()+864e5).toISOString().slice(0,10);
   btn.disabled=true; if(m) m.textContent="Adding...";
-  deskPost({action:"hstask_create",subject:s,due:val("ntdue")||null,note:(val("ntnote")||"").trim()||null,priority:window.__ntpri||"MEDIUM"},function(r){
+  deskPost({action:"hstask_create",subject:s,due:due,note:(val("ntnote")||"").trim()||null,priority:window.__ntpri||"MEDIUM",task_type:window.__nttype||"TODO"},function(r){
     if(r&&r.ok){ closeModal(); showNext("Task added. It syncs to HubSpot, Front and your phone."); loadTasksView(); }
     else { btn.disabled=false; if(m) m.textContent="Could not add: "+((r&&r.error)||"error"); }
   });
