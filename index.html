@@ -624,6 +624,8 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .calev.task{ background:#F0F6FF; color:#0060C7; }
 .calev.task.over{ background:#FEF2F2; color:#8F1D1D; }
 .calev.visit{ background:#E7F8F0; color:#0A6B4A; }
+.calev.meet{ background:#F3EFFB; color:#5B21B6; }
+.calev.meet b{ font-weight:700; font-variant-numeric:tabular-nums; }
 .calev.more{ background:transparent; color:var(--faint); padding:1px 7px 0; }
 /* the productivity bar lives at the foot of the tile */
 .calcell .prod{ margin-top:auto; display:flex; flex-direction:column; gap:3px; }
@@ -2339,21 +2341,27 @@ function tickTask(btn,id){
   });
 }
 // ---- Calendar: what I did each day -----------------------------------------
+// meeting times render in the browser's clock (the team is all UK)
+function meetHM(iso){
+  var d=new Date(iso); if(isNaN(d)) return '';
+  return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
 function loadCalendar(){
   var el=document.getElementById("calboard"); if(!el) return;
   el.innerHTML=spinner();
   var m=(window.__calMonth)||new Date().toISOString().slice(0,7);
   var first=new Date(m+"-01");
   var lastIso=m+"-"+("0"+new Date(first.getFullYear(),first.getMonth()+1,0).getDate()).slice(-2);
-  // three sources, one month: activity (what happened), HubSpot tasks (what's
-  // due), site visits (where you're going). Outlook/Teams meetings join this
-  // merge once the Graph app exists - Front has no calendar API; its calendar
-  // IS the Office 365 one.
-  var got={}, need=3;
+  // four sources, one month: activity (what happened), HubSpot tasks (what's
+  // due), site visits (where you're going), and the Outlook/Teams calendar
+  // graph-sync pulls hourly - Front has no calendar API; its calendar IS the
+  // Office 365 one.
+  var got={}, need=4;
   function fin(k,r){ got[k]=r; if(--need===0) renderCalendar(el,m,got); }
   deskPost({action:"calendar",month:m},function(r){ fin("act",r); });
   deskPost({action:"hstasks"},function(r){ fin("tasks",r); });
   desk2Post({action:"visits",from:m+"-01",to:lastIso},function(r){ fin("visits",r); });
+  desk2Post({action:"meetings",from:m+"-01",to:lastIso},function(r){ fin("meets",r); });
 }
 function renderCalendar(el,m,got){
   var r=got.act;
@@ -2370,7 +2378,14 @@ function renderCalendar(el,m,got){
     var iso=String(v.visit_date||"").slice(0,10); if(!iso) return;
     (vBy[iso]=vBy[iso]||[]).push(v);
   });
-  window.__calTasks=tBy; window.__calVisits=vBy;
+  // meetings by local day; all-day rows land on their calendar date, not the
+  // UTC-midnight rollover
+  var mBy={};
+  ((got.meets&&got.meets.meetings)||[]).forEach(function(ev){
+    var iso=ev.is_all_day?String(ev.starts_at||"").slice(0,10):(ev.starts_at?localISO(new Date(ev.starts_at)):"");
+    if(!iso) return; (mBy[iso]=mBy[iso]||[]).push(ev);
+  });
+  window.__calTasks=tBy; window.__calVisits=vBy; window.__calMeets=mBy;
   var MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
   var first=new Date(m+"-01"), year=first.getFullYear(), mo=first.getMonth();
   var startDow=(first.getDay()+6)%7; // Monday-first week, UK
@@ -2383,8 +2398,13 @@ function renderCalendar(el,m,got){
     var iso=m+"-"+("0"+dd).slice(-2);
     var d=by[iso]; var tot=d?((Number(d.calls)||0)+(Number(d.emails)||0)):0;
     var future=iso>todayIso;
-    // what's on: tasks first (overdue reads red), then visits, max 3 lines
+    // what's on: meetings first (time-fixed), then tasks (overdue reads red),
+    // then visits, max 3 lines
     var evs=[];
+    ((window.__calMeets||{})[iso]||[]).forEach(function(ev){
+      var tm=ev.is_all_day?'':'<b>'+meetHM(ev.starts_at)+'</b> ';
+      evs.push('<span class="calev meet" title="'+esc(ev.subject||'meeting')+'">'+tm+esc(ev.subject||'meeting')+'</span>');
+    });
     (tBy[iso]||[]).forEach(function(t){ evs.push('<span class="calev task'+(iso<todayIso?' over':'')+'" title="'+esc(t.subject||'task')+'">'+esc(t.subject||'task')+'</span>'); });
     (vBy[iso]||[]).forEach(function(v){ evs.push('<span class="calev visit" title="site visit: '+esc(custName(v.company||v.domain||''))+'">'+esc(custName(v.company||v.domain||'visit'))+'</span>'); });
     var extra=evs.length-3;
@@ -2398,6 +2418,7 @@ function renderCalendar(el,m,got){
   }
   el.innerHTML='<div class="calhead"><span class="mt">'+MN[mo]+' '+year+'</span>'+
     '<span class="callegend" style="margin-left:18px">'+
+      '<span><span class="bdot" style="background:#5B21B6"></span> Meeting</span>'+
       '<span><span class="bdot" style="background:#0060C7"></span> HubSpot task due</span>'+
       '<span><span class="bdot" style="background:#0A6B4A"></span> Site visit</span>'+
       '<span>bar = calls + emails that day</span></span>'+
@@ -2427,9 +2448,17 @@ function calSelect(iso){
   var dt=new Date(iso);
   var lbl=W[dt.getDay()]+" "+dt.getDate()+" "+M[dt.getMonth()];
   var todayIso=localISO(new Date());
-  var tasks=(window.__calTasks||{})[iso]||[], visits=(window.__calVisits||{})[iso]||[];
+  var tasks=(window.__calTasks||{})[iso]||[], visits=(window.__calVisits||{})[iso]||[], meets=(window.__calMeets||{})[iso]||[];
   var bm=function(v,l,col){ return '<div class="m" style="text-align:left"><b style="display:block;font-size:24px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+(v||0)+'</b><span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+l+'</span></div>'; };
   var plan='';
+  if(meets.length) plan+='<div style="margin-top:12px"><div class="msec" style="margin:0 0 6px">Meetings</div>'+
+    meets.map(function(ev){
+      var when=ev.is_all_day?'all day':(meetHM(ev.starts_at)+(ev.ends_at?'&ndash;'+meetHM(ev.ends_at):''));
+      return '<div class="frow" style="margin-top:6px"><span class="fl"><i class="ph '+(ev.is_online?'ph-video-camera':'ph-calendar-blank')+'" style="color:#5B21B6"></i>'+
+        '<b style="font-variant-numeric:tabular-nums;font-weight:700">'+when+'</b> '+esc(ev.subject||'(no subject)')+'</span>'+
+        (ev.join_url?'<a class="pill" href="'+esc(ev.join_url)+'" target="_blank" rel="noopener" style="background:#F3EFFB;color:#5B21B6;text-decoration:none">Join</a>':
+          (ev.location?'<span class="hint" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ev.location)+'</span>':''))+'</div>';
+    }).join('')+'</div>';
   if(tasks.length) plan+='<div style="margin-top:12px"><div class="msec" style="margin:0 0 6px">Tasks due</div>'+
     tasks.map(function(t){
       return '<div class="frow" style="margin-top:6px'+(t.domain?';cursor:pointer':'')+'"'+(t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"':'')+'><span class="fl"><i class="ph '+({CALL:'ph-phone',EMAIL:'ph-envelope-simple'}[t.type]||'ph-check-square')+'"></i>'+esc(t.subject||'(untitled)')+
