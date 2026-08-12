@@ -632,6 +632,17 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .bub .bw{ font-size:10.5px; color:var(--faint); margin-bottom:3px; }
 .bub .bt{ font-size:13px; line-height:1.5; color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere; }
 
+/* leads table: per-header filter menus */
+.lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
+.lmfun:hover{ color:var(--ink); }
+.lmfun.on{ color:#0071E3; }
+#lmmenu{ position:fixed; z-index:300; width:236px; max-height:320px; overflow:auto; background:#fff;
+  border-radius:12px; box-shadow:0 10px 34px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.05); padding:6px; }
+.lmmi{ display:flex; align-items:center; padding:7px 10px; border-radius:8px; font-size:13px; cursor:pointer; color:var(--ink); }
+.lmmi:hover{ background:#F5F5F7; }
+.lmmi.on{ font-weight:650; }
+.lmmh{ font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:9px 10px 3px; }
+
 @media (max-width:760px){
   /* bottom padding clears the fixed tab bar */
   .content{ padding:16px 14px 96px; }
@@ -1808,45 +1819,32 @@ function loadLeadsMine(){
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmQ=""; window.__lmPage=1;
-    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null;
+    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmTagF=null;
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
   });
 }
 // Columns the sales team can actually work: click a header to sort (again to
-// flip), chips filter by state and owner, every row ends in the same place.
+// flip), the funnel beside a header filters that column, every row ends in
+// the same place. One prominent search box up top.
 function lmArr(k){ return window.__lmSort===k?(' <span style="font-size:9px">'+(window.__lmDir>0?'&#9650;':'&#9660;')+'</span>'):''; }
+function lmFun(k){
+  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='tags'&&window.__lmTagF);
+  return '<i class="ph '+(on?'ph-funnel-simple-fill on':'ph-funnel-simple')+' lmfun" title="filter" onclick="event.stopPropagation();lmMenu(\''+k+'\',this)"></i>';
+}
 function lmScaffold(){
   var el=document.getElementById("lmboard"); if(!el) return;
+  lmMenuClose();
   var team=!!window.__lmTeam;
-  var owners=[];
-  if(team){ var seen={}; (window.__lm||[]).forEach(function(x){ var f=String(x.rep||'').split(' ')[0]; if(f&&!seen[f]){ seen[f]=1; owners.push(f); } }); owners.sort(); }
   el.innerHTML='<div class="panel flush"><div class="phead"><h3>'+(team?'HubSpot leads &mdash; whole team':'Your HubSpot leads')+'</h3>'+
-    '<input id="lmq" class="input" placeholder="Search company, owner, tag..." value="'+esc(window.__lmQ||'')+'" oninput="lmSearch(this.value)" style="margin-left:auto;max-width:250px;padding:6px 12px;font-size:13px">'+
-    '<span class="hint" id="lmcount"></span></div>'+
-    '<div class="controls" style="padding:10px 20px 8px;border-bottom:1px solid var(--line-soft)">'+
-      '<button class="chip'+(window.__lmEng===null?' active':'')+'" onclick="lmEng(null,this)">All</button>'+
-      '<button class="chip'+(window.__lmEng==='positive'?' active':'')+'" onclick="lmEng(\'positive\',this)">Warm</button>'+
-      '<button class="chip'+(window.__lmEng==='mixed'?' active':'')+'" onclick="lmEng(\'mixed\',this)">Mixed</button>'+
-      '<button class="chip'+(window.__lmEng==='stale'?' active':'')+'" onclick="lmEng(\'stale\',this)">Gone quiet</button>'+
-      '<button class="chip'+(window.__lmEng==='none'?' active':'')+'" onclick="lmEng(\'none\',this)">No read yet</button>'+
-      (owners.length?'<span class="hint" style="margin:0 2px 0 12px">Owner</span>'+owners.map(function(o){
-        return '<button class="chip'+(window.__lmOwner===o?' active':'')+'" onclick="lmOwn(\''+esc(o)+'\',this)">'+esc(o)+'</button>';
-      }).join(''):'')+
-      (function(){
-        // one chip per action tag in play - the do-list cuts across the book
-        var at={}; (window.__lm||[]).forEach(function(x){ (x.utags||[]).forEach(function(u){ if(u.kind==='action') at[u.tag]=(at[u.tag]||0)+1; }); });
-        var ks=Object.keys(at).sort();
-        return ks.length?('<span class="hint" style="margin:0 2px 0 12px">Action</span>'+ks.map(function(t){
-          return '<button class="chip" style="background:#1D1D1F;color:#fff;border-color:#1D1D1F" onclick="lmTag(\''+esc(String(t).replace(/'/g,''))+'\')">'+esc(t)+' &middot; '+at[t]+'</button>';
-        }).join('')):'';
-      })()+
-    '</div>'+
+    '<input id="lmq" class="input" placeholder="Search company, domain, owner, tag..." value="'+esc(window.__lmQ||'')+'" oninput="lmSearch(this.value)" style="margin-left:auto;flex:1;max-width:440px;padding:9px 14px;font-size:14px;border-radius:10px">'+
+    '<span class="hint" id="lmcount" style="white-space:nowrap"></span></div>'+
+    lmActiveBar()+
     '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm"><thead><tr>'+
-      (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+'</th>':'')+
+      (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+lmFun('owner')+'</th>':'')+
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
-      '<th onclick="lmSortH(\'status\')">Status'+lmArr('status')+'</th>'+
-      '<th>Tags</th>'+
+      '<th onclick="lmSortH(\'status\')">Status'+lmArr('status')+lmFun('status')+'</th>'+
+      '<th>Tags'+lmFun('tags')+'</th>'+
       '<th class="num" onclick="lmSortH(\'recent\')">Last engagement'+lmArr('recent')+'</th>'+
       '<th class="num" onclick="lmSortH(\'calls\')">Calls'+lmArr('calls')+'</th>'+
       '<th class="num" onclick="lmSortH(\'emails\')">Emails'+lmArr('emails')+'</th>'+
@@ -1856,15 +1854,85 @@ function lmScaffold(){
     '<div id="lmpager"></div></div>';
   renderLmRows();
 }
+// slim receipt of what's filtering the table right now, each bit removable
+function lmActiveBar(){
+  var parts=[], lbl={positive:'warm',mixed:'mixed',stale:'gone quiet',negative:'negative',none:'no read yet'};
+  if(window.__lmEng) parts.push('<button class="chip active" onclick="lmEngSet(null)">'+esc(lbl[window.__lmEng]||window.__lmEng)+' &times;</button>');
+  if(window.__lmOwner) parts.push('<button class="chip active" onclick="lmOwnSet(null)">'+esc(window.__lmOwner)+' &times;</button>');
+  if(window.__lmTagF) parts.push('<button class="chip active" onclick="lmTagSet(null)">'+esc(window.__lmTagF)+' &times;</button>');
+  if(!parts.length) return '';
+  return '<div class="controls" style="padding:8px 20px;border-bottom:1px solid var(--line-soft);align-items:center">'+
+    '<span class="hint" style="margin-right:2px">Filtered to</span>'+parts.join('')+
+    '<button class="chip" style="border-color:transparent;background:transparent;color:var(--mut)" onclick="lmClearF()">Clear all</button></div>';
+}
 function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); window.__lmPage=1; renderLmRows(); }
-function lmTag(t){ window.__lmQ=String(t||"").toLowerCase(); window.__lmPage=1;
-  var i=document.getElementById("lmq"); if(i) i.value=t; renderLmRows(); }
-function lmEng(v,el){ window.__lmEng=v; window.__lmPage=1;
-  if(el){ var cs=el.parentElement.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){ var c=cs[i]; if(c.innerText==='All'||['Warm','Mixed','Gone quiet','No read yet'].indexOf(c.innerText)>=0) c.classList.toggle("active",c===el); } }
-  renderLmRows(); }
-function lmOwn(o,el){ window.__lmOwner=(window.__lmOwner===o?null:o); window.__lmPage=1;
-  if(el){ var cs=el.parentElement.querySelectorAll(".chip"); for(var i=0;i<cs.length;i++){ var c=cs[i]; if(['All','Warm','Mixed','Gone quiet','No read yet'].indexOf(c.innerText)<0) c.classList.toggle("active",c.innerText===window.__lmOwner); } }
-  renderLmRows(); }
+function lmNorm(s){ return String(s||"").replace(/'/g,''); }
+function lmEngSet(v){ window.__lmEng=v; window.__lmPage=1; lmScaffold(); }
+function lmOwnSet(v){ window.__lmOwner=v; window.__lmPage=1; lmScaffold(); }
+function lmTagSet(v){ window.__lmTagF=v; window.__lmPage=1; lmScaffold(); }
+function lmTag(t){ lmTagSet(String(t||"")); }
+function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmTagF=null; window.__lmPage=1; lmScaffold(); }
+// every tag a lead carries, split by species - one source of truth for the
+// pills, the filter test, and the funnel menu
+function lmAllTags(x){
+  var fx=x.facts||{}, a=[], c=[];
+  if(x.stage==='opportunity') c.push('opportunity');
+  if(x.dropped_ball) c.push('ball dropped');
+  if(fx.uses_couriers==='confirmed') c.push('confirmed courier user');
+  if(fx.current_supplier) c.push('uses '+String(fx.current_supplier).slice(0,24));
+  (fx.tags||[]).slice(0,5).forEach(function(t){ c.push(String(t).slice(0,28)); });
+  (x.utags||[]).forEach(function(u){ (u.kind==='action'?a:c).push(String(u.tag)); });
+  return { a:a, c:c };
+}
+function lmMenuClose(){ var m=document.getElementById('lmmenu'); if(m&&m.parentNode) m.parentNode.removeChild(m); }
+function lmMenuPick(key,v){
+  v=(v===''?null:v);
+  if(key==='owner') lmOwnSet(v); else if(key==='status') lmEngSet(v); else lmTagSet(v);
+}
+function lmMenu(key,ic){
+  if(document.getElementById('lmmenu')){ lmMenuClose(); return; }
+  var L=window.__lm||[], items=[];
+  var mk=function(label,n,on,v){
+    return '<div class="lmmi'+(on?' on':'')+'" onclick="lmMenuPick(\''+key+'\',\''+esc(lmNorm(v))+'\')">'+
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(label)+'</span>'+
+      (n!=null?'<span style="color:var(--faint);font-size:11.5px;margin-left:auto;padding-left:10px">'+n+'</span>':'')+
+      (on?'<i class="ph ph-check" style="color:#0071E3;margin-left:6px;flex:none"></i>':'')+'</div>';
+  };
+  if(key==='owner'){
+    var oc={}; L.forEach(function(x){ var f=String(x.rep||'').split(' ')[0]; if(f) oc[f]=(oc[f]||0)+1; });
+    items.push(mk('Anyone',null,!window.__lmOwner,''));
+    Object.keys(oc).sort().forEach(function(o){ items.push(mk(o,oc[o],window.__lmOwner===o,o)); });
+  } else if(key==='status'){
+    var sc={positive:0,mixed:0,stale:0,negative:0,none:0};
+    L.forEach(function(x){ if(x.engagement&&sc[x.engagement]!=null) sc[x.engagement]++; else if(!x.engagement) sc.none++; });
+    items.push(mk('Any status',null,!window.__lmEng,''));
+    [['positive','Warm'],['mixed','Mixed'],['stale','Gone quiet'],['negative','Negative'],['none','No read yet']].forEach(function(p){
+      items.push(mk(p[1],sc[p[0]],window.__lmEng===p[0],p[0]));
+    });
+  } else {
+    var ac={}, cc={};
+    L.forEach(function(x){ var g=lmAllTags(x);
+      g.a.forEach(function(t){ ac[t]=(ac[t]||0)+1; });
+      g.c.forEach(function(t){ cc[t]=(cc[t]||0)+1; }); });
+    items.push(mk('Any tag',null,!window.__lmTagF,''));
+    var aks=Object.keys(ac).sort();
+    if(aks.length){ items.push('<div class="lmmh">Action</div>');
+      aks.forEach(function(t){ items.push(mk(t,ac[t],window.__lmTagF===t,t)); }); }
+    var cks=Object.keys(cc).sort(function(x,y){ return cc[y]-cc[x]||x.localeCompare(y); }).slice(0,25);
+    if(cks.length){ items.push('<div class="lmmh">Conversation</div>');
+      cks.forEach(function(t){ items.push(mk(t,cc[t],window.__lmTagF===t,t)); }); }
+  }
+  var m=document.createElement('div'); m.id='lmmenu';
+  var r=ic.getBoundingClientRect();
+  m.style.top=(r.bottom+6)+'px';
+  m.style.left=Math.max(8,Math.min(r.left-10,window.innerWidth-252))+'px';
+  m.innerHTML=items.join('');
+  m.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.body.appendChild(m);
+  setTimeout(function(){
+    document.addEventListener('click',function h(){ document.removeEventListener('click',h); lmMenuClose(); });
+  },0);
+}
 function lmSortH(k){
   if(window.__lmSort===k) window.__lmDir=-window.__lmDir;
   else { window.__lmSort=k; window.__lmDir=(k==='company'||k==='owner'||k==='status')?1:-1; }
@@ -1873,12 +1941,12 @@ function lmSortH(k){
 function lmPage(p){ window.__lmPage=p; renderLmRows();
   var box=document.getElementById("lmrows"); if(box) box.scrollIntoView({block:"start",behavior:"smooth"}); }
 function lmTags(x){
-  // every insight the read produced, in one generous cell - clicking a tag
-  // filters the table by it. Two species of USER tag on top of the AI's:
-  // conversation tags (white, black outline = a human added evidence) and
-  // action tags (filled ink = something we intend to DO: visit, donut drop)
-  var fx=x.facts||{}; var out=[];
-  var tag=function(txt,bg,fg,title){ out.push('<span class="pill" style="background:'+bg+';color:'+fg+';cursor:pointer"'+(title?' title="'+esc(title)+'"':'')+' onclick="event.stopPropagation();lmTag(\''+esc(String(txt).replace(/'/g,''))+'\')">'+esc(txt)+'</span>'); };
+  // two rows in the cell: ACTION tags (filled ink = something we intend to
+  // DO: visit, donut drop) on top, conversation tags below - the AI's reads
+  // plus user-added evidence (white, black outline = a human added it).
+  // Clicking any tag filters the table by it; each row has its own adder.
+  var fx=x.facts||{}; var act=[], conv=[];
+  var tag=function(txt,bg,fg,title){ conv.push('<span class="pill" style="background:'+bg+';color:'+fg+';cursor:pointer"'+(title?' title="'+esc(title)+'"':'')+' onclick="event.stopPropagation();lmTag(\''+esc(String(txt).replace(/'/g,''))+'\')">'+esc(txt)+'</span>'); };
   if(x.stage==='opportunity') tag('opportunity','#F0F6FF','#0060C7');
   if(x.dropped_ball) tag('ball dropped','#FEF2F2','#8F1D1D');
   if(fx.uses_couriers==='confirmed') tag('confirmed courier user','#E7F8F0','#0A6B4A');
@@ -1886,36 +1954,52 @@ function lmTags(x){
   (fx.tags||[]).slice(0,5).forEach(function(t){ tag(String(t).slice(0,28),'#F2F4F8','#3A455B'); });
   if(x.other_owners) tag('duplicate: '+String(x.other_owners).split(' ')[0]+'’s book too','#FEF6E7','#7A4E07','the same company exists more than once in HubSpot');
   (x.utags||[]).forEach(function(u){
-    var st=u.kind==='action'?'background:#1D1D1F;color:#fff':'background:#fff;color:#1D1D1F;box-shadow:inset 0 0 0 1.5px #1D1D1F';
+    var isAct=u.kind==='action';
+    var st=isAct?'background:#1D1D1F;color:#fff':'background:#fff;color:#1D1D1F;box-shadow:inset 0 0 0 1.5px #1D1D1F';
     var safe=esc(String(u.tag).replace(/'/g,''));
-    out.push('<span class="pill" style="'+st+';cursor:pointer" title="added by '+esc(String(u.by||'').split('@')[0])+'" onclick="event.stopPropagation();lmTag(\''+safe+'\')">'+esc(u.tag)+
+    (isAct?act:conv).push('<span class="pill" style="'+st+';cursor:pointer" title="added by '+esc(String(u.by||'').split('@')[0])+'" onclick="event.stopPropagation();lmTag(\''+safe+'\')">'+esc(u.tag)+
       '<span onclick="event.stopPropagation();lmTagRemove(\''+esc(x.domain)+'\',\''+safe+'\',\''+u.kind+'\')" style="opacity:.55;font-weight:700;padding-left:4px" title="remove">&times;</span></span>');
   });
-  if(x.domain) out.push('<span class="pill" style="background:transparent;border:1px dashed #C7C7CC;color:var(--mut);cursor:pointer" title="add a tag" onclick="event.stopPropagation();lmTagAdder(this,\''+esc(x.domain)+'\')">+</span>');
-  return out.join('');
+  if(x.domain){
+    var adder=function(label,kind,title){ return '<span class="pill" style="background:transparent;border:1px dashed #C7C7CC;color:var(--mut);cursor:pointer" title="'+title+'" onclick="event.stopPropagation();lmTagAdder(this,\''+esc(x.domain)+'\',\''+kind+'\')">'+label+'</span>'; };
+    act.push(adder('+ action','action','add an action tag - something to do (visit, donut drop)'));
+    conv.push(adder('+ tag','conversation','add a conversation tag - something learned'));
+  }
+  if(!act.length&&!conv.length) return '<span class="faint">&ndash;</span>';
+  return '<div class="pillrow" style="margin:0;gap:4px">'+act.join('')+'</div>'+
+         '<div class="pillrow" style="margin:5px 0 0;gap:4px">'+conv.join('')+'</div>';
 }
-// inline tag adder: type, then pick which species it is
-function lmTagAdder(el,dom){
+// inline tag adder: the row it lives on decides the species, so it's just
+// type + Add, with an x (or Escape, or clicking away) to back out
+function lmTagAdder(el,dom,kind){
+  var isAct=kind==='action';
   var wrap=document.createElement('span');
   wrap.style.cssText='display:inline-flex;gap:4px;align-items:center';
-  wrap.innerHTML='<input style="font:inherit;font-size:12px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);background:#fff;width:110px" placeholder="tag name...">'+
-    '<button class="chip" style="padding:3px 9px;font-size:11px" title="conversation tag - something learned">Conv</button>'+
-    '<button class="chip" style="padding:3px 9px;font-size:11px;background:#1D1D1F;color:#fff" title="action tag - something to do (visit, donut drop)">Action</button>';
+  wrap.innerHTML='<input style="font:inherit;font-size:12px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);background:#fff;width:104px" placeholder="'+(isAct?'action, e.g. visit...':'tag name...')+'">'+
+    '<button class="chip" style="padding:3px 10px;font-size:11px'+(isAct?';background:#1D1D1F;color:#fff;border-color:#1D1D1F':'')+'">Add</button>'+
+    '<span style="cursor:pointer;color:var(--mut);font-weight:700;font-size:14px;padding:0 3px" title="cancel">&times;</span>';
   el.parentNode.replaceChild(wrap,el);
   wrap.addEventListener('click',function(e){ e.stopPropagation(); });
   var inp=wrap.querySelector('input'); inp.focus();
-  function save(kind){
+  var done=false;
+  function cancel(){ if(done) return; done=true; renderLmRows(); }
+  function save(){
+    if(done) return;
     var t=(inp.value||'').trim().slice(0,40);
-    if(!t){ renderLmRows(); return; }
+    if(!t){ cancel(); return; }
+    done=true;
     desk2Post({action:'tag_add',domain:dom,tag:t,kind:kind},function(r){
       if(r&&r.ok){ var l=(window.__lm||[]).filter(function(x){return x.domain===dom;})[0];
         if(l){ l.utags=l.utags||[]; l.utags.push({tag:t,kind:kind,by:'you'}); } }
       lmScaffold();
     });
   }
-  wrap.querySelectorAll('button')[0].onclick=function(e){ e.stopPropagation(); save('conversation'); };
-  wrap.querySelectorAll('button')[1].onclick=function(e){ e.stopPropagation(); save('action'); };
-  inp.onkeydown=function(e){ if(e.key==='Enter'){ e.stopPropagation(); save('conversation'); } if(e.key==='Escape') renderLmRows(); };
+  wrap.querySelector('button').onclick=function(e){ e.stopPropagation(); save(); };
+  wrap.querySelector('span').onclick=function(e){ e.stopPropagation(); cancel(); };
+  inp.onkeydown=function(e){ if(e.key==='Enter'){ e.stopPropagation(); save(); } if(e.key==='Escape') cancel(); };
+  setTimeout(function(){
+    document.addEventListener('click',function h(){ document.removeEventListener('click',h); cancel(); });
+  },0);
 }
 function lmTagRemove(dom,tag,kind){
   desk2Post({action:'tag_remove',domain:dom,tag:tag,kind:kind},function(){});
@@ -1938,6 +2022,9 @@ function renderLmRows(){
   if(window.__lmEng==='none') ls=ls.filter(function(x){ return !x.engagement; });
   else if(window.__lmEng) ls=ls.filter(function(x){ return x.engagement===window.__lmEng; });
   if(window.__lmOwner) ls=ls.filter(function(x){ return String(x.rep||'').split(' ')[0]===window.__lmOwner; });
+  if(window.__lmTagF){ var tf=lmNorm(window.__lmTagF);
+    ls=ls.filter(function(x){ var g=lmAllTags(x);
+      return g.a.some(function(t){return lmNorm(t)===tf;})||g.c.some(function(t){return lmNorm(t)===tf;}); }); }
   var srt=window.__lmSort||"recent", dir=window.__lmDir||-1;
   var cmp={
     calls:function(a,b){ return (Number(a.calls)||0)-(Number(b.calls)||0); },
@@ -1970,7 +2057,7 @@ function renderLmRows(){
         '<div class="dom">'+esc(x.domain||'')+'</div>'+
         (insight?'<div class="dom" style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px" title="'+esc(insight)+'">'+esc(insight)+'</div>':'')+'</td>'+
       '<td style="white-space:nowrap">'+(sb?'<span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)"><span class="bdot" style="width:7px;height:7px;background:'+sb[0]+'"></span>'+sb[1]+'</span>':'<span class="faint" style="font-size:12.5px">no read yet</span>')+'</td>'+
-      '<td style="min-width:220px;max-width:340px"><div class="pillrow" style="margin:0;gap:5px">'+lmTags(x)+'</div></td>'+
+      '<td style="min-width:240px;max-width:360px">'+lmTags(x)+'</td>'+
       '<td class="num" style="white-space:nowrap">'+(x.last_touch?('<b>'+whenB+'</b><div class="dom">'+esc(whenS)+'</div>'):'<span class="faint">never</span>')+'</td>'+
       num(x.calls)+num(x.emails)+num(x.notes)+
       '<td>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
