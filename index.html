@@ -1752,14 +1752,14 @@ function renderCustomers(){
       var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
       var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
       return '<div class="actrow callrow'+open+'>'+
-        '<div class="co"><b>'+esc(w.customer_name)+'</b>'+
+        '<div class="co"><b>'+esc(custName(w.customer_name))+'</b>'+
         '<div class="seg" style="margin-top:2px">'+esc(w.headline||"")+'</div></div>'+
         '<div class="rt">'+(w.salesperson?'<span class="pill">'+esc(w.salesperson)+'</span>':'')+
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
         '</div></div>';
     }).join("")+'</div></div>'):"";
   el.innerHTML=commHtml+watchHtml+'<div class="statwrap"><div class="statgrid">'+
-    stat(window.__custAll?"All customers":"Your customers",nf(cs.length),"spending in the TMS")+
+    stat(window.__custAll?"Team customers":"Your customers",nf(cs.length),window.__custAll?"Jodie, Luke, Nicola & Ricky's books":"spending in the TMS")+
     stat("Total revenue","\u00a3"+nf(Math.round(totV)),"all time, from consignment logs")+
     stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
     stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days")+
@@ -1779,6 +1779,9 @@ function renderCustomers(){
   renderCustRows();
 }
 function custSearch(q){ window.__custQ=String(q||"").toLowerCase(); renderCustRows(); }
+// TMS names arrive with entry artifacts ("DHL Ltd''", "Brenntag Limited..",
+// "RAD Desk@") - strip trailing junk for display, never for matching
+function custName(s){ return String(s||"").replace(/[\s'".,@]+$/,""); }
 function renderCustRows(){
   var box=document.getElementById("custrows"); if(!box) return;
   var f=window.__custFilter, cs=(window.__cust||[]).slice();
@@ -1798,8 +1801,8 @@ function renderCustRows(){
   box.innerHTML=cs.slice(0,150).map(function(x){
     var open=x.domain?(' crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'"';
     return '<div class="actrow callrow'+open+'>'+
-      '<div class="co"><b>'+esc(x.customer_name)+'</b>'+
-      '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+' ('+x.days_since_job+'d ago)':'unknown')+
+      '<div class="co"><b>'+esc(custName(x.customer_name))+'</b>'+
+      '<div class="dom">Last job '+(x.last_job?esc(String(x.last_job))+(x.days_since_job<=1?' (current)':' ('+x.days_since_job+'d ago)'):'unknown')+
         (x.pattern_tracked&&x.cadence?' &middot; usually books '+esc(x.cadence)+' ('+x.jobs_per_week+'/wk)':'')+
         (window.__custAll&&x.salesperson?' &middot; '+esc(x.salesperson):'')+'</div>'+
       '<div style="font-size:15px;font-weight:650;color:#1D1D1F;margin-top:3px">\u00a3'+nf(Math.round(x.revenue_total))+' lifetime <span style="color:var(--faint);font-weight:500">&middot;</span> '+nf(x.jobs_total)+' jobs <span style="color:var(--faint);font-weight:500">&middot;</span> \u00a3'+nf(Math.round(x.avg_job_value||0))+'/job <span style="color:var(--faint);font-weight:500">&middot;</span> '+(x.margin_pct!=null?x.margin_pct+'% margin':'')+'</div>'+
@@ -1812,8 +1815,6 @@ function renderCustRows(){
       (x.off_pattern?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D" title="silent for more full weeks than any gap in their recent history">out of pattern &middot; silent '+x.silent_weeks+'wk</span>':'')+
       (x.volume_shift&&!x.off_pattern?'<span class="pill" style="background:#FEF6E7;color:#7A4E07" title="job count halved over 4 weeks">volume down '+x.jobs_prior_4w+'&rarr;'+x.jobs_4w+' jobs/4wk</span>':'')+
       trendPill(x)+
-      (Number(x.quoted_n)>=5?(function(){var w=Number(x.win_pct)||0;var c=w>=60?["#E7F8F0","#0A6B4A"]:(w>=30?["#FEF6E7","#7A4E07"]:["#FEF2F2","#8F1D1D"]);return '<span class="pill" style="background:'+c[0]+';color:'+c[1]+'">wins '+w+'% of quotes</span>';})():'')+
-      (!x.has_account_form?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">no account form</span>':'')+
       '</div></div>';
   }).join("")||'<div class="empty">Nothing matches.</div>';
 }
@@ -2604,7 +2605,7 @@ function renderCallList(){
       var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
       var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
       return '<div class="actrow callrow'+open+'>'+
-        '<div class="co"><b>'+esc(w.customer_name)+'</b>'+
+        '<div class="co"><b>'+esc(custName(w.customer_name))+'</b>'+
         '<div class="seg" style="margin-top:2px">'+esc(w.headline||"")+'</div></div>'+
         '<div class="rt">'+(w.salesperson?'<span class="pill">'+esc(w.salesperson)+'</span>':'')+
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
@@ -3034,7 +3035,7 @@ function loadTeam(){
       var c=(window.__cust||[]).find(function(x){return x.customer_name===w.customer_name;});
       var open=(c&&c.domain)?(' crow" onclick="openCallLead(\''+esc(c.domain)+'\')"'):'"';
       return '<div class="actrow callrow'+open+'>'+
-        '<div class="co"><b>'+esc(w.customer_name)+'</b>'+
+        '<div class="co"><b>'+esc(custName(w.customer_name))+'</b>'+
         '<div class="seg" style="margin-top:2px">'+esc(w.headline||"")+'</div></div>'+
         '<div class="rt">'+(w.salesperson?'<span class="pill">'+esc(w.salesperson)+'</span>':'')+
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
