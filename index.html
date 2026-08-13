@@ -1848,9 +1848,12 @@ function logVisit(dom){ var m=document.getElementById('vmsg'); if(m) m.textConte
 function loadCustomers(){
   var el=document.getElementById("custboard"); if(!el) return;
   el.innerHTML=spinner();
-  // head/admin with no view-as selected see the whole book with rep chips
+  // head/admin choose explicitly: whole team (default) or their own book.
+  // Implicit all-mode under a "viewing as myself" label read as an ownership
+  // bug, so the toggle is always visible and labelled.
+  if(window.__custTeam===undefined) window.__custTeam=true;
   var payload={action:"customers"};
-  if(window.CAN_MANAGE && !window.VIEW_AS) payload.all=true;
+  if(window.CAN_MANAGE && !window.VIEW_AS && window.__custTeam) payload.all=true;
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load customers.")+'</div>'; return; }
     paintFreshness(r.tms);
@@ -1926,7 +1929,11 @@ function renderCustomers(){
         (w.revenue_at_stake?'<span class="pill" style="background:#FEF6E7;color:#7A4E07">\u00a3'+nf(Math.round(w.revenue_at_stake))+'/mo at stake</span>':'')+
         '</div></div>';
     }).join("")+'</div></div>'):"";
-  el.innerHTML=commHtml+watchHtml+'<div class="statwrap"><div class="statgrid">'+
+  var teamToggle=(window.CAN_MANAGE&&!window.VIEW_AS)?('<div class="controls" style="margin-bottom:12px"><span class="seg2">'+
+    '<button'+(window.__custTeam!==false?' class="on"':'')+' onclick="custViewAll(true)">Whole team</button>'+
+    '<button'+(window.__custTeam===false?' class="on"':'')+' onclick="custViewAll(false)">My book</button></span>'+
+    '<span class="hint">'+(window.__custTeam!==false?'every scoped rep’s customers, with rep chips':'only accounts the TMS credits to you')+'</span></div>'):'';
+  el.innerHTML=teamToggle+commHtml+watchHtml+'<div class="statwrap"><div class="statgrid">'+
     stat(window.__custAll?"Team customers":"Your customers",nf(cs.length),window.__custAll?"Jodie, Luke, Nicola & Ricky's books":"spending in the TMS")+
     stat("Total revenue","\u00a3"+nf(Math.round(totV)),"all time, from consignment logs")+
     stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
@@ -2257,9 +2264,11 @@ function renderLmRows(){
     var open=x.domain?(' class="crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
     var num=function(n){ n=Number(n)||0; return '<td class="num" style="font-variant-numeric:tabular-nums;'+(n?'font-weight:650':'color:var(--faint)')+'">'+n+'</td>'; };
     return '<tr'+open+'>'+
-      (team?'<td style="white-space:nowrap">'+(x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'<span class="faint">&ndash;</span>')+'</td>':'')+
+      (team?'<td style="white-space:nowrap">'+(x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'<span class="faint">&ndash;</span>')+
+        (x.owner_mismatch&&x.worked_by?'<div style="font-size:10.5px;color:#B45309;margin-top:3px" title="The HubSpot owner has never logged activity here - these reps have">&#9888; worked by '+esc(x.worked_by)+'</div>':'')+'</td>':'')+
       '<td class="company-cell" style="max-width:260px"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
-        '<div class="dom">'+esc(x.domain||'')+'</div>'+
+        '<div class="dom">'+esc(x.domain||'')+
+        (!team&&x.owner_mismatch&&x.worked_by?' <span style="color:#B45309" title="Owned by you in HubSpot, but the activity is someone else&#39;s">&#9888; worked by '+esc(x.worked_by)+'</span>':'')+'</div>'+
         (insight?'<div class="dom" style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px" title="'+esc(insight)+'">'+esc(insight)+'</div>':'')+'</td>'+
       '<td style="white-space:nowrap">'+(sb?'<span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)"><span class="bdot" style="width:7px;height:7px;background:'+sb[0]+'"></span>'+sb[1]+'</span>':'<span class="faint" style="font-size:12.5px">no read yet</span>')+'</td>'+
       (function(){ var tg=lmTagCells(x);
@@ -2286,14 +2295,20 @@ function renderLmRows(){
   }
 }
 // ---- Tasks: HubSpot's list + create + suggested ----------------------------
+function custViewAll(v){ window.__custTeam=v; loadCustomers(); }
 function loadTasksView(){
   var el=document.getElementById("taskboard"); if(!el) return;
   el.innerHTML=spinner();
   var got={}, need=2;
   function fin(k,r){ got[k]=r; if(--need===0) renderTasks(el,got); }
   deskPost({action:"hstasks"},function(r){ fin("hs",r); });
-  deskPost({action:"tasks"},function(r){ fin("sugg",r); });
+  // suggested tasks are scoped to the viewed rep + unassigned; a manager can
+  // flip to the whole team's, explicitly
+  var p={action:"tasks"};
+  if(window.CAN_MANAGE && !window.VIEW_AS && window.__taskTeam) p.all=true;
+  deskPost(p,function(r){ fin("sugg",r); });
 }
+function taskViewAll(v){ window.__taskTeam=v; loadTasksView(); }
 function renderTasks(el,got){
   var hs=(got.hs&&got.hs.tasks)||[], sg=(got.sugg&&got.sugg.tasks)||[];
   var note=got.hs&&got.hs.note;
@@ -2302,7 +2317,10 @@ function renderTasks(el,got){
   var html='<div id="nexttoast2"></div>'+
     '<div class="controls" style="margin-bottom:14px">'+
       '<button class="btn btn-primary" onclick="newTaskSheet()"><i class="ph ph-plus" style="margin-right:6px;font-size:15px;vertical-align:-2px"></i>New task</button>'+
-      '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+'</span></div>';
+      '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+'</span>'+
+      ((window.CAN_MANAGE&&!window.VIEW_AS)?('<span class="seg2" style="margin-left:auto">'+
+        '<button'+(!window.__taskTeam?' class="on"':'')+' onclick="taskViewAll(false)">My suggestions</button>'+
+        '<button'+(window.__taskTeam?' class="on"':'')+' onclick="taskViewAll(true)">Whole team</button></span>'):'')+'</div>';
   html+='<div class="panel flush"><div class="phead"><h3>Your HubSpot tasks</h3><span class="hint">'+(note?esc(note):'tap the circle to complete')+'</span></div><div class="plist">'+
     (hs.length?hs.map(function(t){
       var due=t.due?new Date(Number(t.due)||t.due):null;
@@ -2332,7 +2350,10 @@ function renderTasks(el,got){
       '<div class="sggrid">'+
       sg.map(function(t){
         var dueTxt=t.due_date?('due '+esc(t.due_date)):'due tomorrow (no date was mentioned)';
-        return '<div class="sgcard"><b>'+esc(t.title)+'</b>'+
+        var who=t.staff_email?(String(t.staff_email).split("@")[0]):null;
+        var whoPill=who?('<span class="pill" style="margin-left:6px">'+esc(who)+'</span>')
+                       :'<span class="pill" style="margin-left:6px;background:var(--color-base-300);color:var(--mut)">unassigned</span>';
+        return '<div class="sgcard"><b>'+esc(t.title)+whoPill+'</b>'+
           '<div class="dom">'+esc(t.domain)+' &middot; spotted in a '+esc(t.source||'conversation')+'</div>'+
           (t.quote?'<div class="sgquote">&ldquo;'+esc(String(t.quote))+'&rdquo;</div>':'')+
           (t.action_email?'<div><a class="chip" style="text-decoration:none" href="mailto:'+esc(t.action_email)+'"><i class="ph ph-envelope-simple" style="vertical-align:-2px;margin-right:5px"></i>'+esc(t.action_email)+'</a></div>':'')+
