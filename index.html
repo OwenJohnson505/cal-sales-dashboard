@@ -1466,10 +1466,11 @@ function setView(el){
   // sheet - selection syncs by data-v so they never disagree
   var b=document.querySelectorAll(".nv[data-v]"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i].getAttribute("data-v")===v);
   var ms=document.getElementById("moresheet"); if(ms) ms.style.display="none";
-  var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",admin:"view-admin",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",today:"view-today",dash:"view-dash",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",admin:"view-admin",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   var ct=document.querySelector(".content"); if(ct) ct.classList.toggle("wide", v==="leadsmine"||v==="calendar");
   if(v==="today") loadToday();
+  if(v==="dash") loadDashView();
   if(v==="pulse") loadPulse();
   if(v==="customers") loadCustomers();
   if(v==="leadsmine") loadLeadsMine();
@@ -1610,6 +1611,72 @@ function auditTrail(dom,cid,name){
         (e.summary?'<div class="dom" style="margin-top:1px">'+esc(e.summary)+'</div>':'')+'</div></div>';
     }).join('')||'<div class="empty">No recorded activity for this record yet.</div>';
   });
+}
+// ---- Dashboard: the rep's own numbers (manager sees anyone via view-as) -----
+function loadDashView(){
+  var el=document.getElementById("dashboard2"); if(!el) return;
+  el.innerHTML=spinner("Adding up your numbers...");
+  desk2Post({action:"dashboard",days:14},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load the dashboard.")+'</div>'; return; }
+    renderDashView(el,r);
+  });
+}
+function dashTrend(weekly){
+  // last four FULL weeks vs the four before - the current part-week would
+  // always read as a slump
+  var w=(weekly||[]).slice(0,-1).map(function(x){ return (Number(x.calls)||0)+(Number(x.emails)||0); });
+  if(w.length<8) return null;
+  var recent=w.slice(-4).reduce(function(a,b){return a+b;},0);
+  var prior=w.slice(-8,-4).reduce(function(a,b){return a+b;},0);
+  if(!prior&&!recent) return null;
+  var pct=prior?Math.round((recent-prior)/prior*100):100;
+  return { recent:recent, prior:prior, pct:pct, up:pct>=0 };
+}
+function dashChart(weekly){
+  var W=640,H=190,padL=34,padR=10,padT=14,padB=26;
+  var wks=weekly||[]; if(!wks.length) return '<div class="empty">No activity history yet.</div>';
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var max=1; wks.forEach(function(x){ max=Math.max(max,Number(x.calls)||0,Number(x.emails)||0); });
+  var X=function(i){ return padL+(W-padL-padR)*(wks.length>1?i/(wks.length-1):0); };
+  var Y=function(v){ return padT+(H-padT-padB)*(1-v/max); };
+  var line=function(key,col){
+    var pts=wks.map(function(x,i){ return X(i)+','+Y(Number(x[key])||0); }).join(' ');
+    var dots=wks.map(function(x,i){ var v=Number(x[key])||0; return '<circle cx="'+X(i)+'" cy="'+Y(v)+'" r="3.2" fill="'+col+'" stroke="#fff" stroke-width="1.3"><title>'+v+' '+key+' &middot; wk of '+x.wk+'</title></circle>'; }).join('');
+    return '<polyline points="'+pts+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+dots;
+  };
+  var grid='',labels='';
+  [0,.5,1].forEach(function(f){ var v=Math.round(max*f); var y=Y(v); grid+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="var(--line-soft,#E8E8ED)" stroke-width="1"/>'; labels+='<text x="'+(padL-6)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="10" fill="var(--faint,#98989F)">'+v+'</text>'; });
+  wks.forEach(function(x,i){ if(i%2) return; var d=new Date(x.wk); labels+='<text x="'+X(i)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9.5" fill="var(--faint,#98989F)">'+d.getDate()+' '+M[d.getMonth()]+'</text>'; });
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid+labels+line('calls','#0060C7')+line('emails','#0A6B4A')+'</svg>'+
+    '<div class="controls" style="gap:14px;padding:2px 0 0"><span class="hint"><span class="bdot" style="background:#0060C7"></span> calls logged</span><span class="hint"><span class="bdot" style="background:#0A6B4A"></span> emails logged</span><span class="hint" style="margin-left:auto">12 weeks, from HubSpot &middot; if it is not logged, it is not here</span></div>';
+}
+function renderDashView(el,r){
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var unret=(r.missed||[]).filter(function(m){ return !m.returned; });
+  var tr=dashTrend(r.weekly);
+  var h='<div class="statwrap"><div class="statgrid">'+
+    stat("Missed inbound",nf(r.missed_total),r.days+" days &middot; "+r.unreturned+" never called back",r.unreturned?"alarm":"ok")+
+    stat("Inbound answered",nf(r.inbound_answered_team),(r.inbound_answered_mine?nf(r.inbound_answered_mine)+" by you &middot; ":"")+"whole team, "+r.days+" days")+
+    stat("Leads in pipeline",nf(r.leads_in_pipeline),"HubSpot companies you own")+
+    stat("Customers",nf(r.customers_count),"trading accounts on your book")+
+    stat("Avg weekly revenue","£"+nf(r.avg_weekly_rev),"from your customers&rsquo; recent monthly spend")+
+    '</div></div>';
+  if(unret.length){
+    h+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#DC2626"></span><h3>Missed and never called back</h3><span class="hint">inbound callers nobody has rung back &mdash; each one might have been a job</span></div><div class="plist">'+
+      unret.map(function(m){
+        var d=new Date(m.at);
+        return '<div class="actrow" style="align-items:center">'+
+          '<div class="co"><b>'+esc(m.company||m.domain||"Unknown caller")+'</b>'+
+          '<div class="dom">'+esc(m.phone||"")+' &middot; '+d.getDate()+' '+M[d.getMonth()]+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+'</div></div>'+
+          '<div class="rt" style="display:flex;gap:8px;align-items:center;margin-left:auto">'+
+          (m.domain?'<button class="chip" onclick="openCallLead(\''+esc(m.domain)+'\')">Profile</button>':'')+
+          (m.phone?'<a class="btn btn-primary btn-sm tel" href="tel:'+esc(m.phone)+'">Call back</a>':'')+'</div></div>';
+      }).join('')+'</div></div>';
+  }
+  h+='<div class="panel"><div class="phead" style="padding:0 0 8px"><span class="bdot" style="background:#0060C7"></span><h3>Activity &mdash; last 12 weeks</h3>'+
+    (tr?'<span class="pill" style="margin-left:auto;background:'+(tr.up?'#E7F6EF;color:#0A6B4A':'#FEE2E2;color:#B91C1C')+'">'+(tr.up?'&#9650;':'&#9660;')+' '+Math.abs(tr.pct)+'% vs the four weeks before</span>':'')+'</div>'+
+    dashChart(r.weekly)+'</div>';
+  el.innerHTML=h;
 }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
 var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2";
@@ -2073,6 +2140,7 @@ function loadCustomers(){
     paintFreshness(r.tms);
     window.__cust=r.customers||[]; window.__custAll=!!r.all; window.__custFilter="all";
     window.__custWatch=r.watch||[]; window.__custQ="";
+    window.__chAlerts=r.ch_alerts||window.__chAlerts||{};
     window.__myComm=null;
     renderCustomers();
     // a rep (or a viewed-as rep) sees their own commission right where their
@@ -2343,7 +2411,7 @@ function renderCustTable(){
     var num=function(v,fmt){ return '<td class="num" style="font-variant-numeric:tabular-nums;white-space:nowrap">'+(v!=null?fmt(v):'<span class="faint">&ndash;</span>')+'</td>'; };
     return '<tr'+open+'>'+
       (team?'<td style="white-space:nowrap">'+(x.salesperson?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.salesperson)+'">'+esc(initials(x.salesperson))+'</span>'+esc(String(x.salesperson).split(" ")[0])+'</span>':'<span class="faint">&ndash;</span>')+'</td>':'')+
-      '<td class="company-cell" style="max-width:240px"><b>'+esc(custName(x.customer_name))+'</b>'+(x.domain?'<div class="dom">'+esc(x.domain)+'</div>':'')+'</td>'+
+      '<td class="company-cell" style="max-width:240px"><b>'+esc(custName(x.customer_name))+'</b>'+chPill(x.domain)+(x.domain?'<div class="dom">'+esc(x.domain)+'</div>':'')+'</td>'+
       '<td style="white-space:nowrap;font-variant-numeric:tabular-nums">'+(x.postcode?'<span style="cursor:pointer" title="filter to '+esc(pcArea(x.postcode))+'" onclick="event.stopPropagation();cuSet(\'pc\',\''+esc(pcArea(x.postcode))+'\')">'+esc(String(x.postcode).toUpperCase())+'</span>':'<span class="faint">&ndash;</span>')+'</td>'+
       '<td style="min-width:110px">'+(acts||'<span class="faint">&ndash;</span>')+'</td>'+
       '<td style="white-space:nowrap">'+lc+'</td>'+
@@ -2407,6 +2475,7 @@ function loadLeadsMine(){
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmReps=r.reps||[]; window.__lmQ=""; window.__lmPage=1;
+    window.__chAlerts=r.ch_alerts||window.__chAlerts||{};
     window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmPc=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
@@ -2422,6 +2491,13 @@ function lmFun(k){
 }
 // postcode area = the letters before the digits (SK10 4TF -> SK)
 function pcArea(pc){ var m=String(pc||'').toUpperCase().trim().match(/^[A-Z]{1,2}/); return m?m[0]:''; }
+// Companies House distress flag (Liquidation / In Administration / strike-off
+// / Dissolved) - ch-watch refreshes the register 3x daily
+function chPill(dom){
+  var s=dom&&window.__chAlerts&&window.__chAlerts[dom];
+  if(!s) return '';
+  return ' <span class="pill" title="Companies House status - check before extending credit" style="background:#FEE2E2;color:#B91C1C;font-weight:700">&#9888; '+esc(s)+'</span>';
+}
 // the rep-set pipeline status straight from the HubSpot company record
 // (hs_lead_status) - label + colour per stage of the journey
 var HSTAT={NEW:['New','#F0F6FF','#0060C7'],OPEN:['Open','#E7F8F0','#0A6B4A'],IN_PROGRESS:['In progress','#FEF6E7','#7A4E07'],ATTEMPTED_TO_CONTACT:['Attempted','#F2F4F8','#3A455B'],CONNECTED:['Connected','#E7F8F0','#0A6B4A'],OPEN_DEAL:['Open deal','#0A6B4A','#fff'],UNQUALIFIED:['Unqualified','#FEF2F2','#8F1D1D'],BAD_TIMING:['Bad timing','#F2F4F8','#3A455B'],
@@ -2991,7 +3067,7 @@ function renderLmRows(){
           (x.rep?'<span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0]):'<span class="faint">unowned</span>')+
           ' <i class="ph ph-caret-down" style="font-size:10px;color:var(--mut)"></i></span>'+
         (x.owner_mismatch&&x.worked_by?'<div style="font-size:10.5px;color:#B45309;margin-top:3px" title="The HubSpot owner has never logged activity here - these reps have">&#9888; worked by '+esc(x.worked_by)+'</div>':'')+'</td>':'')+
-      '<td class="company-cell" style="max-width:260px"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
+      '<td class="company-cell" style="max-width:260px"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+chPill(x.domain)+
         '<div class="dom">'+esc(x.domain||'')+
         (!team&&x.owner_mismatch&&x.worked_by?' <span style="color:#B45309" title="Owned by you in HubSpot, but the activity is someone else&#39;s">&#9888; worked by '+esc(x.worked_by)+'</span>':'')+'</div>'+
         (insight?'<div class="dom" style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px" title="'+esc(insight)+'">'+esc(insight)+'</div>':'')+'</td>'+
@@ -4386,6 +4462,7 @@ function renderDash(p){
       '<div class="sb-brand"><span class="blogo">C</span><span>Cal Sameday</span></div>'+
       '<nav class="sb-nav nav">'+
         '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i>Today</button>'+
+        '<button class="nv" data-v="dash" onclick="setView(this)"><i class="ph ph-gauge"></i>Dashboard</button>'+
         '<button class="nv" data-v="tasks" onclick="setView(this)"><i class="ph ph-check-circle"></i>Tasks</button>'+
         '<button class="nv" data-v="leadsmine" onclick="setView(this)"><i class="ph ph-chats-circle"></i>Leads</button>'+
         '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i>Customers</button>'+
@@ -4412,6 +4489,7 @@ function renderDash(p){
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">AI-hunted and Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot with you as the owner.</p></div></div><div id="leadboard">'+spinner()+'</div></div>'+
     '<div id="view-today" class="view" style="display:none"><div class="page-head"><div><div class="t">Today</div><p class="sub">Ranked by obligation, not by score &mdash; what we owe someone, then what you promised, then accounts going quiet, then fresh ground. It refills itself.</p></div></div><div id="todayboard">'+spinner()+'</div></div>'+
+    '<div id="view-dash" class="view" style="display:none"><div class="page-head"><div><div class="t">Dashboard</div><p class="sub">Your numbers at a glance &mdash; the calls picture, your pipeline, your revenue, and whether your activity is climbing or sliding.</p></div></div><div id="dashboard2">'+spinner()+'</div></div>'+
     '<div id="view-pulse" class="view" style="display:none"><div class="page-head"><div><div class="t">Pulse</div><p class="sub">Productivity, effort, outcome and quality &mdash; per person, from the phones, the inboxes and HubSpot. Only you see this.</p></div></div><div id="pulseboard">'+spinner()+'</div></div>'+
     '<div id="view-customers" class="view" style="display:none"><div class="page-head"><div><div class="t">Customers</div><p class="sub">Your converted accounts &mdash; on the system and spending. Booking history comes from HubSpot deals until the TMS is wired in.</p></div></div><div id="custboard">'+spinner()+'</div></div>'+
     '<div id="view-leadsmine" class="view" style="display:none"><div class="page-head"><div><div class="t">Leads</div><p class="sub">Everyone you have reached where something constructive happened. Open one for the full history.</p></div></div><div id="lmboard">'+spinner()+'</div></div>'+
@@ -4442,6 +4520,7 @@ function renderDash(p){
     '</div>'+
     '</div></div></main></div>'+
     '<div id="moresheet" style="display:none" class="moresheet nav">'+
+      '<button class="nv" data-v="dash" onclick="setView(this)"><i class="ph ph-gauge"></i>Dashboard</button>'+
       '<button class="nv" data-v="calendar" onclick="setView(this)"><i class="ph ph-calendar-blank"></i>Calendar</button>'+
       '<button class="nv" data-v="assistant" onclick="setView(this)"><i class="ph ph-sparkle"></i>Assistant</button>'+
       '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-users-three"></i>Team</button>'+
