@@ -2443,7 +2443,13 @@ function mapMode(m){
   if((m==='customers'||m==='both')&&!(window.__cust&&window.__cust.length)){
     var payload={action:"customers"};
     if(window.CAN_MANAGE && !window.VIEW_AS && window.__custTeam!==false) payload.all=true;
-    desk2Post(payload,function(r){ if(r&&r.ok){ window.__cust=r.customers||[]; window.__custWatch=r.watch||[]; window.__custAll=!!r.all; } mapRender(MAP.host); });
+    desk2Post(payload,function(r){ if(r&&r.ok){ window.__cust=r.customers||[]; window.__custWatch=r.watch||[]; window.__custAll=!!r.all; } mapMode(m); });
+    return;
+  }
+  if((m==='leads'||m==='both')&&!(window.__lm&&window.__lm.length)){
+    var lp={action:"leads"};
+    if(window.CAN_MANAGE && !window.VIEW_AS && window.__lmAll) lp.all=true;
+    desk2Post(lp,function(r){ if(r&&r.ok){ window.__lm=r.leads||[]; window.__lmReps=r.reps||[]; } mapRender(MAP.host); });
     return;
   }
   mapRender(MAP.host);
