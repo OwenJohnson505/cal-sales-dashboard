@@ -2424,8 +2424,8 @@ function mapItems(){
   return {items:items, hidden:hidden};
 }
 function mapRender(host){
+  if(MAP.host!==host || !MAP.mode) MAP.mode=(host==='customers')?'customers':'leads';
   MAP.host=host;
-  if(!MAP.mode) MAP.mode=(host==='customers')?'customers':'leads';
   var region=document.getElementById('mapregion'); if(!region) return;
   region.innerHTML='<div class="controls" style="padding:8px 20px;border-bottom:1px solid var(--line-soft);gap:8px;align-items:center;flex-wrap:wrap">'+
     '<span class="viewseg" style="margin-left:0">'+['leads','customers','both'].map(function(m){ return '<button'+(MAP.mode===m?' class="on"':'')+' onclick="mapMode(\''+m+'\')">'+m.charAt(0).toUpperCase()+m.slice(1)+'</button>'; }).join('')+'</span>'+
