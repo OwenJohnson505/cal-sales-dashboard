@@ -882,6 +882,13 @@ function sendChat(){
         '<button class="go" onclick="confirmAct(\''+esc(ev.id)+'\')">Confirm</button>'+
         '<button class="no" onclick="dismissAct(\''+esc(ev.id)+'\')">Dismiss</button></div>');
     }
+    else if(ev.type==="file"){
+      var host3=document.getElementById("cm-"+n);
+      if(host3) host3.insertAdjacentHTML("beforeend",
+        '<div class="actchip done"><span class="as"><i class="ph ph-file-xls" style="font-size:16px;vertical-align:-3px"></i> '+
+        '<a href="'+esc(ev.url)+'" target="_blank" rel="noopener" style="color:inherit;font-weight:700;text-decoration:underline">Download '+esc(ev.filename||"export.xlsx")+'</a>'+
+        (ev.rows?' &middot; '+ev.rows+' rows':'')+' &middot; link lasts 7 days</span></div>');
+    }
     else if(ev.type==="error"){ if(bd) bd.innerHTML=fmtMd(acc)+ '<p style="color:#8F1D1D">'+esc(ev.error||"Something went wrong.")+'</p>'; }
     else if(ev.type==="done"){ if(tl){ tl.innerHTML=toolSeen.length?('<i class="ph ph-check"></i>'+esc(toolSeen.join(" · "))):""; if(!toolSeen.length) tl.style.display="none"; } }
     var host2=document.getElementById("cm-"+n); if(host2) host2.scrollIntoView({behavior:"auto",block:"end"});
