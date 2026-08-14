@@ -2008,21 +2008,171 @@ function renderCustomers(){
     stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
     stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days")+
     '</div></div>'+
-    '<div class="controls">'+
-      '<input id="custq" class="input" placeholder="Search customers..." oninput="custSearch(this.value)" style="max-width:210px;padding:7px 12px;font-size:13.5px">'+
-      '<button class="chip active" onclick="custFilter(\'all\',this)">All</button>'+
-      '<button class="chip" onclick="custFilter(\'declining\',this)">Spend falling</button>'+
-      '<button class="chip" onclick="custFilter(\'offpattern\',this)">Out of pattern</button>'+
-      '<button class="chip" onclick="custFilter(\'growing\',this)">Growing</button>'+
-      '<button class="chip" onclick="custFilter(\'new\',this)">New</button>'+
-      '<button class="chip" onclick="custFilter(\'quiet\',this)">Quiet 60d+</button>'+
-      '<button class="chip" onclick="custFilter(\'top\',this)">Top spenders</button>'+
-      '<button class="chip" onclick="custFilter(\'noform\',this)">No account form</button>'+
-    '</div>'+
-    '<div class="panel flush"><div class="phead"><h3>Customers</h3><span class="hint" id="custcount"></span></div><div class="plist" id="custrows"></div></div>';
-  renderCustRows();
+    '<div class="panel flush"><div class="phead"><h3>Customers</h3>'+
+      '<input id="custq" class="input" placeholder="Search customer, domain, postcode, rep..." value="'+esc(window.__custQ||'')+'" oninput="custSearch(this.value)" style="margin-left:auto;flex:1;max-width:380px;padding:8px 13px;font-size:13.5px;border-radius:10px">'+
+      '<span class="hint" id="custcount" style="white-space:nowrap"></span></div>'+
+    '<div id="cubar"></div>'+
+    '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm lmtable"><thead><tr>'+
+      (window.__custAll?'<th onclick="cuSortH(\'rep\')">Rep'+cuArr('rep')+cuFun('rep')+'</th>':'')+
+      '<th onclick="cuSortH(\'name\')">Customer'+cuArr('name')+'</th>'+
+      '<th onclick="cuSortH(\'pc\')">Postcode'+cuArr('pc')+cuFun('pc')+'</th>'+
+      '<th title="open suggested tasks + action tags on the account">Actions'+cuFun('act')+'</th>'+
+      '<th onclick="cuSortH(\'contact\')" title="last time a rep actually reached them - an answered call or an email sent">Last contact'+cuArr('contact')+cuFun('contact')+'</th>'+
+      '<th onclick="cuSortH(\'started\')">Started'+cuArr('started')+'</th>'+
+      '<th class="num" onclick="cuSortH(\'jobswk\')">Jobs/wk'+cuArr('jobswk')+'</th>'+
+      '<th class="num" onclick="cuSortH(\'monthly\')" title="average of the last two full months">Monthly &pound;'+cuArr('monthly')+'</th>'+
+      '<th class="num" onclick="cuSortH(\'margin\')">Margin'+cuArr('margin')+'</th>'+
+      '<th class="num" onclick="cuSortH(\'lifetime\')">Lifetime &pound;'+cuArr('lifetime')+'</th>'+
+      '<th onclick="cuSortH(\'trend\')">Trend'+cuArr('trend')+cuFun('trend')+'</th>'+
+      '<th style="width:28px"></th>'+
+    '</tr></thead><tbody id="custrows"></tbody></table></div></div>';
+  renderCustTable();
 }
-function custSearch(q){ window.__custQ=String(q||"").toLowerCase(); renderCustRows(); }
+function custSearch(q){ window.__custQ=String(q||"").toLowerCase(); renderCustTable(); }
+/* customers table: every funnel is independent and they ALL stack - SK
+   postcodes AND has-actions AND declining works exactly like the leads table */
+function cuArr(k){ return window.__cuSort===k?(' <span style="font-size:9px">'+(window.__cuDir>0?'&#9650;':'&#9660;')+'</span>'):''; }
+function cuFun(k){
+  var F=window.__cuF||{};
+  return '<i class="ph '+(F[k]?'ph-funnel-simple-fill on':'ph-funnel-simple')+' lmfun" title="filter" onclick="event.stopPropagation();cuMenu(\''+k+'\',this)"></i>';
+}
+function cuSet(k,v){ window.__cuF=window.__cuF||{}; window.__cuF[k]=(v===''?null:v); lmMenuClose(); renderCustomers(); }
+function cuSortH(k){
+  if(window.__cuSort===k) window.__cuDir=-window.__cuDir;
+  else { window.__cuSort=k; window.__cuDir=(k==='name'||k==='rep'||k==='pc'||k==='trend')?1:-1; }
+  renderCustomers();
+}
+function cuMenu(key,ic){
+  if(document.getElementById('lmmenu')){ lmMenuClose(); return; }
+  var L=window.__cust||[], F=window.__cuF||{}, items=[];
+  var mk=function(label,n,on,v){
+    return '<div class="lmmi'+(on?' on':'')+'" onclick="cuSet(\''+key+'\',\''+esc(String(v).replace(/'/g,''))+'\')">'+
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(label)+'</span>'+
+      (n!=null?'<span style="color:var(--faint);font-size:11.5px;margin-left:auto;padding-left:10px">'+n+'</span>':'')+
+      (on?'<i class="ph ph-check" style="color:#0071E3;margin-left:6px;flex:none"></i>':'')+'</div>';
+  };
+  if(key==='rep'){
+    var rc={}; L.forEach(function(x){ var f=String(x.salesperson||'').split(' ')[0]; if(f) rc[f]=(rc[f]||0)+1; });
+    items.push(mk('Anyone',null,!F.rep,''));
+    Object.keys(rc).sort().forEach(function(r){ items.push(mk(r,rc[r],F.rep===r,r)); });
+  } else if(key==='pc'){
+    var pc={}; L.forEach(function(x){ var a=pcArea(x.postcode); if(a) pc[a]=(pc[a]||0)+1; });
+    items.push(mk('Any area',null,!F.pc,''));
+    Object.keys(pc).sort().forEach(function(a){ items.push(mk(a,pc[a],F.pc===a,a)); });
+  } else if(key==='act'){
+    var na=L.filter(function(x){return Number(x.open_actions)>0||x.action_tags;}).length;
+    items.push(mk('Any',null,!F.act,''));
+    items.push(mk('Has action points',na,F.act==='yes','yes'));
+    items.push(mk('No action points',L.length-na,F.act==='no','no'));
+  } else if(key==='contact'){
+    var now=Date.now();
+    var never=L.filter(function(x){return !x.last_contact;}).length;
+    var d30=L.filter(function(x){return x.last_contact&&(now-new Date(x.last_contact).getTime())>30*864e5;}).length;
+    var d60=L.filter(function(x){return x.last_contact&&(now-new Date(x.last_contact).getTime())>60*864e5;}).length;
+    items.push(mk('Any',null,!F.contact,''));
+    items.push(mk('Never logged',never,F.contact==='never','never'));
+    items.push(mk('Over 30d ago',d30,F.contact==='30','30'));
+    items.push(mk('Over 60d ago',d60,F.contact==='60','60'));
+    items.push(mk('Within 30d',L.length-never-d30,F.contact==='recent','recent'));
+  } else if(key==='trend'){
+    var tc={}; L.forEach(function(x){ if(x.trend) tc[x.trend]=(tc[x.trend]||0)+1; });
+    items.push(mk('Any',null,!F.trend,''));
+    ['growing','steady','declining','new','quiet'].forEach(function(t){ if(tc[t]) items.push(mk(t.charAt(0).toUpperCase()+t.slice(1),tc[t],F.trend===t,t)); });
+    var op=L.filter(function(x){return x.off_pattern||x.volume_shift;}).length;
+    if(op) items.push(mk('Out of pattern',op,F.trend==='offpattern','offpattern'));
+  }
+  var m=document.createElement('div'); m.id='lmmenu';
+  var r=ic.getBoundingClientRect();
+  m.style.top=(r.bottom+6)+'px';
+  m.style.left=Math.max(8,Math.min(r.left-10,window.innerWidth-252))+'px';
+  m.innerHTML=items.join('');
+  m.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.body.appendChild(m);
+  setTimeout(function(){
+    document.addEventListener('click',function h(){ document.removeEventListener('click',h); lmMenuClose(); });
+  },0);
+}
+function cuBar(){
+  var F=window.__cuF||{}, parts=[];
+  if(F.rep) parts.push('<button class="chip active" onclick="cuSet(\'rep\',null)">'+esc(F.rep)+' &times;</button>');
+  if(F.pc) parts.push('<button class="chip active" onclick="cuSet(\'pc\',null)">'+esc(F.pc)+' postcodes &times;</button>');
+  if(F.act) parts.push('<button class="chip active" onclick="cuSet(\'act\',null)">'+(F.act==='yes'?'has actions':'no actions')+' &times;</button>');
+  if(F.contact) parts.push('<button class="chip active" onclick="cuSet(\'contact\',null)">contact: '+esc(F.contact==='never'?'never':(F.contact==='recent'?'within 30d':F.contact+'d+'))+' &times;</button>');
+  if(F.trend) parts.push('<button class="chip active" onclick="cuSet(\'trend\',null)">'+esc(F.trend)+' &times;</button>');
+  if(!parts.length) return '';
+  return '<div class="controls" style="padding:8px 20px;border-bottom:1px solid var(--line-soft);align-items:center">'+
+    '<span class="hint" style="margin-right:2px">Filtered to</span>'+parts.join('')+
+    '<button class="chip" style="border-color:transparent;background:transparent;color:var(--mut)" onclick="window.__cuF={};renderCustomers()">Clear all</button></div>';
+}
+function fmtShortD(d){
+  if(!d) return null;
+  var x=new Date(d); if(isNaN(x)) return null;
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return x.getDate()+' '+M[x.getMonth()]+' '+String(x.getFullYear()).slice(2);
+}
+function renderCustTable(){
+  var box=document.getElementById("custrows"); if(!box) return;
+  var bar=document.getElementById("cubar"); if(bar) bar.innerHTML=cuBar();
+  var F=window.__cuF||{}, cs=(window.__cust||[]).slice(), q=window.__custQ||"", team=!!window.__custAll;
+  if(q) cs=cs.filter(function(x){
+    return (String(x.customer_name||"")+" "+String(x.domain||"")+" "+String(x.salesperson||"")+" "+String(x.postcode||"")+" "+String(x.action_tags||"")).toLowerCase().indexOf(q)>=0; });
+  if(F.rep) cs=cs.filter(function(x){ return String(x.salesperson||'').split(' ')[0]===F.rep; });
+  if(F.pc) cs=cs.filter(function(x){ return pcArea(x.postcode)===F.pc; });
+  if(F.act==='yes') cs=cs.filter(function(x){ return Number(x.open_actions)>0||x.action_tags; });
+  if(F.act==='no') cs=cs.filter(function(x){ return !(Number(x.open_actions)>0||x.action_tags); });
+  if(F.contact){
+    var now=Date.now();
+    cs=cs.filter(function(x){
+      var age=x.last_contact?(now-new Date(x.last_contact).getTime())/864e5:null;
+      if(F.contact==='never') return age===null;
+      if(F.contact==='30') return age!==null&&age>30;
+      if(F.contact==='60') return age!==null&&age>60;
+      return age!==null&&age<=30;
+    });
+  }
+  if(F.trend==='offpattern') cs=cs.filter(function(x){ return x.off_pattern||x.volume_shift; });
+  else if(F.trend) cs=cs.filter(function(x){ return x.trend===F.trend; });
+  var srt={
+    rep:function(a,b){ return String(a.salesperson||"").localeCompare(String(b.salesperson||"")); },
+    name:function(a,b){ return String(a.customer_name||"").localeCompare(String(b.customer_name||"")); },
+    pc:function(a,b){ return String(a.postcode||"zz").localeCompare(String(b.postcode||"zz")); },
+    contact:function(a,b){ return String(a.last_contact||"").localeCompare(String(b.last_contact||"")); },
+    started:function(a,b){ return String(a.first_job||"").localeCompare(String(b.first_job||"")); },
+    jobswk:function(a,b){ return (Number(a.jobs_per_week)||0)-(Number(b.jobs_per_week)||0); },
+    monthly:function(a,b){ return (Number(a.recent_monthly)||0)-(Number(b.recent_monthly)||0); },
+    margin:function(a,b){ return (Number(a.margin_pct)||0)-(Number(b.margin_pct)||0); },
+    lifetime:function(a,b){ return (Number(a.revenue_total)||0)-(Number(b.revenue_total)||0); },
+    trend:function(a,b){ return String(a.trend||"").localeCompare(String(b.trend||"")); },
+  }[window.__cuSort||'lifetime'];
+  if(srt) cs.sort(function(a,b){ return srt(a,b)*(window.__cuDir||-1); });
+  var cnt=document.getElementById("custcount"); if(cnt) cnt.textContent=cs.length+' customers';
+  var now2=Date.now();
+  box.innerHTML=cs.map(function(x){
+    var open=x.domain?(' class="crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
+    var acts='';
+    if(Number(x.open_actions)>0) acts+='<span class="pill" style="background:#F0F6FF;color:#0060C7">'+x.open_actions+' task'+(x.open_actions>1?'s':'')+'</span> ';
+    if(x.action_tags) acts+=String(x.action_tags).split(', ').slice(0,2).map(function(t){ return '<span class="pill" style="background:#1D1D1F;color:#fff">'+esc(t)+'</span>'; }).join(' ');
+    var lc='<span class="faint">never logged</span>';
+    if(x.last_contact){
+      var days=Math.floor((now2-new Date(x.last_contact).getTime())/864e5);
+      lc='<b>'+fmtShortD(x.last_contact)+'</b><div class="dom"><i class="ph '+(x.last_contact_kind==='call'?'ph-phone':'ph-envelope-simple')+'" style="margin-right:3px"></i>'+(x.last_contact_kind==='call'?'spoke':'emailed')+' &middot; '+(days===0?'today':days+'d ago')+(days>60?' <span style="color:#B45309">&#9888;</span>':'')+'</div>';
+    }
+    var num=function(v,fmt){ return '<td class="num" style="font-variant-numeric:tabular-nums;white-space:nowrap">'+(v!=null?fmt(v):'<span class="faint">&ndash;</span>')+'</td>'; };
+    return '<tr'+open+'>'+
+      (team?'<td style="white-space:nowrap">'+(x.salesperson?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.salesperson)+'">'+esc(initials(x.salesperson))+'</span>'+esc(String(x.salesperson).split(" ")[0])+'</span>':'<span class="faint">&ndash;</span>')+'</td>':'')+
+      '<td class="company-cell" style="max-width:240px"><b>'+esc(custName(x.customer_name))+'</b>'+(x.domain?'<div class="dom">'+esc(x.domain)+'</div>':'')+'</td>'+
+      '<td style="white-space:nowrap;font-variant-numeric:tabular-nums">'+(x.postcode?'<span style="cursor:pointer" title="filter to '+esc(pcArea(x.postcode))+'" onclick="event.stopPropagation();cuSet(\'pc\',\''+esc(pcArea(x.postcode))+'\')">'+esc(String(x.postcode).toUpperCase())+'</span>':'<span class="faint">&ndash;</span>')+'</td>'+
+      '<td style="min-width:110px">'+(acts||'<span class="faint">&ndash;</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+lc+'</td>'+
+      '<td style="white-space:nowrap">'+(x.first_job?fmtShortD(x.first_job):'<span class="faint">&ndash;</span>')+'</td>'+
+      num(x.jobs_per_week,function(v){return Number(v).toFixed(1);})+
+      num(x.recent_monthly,function(v){return '£'+nf(Math.round(v));})+
+      num(x.margin_pct,function(v){return v+'%';})+
+      num(x.revenue_total,function(v){return '£'+nf(Math.round(v));})+
+      '<td style="white-space:nowrap">'+spendSpark(x.monthly)+' '+trendPill(x)+'</td>'+
+      '<td>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
+  }).join("")||'<tr><td colspan="'+(team?12:11)+'"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
+}
 // TMS names arrive with entry artifacts ("DHL Ltd''", "Brenntag Limited..",
 // "RAD Desk@") - strip trailing junk for display, never for matching
 function custName(s){ return String(s||"").replace(/[\s'".,@]+$/,""); }
@@ -2074,7 +2224,7 @@ function loadLeadsMine(){
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmReps=r.reps||[]; window.__lmQ=""; window.__lmPage=1;
-    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
+    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmPc=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
   });
@@ -2084,9 +2234,11 @@ function loadLeadsMine(){
 // the same place. One prominent search box up top.
 function lmArr(k){ return window.__lmSort===k?(' <span style="font-size:9px">'+(window.__lmDir>0?'&#9650;':'&#9660;')+'</span>'):''; }
 function lmFun(k){
-  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='hstat'&&window.__lmHstat)||(k==='ctags'&&window.__lmTagC)||(k==='atags'&&window.__lmTagA);
+  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='hstat'&&window.__lmHstat)||(k==='pc'&&window.__lmPc)||(k==='ctags'&&window.__lmTagC)||(k==='atags'&&window.__lmTagA);
   return '<i class="ph '+(on?'ph-funnel-simple-fill on':'ph-funnel-simple')+' lmfun" title="filter" onclick="event.stopPropagation();lmMenu(\''+k+'\',this)"></i>';
 }
+// postcode area = the letters before the digits (SK10 4TF -> SK)
+function pcArea(pc){ var m=String(pc||'').toUpperCase().trim().match(/^[A-Z]{1,2}/); return m?m[0]:''; }
 // the rep-set pipeline status straight from the HubSpot company record
 // (hs_lead_status) - label + colour per stage of the journey
 var HSTAT={NEW:['New','#F0F6FF','#0060C7'],OPEN:['Open','#E7F8F0','#0A6B4A'],IN_PROGRESS:['In progress','#FEF6E7','#7A4E07'],ATTEMPTED_TO_CONTACT:['Attempted','#F2F4F8','#3A455B'],CONNECTED:['Connected','#E7F8F0','#0A6B4A'],OPEN_DEAL:['Open deal','#0A6B4A','#fff'],UNQUALIFIED:['Unqualified','#FEF2F2','#8F1D1D'],BAD_TIMING:['Bad timing','#F2F4F8','#3A455B'],
@@ -2113,6 +2265,7 @@ function lmScaffold(){
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
       '<th onclick="lmSortH(\'status\')" title="The AI&#39;s read of how the conversation is going, taken from the actual calls and emails - not set by anyone">Indication'+lmArr('status')+lmFun('status')+'</th>'+
       '<th onclick="lmSortH(\'hstat\')" title="The lead status the rep set on the company record in HubSpot">HubSpot lead status'+lmArr('hstat')+lmFun('hstat')+'</th>'+
+      '<th onclick="lmSortH(\'pc\')">Postcode'+lmArr('pc')+lmFun('pc')+'</th>'+
       '<th>Conversation tags'+lmFun('ctags')+'</th>'+
       '<th>Action tags'+lmFun('atags')+'</th>'+
       '<th class="num" onclick="lmSortH(\'recent\')">Last engagement'+lmArr('recent')+'</th>'+
@@ -2129,6 +2282,7 @@ function lmActiveBar(){
   var parts=[], lbl={positive:'warm',mixed:'mixed',stale:'gone quiet',negative:'negative',no_contact:'no established contact',none:'no read yet'};
   if(window.__lmEng) parts.push('<button class="chip active" onclick="lmEngSet(null)">'+esc(lbl[window.__lmEng]||window.__lmEng)+' &times;</button>');
   if(window.__lmHstat) parts.push('<button class="chip active" onclick="lmHstatSet(null)">'+esc(window.__lmHstat==='none'?'HubSpot: not set':('HubSpot: '+((HSTAT[window.__lmHstat]||[window.__lmHstat])[0])))+' &times;</button>');
+  if(window.__lmPc) parts.push('<button class="chip active" onclick="lmPcSet(null)">'+esc(window.__lmPc)+' postcodes &times;</button>');
   if(window.__lmOwner) parts.push('<button class="chip active" onclick="lmOwnSet(null)">'+esc(window.__lmOwner)+' &times;</button>');
   if(window.__lmTagC) parts.push('<button class="chip active" onclick="lmTagCSet(null)">'+esc(window.__lmTagC)+' &times;</button>');
   if(window.__lmTagA) parts.push('<button class="chip active" style="background:#1D1D1F;border-color:#1D1D1F" onclick="lmTagASet(null)">'+esc(window.__lmTagA)+' &times;</button>');
@@ -2142,9 +2296,10 @@ function lmNorm(s){ return String(s||"").replace(/'/g,''); }
 function lmEngSet(v){ window.__lmEng=v; window.__lmPage=1; lmScaffold(); }
 function lmOwnSet(v){ window.__lmOwner=v; window.__lmPage=1; lmScaffold(); }
 function lmHstatSet(v){ window.__lmHstat=v; window.__lmPage=1; lmScaffold(); }
+function lmPcSet(v){ window.__lmPc=v; window.__lmPage=1; lmScaffold(); }
 function lmTagCSet(v){ window.__lmTagC=v; window.__lmPage=1; lmScaffold(); }
 function lmTagASet(v){ window.__lmTagA=v; window.__lmPage=1; lmScaffold(); }
-function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmPage=1; lmScaffold(); }
+function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmPc=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmPage=1; lmScaffold(); }
 function lmViewAll(v){ window.__lmAll=v; loadLeadsMine(); }
 function lmExpandTags(dom){ window.__lmX=window.__lmX||{}; window.__lmX[dom]=!window.__lmX[dom]; renderLmRows(); }
 // sector labels don't move a sale and the account record holds them anyway
@@ -2168,6 +2323,7 @@ function lmMenuPick(key,v){
   v=(v===''?null:v);
   if(key==='owner') lmOwnSet(v); else if(key==='status') lmEngSet(v);
   else if(key==='hstat') lmHstatSet(v);
+  else if(key==='pc') lmPcSet(v);
   else if(key==='atags') lmTagASet(v); else lmTagCSet(v);
 }
 function lmMenu(key,ic){
@@ -2204,6 +2360,12 @@ function lmMenu(key,ic){
       var lbl=v==='none'?'Not set':((HSTAT[v]||[String(v).toLowerCase().replace(/_/g,' ')])[0]);
       items.push(mk(lbl,hc[v],window.__lmHstat===v,v));
     });
+  } else if(key==='pc'){
+    var pc={};
+    L.forEach(function(x){ var a=pcArea(x.postcode); if(a) pc[a]=(pc[a]||0)+1; });
+    items.push(mk('Any area',null,!window.__lmPc,''));
+    Object.keys(pc).sort().forEach(function(a){ items.push(mk(a,pc[a],window.__lmPc===a,a)); });
+    if(!Object.keys(pc).length) items.push('<div class="lmmi" style="cursor:default;color:var(--mut)">No postcodes on these leads yet</div>');
   } else if(key==='atags'){
     var ac={};
     L.forEach(function(x){ lmAllTags(x).a.forEach(function(t){ ac[t]=(ac[t]||0)+1; }); });
@@ -2390,7 +2552,7 @@ function renderLmRows(){
   var ls=(window.__lm||[]).slice(), team=!!window.__lmTeam, q=window.__lmQ||"";
   if(q) ls=ls.filter(function(x){
     var fx=x.facts||{};
-    var hay=(String(x.company||"")+" "+String(x.domain||"")+" "+String(x.rep||"")+" "
+    var hay=(String(x.company||"")+" "+String(x.domain||"")+" "+String(x.rep||"")+" "+String(x.postcode||"")+" "
       +String(x.headline||"")+" "+String(fx.current_supplier||"")+" "+((fx.tags||[]).join(" "))
       +" "+((x.utags||[]).map(function(u){return u.tag;}).join(" "))
       +(x.stage==='opportunity'?' opportunity':'')+(x.dropped_ball?' ball dropped':'')
@@ -2401,6 +2563,7 @@ function renderLmRows(){
   else if(window.__lmEng) ls=ls.filter(function(x){ return x.engagement===window.__lmEng; });
   if(window.__lmOwner) ls=ls.filter(function(x){ return String(x.rep||'').split(' ')[0]===window.__lmOwner; });
   if(window.__lmHstat) ls=ls.filter(function(x){ return window.__lmHstat==='none' ? !x.lead_status : x.lead_status===window.__lmHstat; });
+  if(window.__lmPc) ls=ls.filter(function(x){ return pcArea(x.postcode)===window.__lmPc; });
   if(window.__lmTagC){ var tc=lmNorm(window.__lmTagC);
     ls=ls.filter(function(x){ return lmAllTags(x).c.some(function(t){return lmNorm(t)===tc;}); }); }
   if(window.__lmTagA){ var ta=lmNorm(window.__lmTagA);
@@ -2413,6 +2576,7 @@ function renderLmRows(){
     company:function(a,b){ return String(a.company||a.domain||"").localeCompare(String(b.company||b.domain||"")); },
     owner:function(a,b){ return String(a.rep||"").localeCompare(String(b.rep||"")); },
     hstat:function(a,b){ return String(a.lead_status||"zz").localeCompare(String(b.lead_status||"zz")); },
+    pc:function(a,b){ return String(a.postcode||"zz").localeCompare(String(b.postcode||"zz")); },
     status:function(a,b){ var o={positive:1,mixed:2,stale:3,negative:4}; return (o[a.engagement]||9)-(o[b.engagement]||9); },
     recent:function(a,b){ return new Date(a.last_touch||0)-new Date(b.last_touch||0); }
   }[srt]||function(){return 0;};
@@ -2447,13 +2611,14 @@ function renderLmRows(){
         (insight?'<div class="dom" style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px" title="'+esc(insight)+'">'+esc(insight)+'</div>':'')+'</td>'+
       '<td style="white-space:nowrap">'+(sb?'<span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)"><span class="bdot" style="width:7px;height:7px;background:'+sb[0]+'"></span>'+sb[1]+'</span>':'<span class="faint" style="font-size:12.5px">no read yet</span>')+'</td>'+
       '<td style="white-space:nowrap">'+lmHstatPill(x.lead_status)+'</td>'+
+      '<td style="white-space:nowrap;font-variant-numeric:tabular-nums">'+(x.postcode?'<span style="cursor:pointer" title="filter to '+esc(pcArea(x.postcode))+' postcodes" onclick="event.stopPropagation();lmPcSet(\''+esc(pcArea(x.postcode))+'\')">'+esc(String(x.postcode).toUpperCase())+'</span>':'<span class="faint">&ndash;</span>')+'</td>'+
       (function(){ var tg=lmTagCells(x);
         return '<td style="min-width:200px;max-width:320px">'+tg.c+'</td>'+
                '<td style="min-width:110px;max-width:210px">'+tg.a+'</td>'; })()+
       '<td class="num" style="white-space:nowrap">'+(x.last_touch?('<b>'+whenB+'</b><div class="dom">'+esc(whenS)+'</div>'):'<span class="faint">never</span>')+'</td>'+
       num(x.calls)+num(x.emails)+num(x.notes)+
       '<td>'+((x.domain||peek)?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
-  }).join("")||'<tr><td colspan="11"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
+  }).join("")||'<tr><td colspan="12"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
   // page selector: every lead is reachable, not just the first screen
   var pager=document.getElementById("lmpager");
   if(pager){
