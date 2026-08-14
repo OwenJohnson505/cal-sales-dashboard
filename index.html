@@ -1466,7 +1466,7 @@ function setView(el){
   // sheet - selection syncs by data-v so they never disagree
   var b=document.querySelectorAll(".nv[data-v]"); for(var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i].getAttribute("data-v")===v);
   var ms=document.getElementById("moresheet"); if(ms) ms.style.display="none";
-  var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
+  var ids={assistant:"view-assistant",today:"view-today",pulse:"view-pulse",customers:"view-customers",leadsmine:"view-leadsmine",tasks:"view-tasks",calendar:"view-calendar",accounts:"view-accounts",calllist:"view-calllist",team:"view-team",settings:"view-settings",admin:"view-admin",pipeline:"view-pipeline",cold:"view-cold",leads:"view-leads",monitor:"view-monitor",simulation:"view-simulation"};
   for(var k in ids){ var e2=document.getElementById(ids[k]); if(e2) e2.style.display=(k===v?"":"none"); }
   var ct=document.querySelector(".content"); if(ct) ct.classList.toggle("wide", v==="leadsmine"||v==="calendar");
   if(v==="today") loadToday();
@@ -1479,6 +1479,7 @@ function setView(el){
   if(v==="calllist") loadCallList();
   if(v==="team") loadTeam();
   if(v==="settings") loadSettings();
+  if(v==="admin") loadAdmin();
   if(v==="leads" && !LEADSloaded) loadLeads();
   if(v==="monitor" && !MONloaded) loadMonitor();
   if(v==="simulation" && !SIMloaded) loadSim();
@@ -1486,6 +1487,130 @@ function setView(el){
 }
 function revealMgmt(){ var mg=document.querySelectorAll(".mgmtonly"); for(var i=0;i<mg.length;i++) mg[i].style.display=""; }
 function toggleMore(){ var ms=document.getElementById("moresheet"); if(!ms) return; ms.style.display=(ms.style.display==="none"?"":"none"); }
+// ---- Admin console: connector costs + audit trail (is_admin only) -----------
+var ADM={tab:'conn',days:30,open:{},data:null,fdays:7,fsrc:'',factor:'',fq:'',feed:null};
+function loadAdmin(){
+  var el=document.getElementById("adminboard"); if(!el) return;
+  if(!ADM.data){ el.innerHTML=spinner("Counting every API call..."); }
+  desk2Post({action:"admin_overview",days:ADM.days},function(r){
+    if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Only the admin account can open this.")+'</div>'; return; }
+    ADM.data=r; renderAdmin();
+  });
+}
+function admTab(t){ ADM.tab=t; if(t==='audit'&&!ADM.feed) admFeedLoad(); else renderAdmin(); }
+function admDays(d){ ADM.days=d; ADM.data=null; loadAdmin(); }
+function admExpand(k){ ADM.open[k]=!ADM.open[k]; renderAdmin(); }
+function admSubSave(k,inp){
+  var v=Number(inp.value)||0;
+  desk2Post({action:"connector_cost_set",connector:k,subscription_monthly:v},function(r){
+    if(r&&r.ok){ var c=(ADM.data.connectors||[]).find(function(x){return x.connector===k;});
+      if(c){ c.subscription_monthly=v; c.est_monthly_gbp=Math.round((v+c.usage_est_gbp*(30/ADM.data.days))*100)/100; }
+      renderAdmin(); }
+  });
+}
+function renderAdmin(){
+  var el=document.getElementById("adminboard"); if(!el||!ADM.data) return;
+  var tabs='<div class="controls" style="margin-bottom:14px"><span class="seg2">'+
+    '<button class="'+(ADM.tab==='conn'?'on':'')+'" onclick="admTab(\'conn\')">Connectors &amp; costs</button>'+
+    '<button class="'+(ADM.tab==='audit'?'on':'')+'" onclick="admTab(\'audit\')">Audit log</button></span></div>';
+  el.innerHTML=tabs+(ADM.tab==='conn'?admConnHtml():admAuditHtml());
+}
+function admConnHtml(){
+  var d=ADM.data, cs=(d.connectors||[]).slice().sort(function(a,b){ return b.est_monthly_gbp-a.est_monthly_gbp; });
+  var totSub=0, totUse=0; cs.forEach(function(c){ totSub+=Number(c.subscription_monthly)||0; totUse+=c.usage_est_gbp*(30/d.days); });
+  var seg=function(dd,lab){ return '<button class="'+(d.days===dd?'on':'')+'" onclick="admDays('+dd+')">'+lab+'</button>'; };
+  var h='<div class="statwrap"><div class="statgrid">'+
+    stat("Est. monthly total","£"+nf(Math.round(totSub+totUse)),"subscriptions + usage, scaled to 30 days")+
+    stat("Subscriptions","£"+nf(Math.round(totSub)),"editable below - set them to the real bill")+
+    stat("Usage (est.)","£"+nf(Math.round(totUse)),"per-call estimates × measured volume")+
+    stat("Window",d.days+" days",'counts below cover this period')+
+    '</div></div>'+
+    '<div class="controls" style="margin:2px 0 10px"><span class="hint">Numbers are estimates to find the big levers, not an invoice. Click a connector for the per-use-case breakdown.</span><span class="seg2" style="margin-left:auto">'+seg(7,'7d')+seg(30,'30d')+seg(90,'90d')+'</span></div>';
+  h+='<div class="panel flush"><div class="plist">'+cs.map(function(c){
+    var calls=(c.uses||[]).reduce(function(a,u){return a+u.calls;},0);
+    var openRow=!!ADM.open[c.connector];
+    var row='<div class="actrow crow" style="align-items:center" onclick="admExpand(\''+c.connector+'\')">'+
+      '<div class="co" style="min-width:170px"><b>'+esc(c.label)+'</b><div class="dom">'+esc(c.category||'')+' &middot; '+esc(c.billing_model||'')+'</div></div>'+
+      '<div class="rt" style="gap:18px;flex-wrap:wrap">'+
+        '<div style="text-align:right;min-width:90px"><b style="font-variant-numeric:tabular-nums">'+nf(calls)+'</b><div class="dom">calls &middot; '+d.days+'d</div></div>'+
+        '<div style="text-align:right;min-width:80px"><b style="font-variant-numeric:tabular-nums">'+(c.cron.runs?nf(c.cron.runs):'&ndash;')+'</b><div class="dom">cron runs'+(c.cron.failed?' &middot; <span style="color:#DC2626">'+c.cron.failed+' failed</span>':'')+'</div></div>'+
+        '<div style="text-align:right;min-width:80px"><b style="font-variant-numeric:tabular-nums">£'+nf(Math.round(c.usage_est_gbp))+'</b><div class="dom">usage est &middot; '+d.days+'d</div></div>'+
+        '<div style="text-align:right;min-width:110px" onclick="event.stopPropagation()"><span style="font-size:13px">£</span><input type="number" value="'+Number(c.subscription_monthly||0)+'" style="width:64px;font:inherit;font-size:13.5px;font-weight:650;padding:3px 6px;border:1px solid var(--line);border-radius:8px;text-align:right" onchange="admSubSave(\''+c.connector+'\',this)"><div class="dom">subscription/mo</div></div>'+
+        '<div style="text-align:right;min-width:86px"><b style="font-size:15px;font-variant-numeric:tabular-nums;color:'+(c.est_monthly_gbp>100?'#B45309':'var(--ink)')+'">£'+nf(Math.round(c.est_monthly_gbp))+'</b><div class="dom">est /month</div></div>'+
+        '<i class="ph ph-caret-'+(openRow?'up':'down')+' chv"></i></div></div>';
+    if(openRow){
+      row+='<div style="background:var(--color-base-200,#F5F5F7);border-radius:12px;margin:0 20px 12px;padding:12px 16px">'+
+        (c.sub_note?'<p class="hint" style="margin:0 0 8px">'+esc(c.sub_note)+'</p>':'')+
+        (c.uses||[]).map(function(u){
+          return '<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid rgba(0,0,0,.05);flex-wrap:wrap">'+
+            '<b style="font-size:13px;min-width:220px">'+esc(u.use_case)+'</b>'+
+            '<span style="font-variant-numeric:tabular-nums">'+nf(u.calls)+' calls</span>'+
+            (u.unit_gbp?'<span class="hint">× ~£'+u.unit_gbp+'</span><b style="font-variant-numeric:tabular-nums">£'+nf(Math.round(u.est_gbp))+'</b>':'<span class="hint">included in the plan</span>')+
+            '<span class="hint" style="flex-basis:100%;font-size:11px">'+esc(u.how)+'</span></div>';
+        }).join('')+
+        ((c.cron.jobs||[]).length?'<p class="hint" style="margin:9px 0 2px"><b>Scheduled jobs:</b> '+c.cron.jobs.map(function(j){ return esc(j.name)+' ('+esc(j.schedule)+', '+nf(j.runs)+' runs)'; }).join(' &middot; ')+'</p>':'')+
+        (c.notes?'<p class="hint" style="margin:6px 0 0">'+esc(c.notes)+'</p>':'')+
+      '</div>';
+    }
+    return row;
+  }).join('')+'</div></div>';
+  return h;
+}
+function admFeedLoad(){
+  ADM.feed='loading'; renderAdmin();
+  var fl=document.getElementById('admfeedlist'); if(fl) fl.innerHTML=spinner();
+  desk2Post({action:"audit_feed",days:ADM.fdays,source:ADM.fsrc,actor:ADM.factor,q:ADM.fq},function(r){
+    ADM.feed=(r&&r.ok)?r.events:[];
+    renderAdmin();
+  });
+}
+function admFSet(k,v){ ADM[k]=v; admFeedLoad(); }
+function admAuditHtml(){
+  var srcCol={app:'#0060C7',assistant:'#5B21B6',hubspot:'#C2740B',aircall:'#0A6B4A'};
+  var segD=function(dd,lab){ return '<button class="'+(ADM.fdays===dd?'on':'')+'" onclick="admFSet(\'fdays\','+dd+')">'+lab+'</button>'; };
+  var segS=function(s,lab){ return '<button class="'+(ADM.fsrc===s?'on':'')+'" onclick="admFSet(\'fsrc\',\''+s+'\')">'+lab+'</button>'; };
+  var h='<div class="controls" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">'+
+    '<span class="seg2">'+segD(1,'Today')+segD(7,'7d')+segD(30,'30d')+'</span>'+
+    '<span class="seg2">'+segS('','All')+segS('app','App')+segS('assistant','Assistant')+segS('hubspot','HubSpot')+segS('aircall','Calls')+'</span>'+
+    '<input class="input" placeholder="person..." style="width:130px;padding:6px 10px;font-size:13px" value="'+esc(ADM.factor)+'" onchange="admFSet(\'factor\',this.value)">'+
+    '<input class="input" placeholder="search company, action, text..." style="width:220px;padding:6px 10px;font-size:13px" value="'+esc(ADM.fq)+'" onchange="admFSet(\'fq\',this.value)">'+
+    '</div>';
+  if(ADM.feed==='loading'||!ADM.feed) return h+'<div class="panel flush"><div id="admfeedlist" style="padding:20px">'+spinner()+'</div></div>';
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  h+='<div class="panel flush"><div class="plist" id="admfeedlist">'+ (ADM.feed.length?ADM.feed.map(function(e){
+    var dt=new Date(e.at);
+    var when=dt.getDate()+' '+M[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+    var ent=e.entity_key||e.entity_name;
+    return '<div class="actrow" style="align-items:baseline">'+
+      '<div style="min-width:96px"><b style="font-size:12.5px;font-variant-numeric:tabular-nums">'+when+'</b></div>'+
+      '<div class="co"><b style="font-size:13px">'+esc(e.actor||'system')+'</b> <span style="color:var(--ink2);font-size:13px">'+esc(e.action)+'</span>'+
+        (e.summary?'<div class="dom" style="max-width:560px;overflow:hidden;text-overflow:ellipsis">'+esc(e.summary)+'</div>':'')+'</div>'+
+      '<div class="rt">'+(ent?'<span class="pill" style="cursor:pointer" title="open this record’s audit trail" onclick="auditTrail(\''+esc(String(e.entity_key||'').indexOf('.')>0?e.entity_key:'')+'\',\''+esc(String(e.entity_key||'').indexOf('.')>0?'':String(e.entity_key||''))+'\',\''+esc(String(e.entity_name||e.entity_key||'').replace(/'/g,''))+'\')">'+esc(String(ent).slice(0,28))+'</span>':'')+
+        '<span class="pill" style="background:'+(srcCol[e.source]||'#98989F')+'18;color:'+(srcCol[e.source]||'#636366')+'">'+esc(e.source)+'</span></div></div>';
+  }).join(''):'<div class="empty" style="padding:18px">Nothing in this window.</div>')+'</div></div>'+
+  '<p class="hint" style="margin-top:8px">App changes land here the moment they happen. HubSpot and call activity arrives with the hourly syncs, credited to whoever logged it.</p>';
+  return h;
+}
+// Site-wide per-record trail: every system's activity for one company in one
+// timeline. Reachable from the history icon on Leads and Customers rows.
+function auditTrail(dom,cid,name){
+  var m=document.getElementById("cmodal"); if(!m) return;
+  m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>Audit trail'+(name?' &mdash; '+esc(name):'')+'</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody" id="trailbody">'+spinner("Pulling the full history...")+'</div></div>';
+  desk2Post({action:"audit_trail",domain:dom||undefined,company_id:cid||undefined},function(r){
+    var b=document.getElementById("trailbody"); if(!b) return;
+    if(!r||!r.ok){ b.innerHTML='<div class="empty">'+esc((r&&r.error)||'Could not load the trail.')+'</div>'; return; }
+    var srcCol={app:'#0060C7',assistant:'#5B21B6',hubspot:'#C2740B',aircall:'#0A6B4A'};
+    var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    b.innerHTML=(r.events||[]).map(function(e){
+      var dt=new Date(e.at);
+      return '<div style="display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--color-base-200)">'+
+        '<span class="bdot" style="width:8px;height:8px;margin-top:6px;flex:none;background:'+(srcCol[e.source]||'#98989F')+'"></span>'+
+        '<div><div style="font-size:13px"><b>'+esc(e.actor||'system')+'</b> <span style="color:var(--ink2)">'+esc(e.action)+'</span> <span class="hint">'+dt.getDate()+' '+M[dt.getMonth()]+' '+dt.getFullYear()+', '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0')+'</span></div>'+
+        (e.summary?'<div class="dom" style="margin-top:1px">'+esc(e.summary)+'</div>':'')+'</div></div>';
+    }).join('')||'<div class="empty">No recorded activity for this record yet.</div>';
+  });
+}
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
 var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2";
 function desk2Post(payload, cb){
@@ -2228,7 +2353,7 @@ function renderCustTable(){
       num(x.margin_pct,function(v){return v+'%';})+
       num(x.revenue_total,function(v){return '£'+nf(Math.round(v));})+
       '<td style="white-space:nowrap">'+spendSpark(x.monthly)+' '+trendPill(x)+'</td>'+
-      '<td>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
+      '<td style="white-space:nowrap">'+(x.domain?'<i class="ph ph-clock-counter-clockwise" title="full audit trail" style="color:var(--mut);cursor:pointer" onclick="event.stopPropagation();auditTrail(\''+esc(x.domain)+'\',\'\',\''+esc(custName(x.customer_name).replace(/'/g,''))+'\')"></i> <i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
   }).join("")||'<tr><td colspan="'+(team?12:11)+'"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
 }
 // TMS names arrive with entry artifacts ("DHL Ltd''", "Brenntag Limited..",
@@ -2878,7 +3003,7 @@ function renderLmRows(){
                '<td style="min-width:110px;max-width:210px">'+tg.a+'</td>'; })()+
       '<td class="num" style="white-space:nowrap">'+(x.last_touch?('<b>'+whenB+'</b><div class="dom">'+esc(whenS)+'</div>'):'<span class="faint">never</span>')+'</td>'+
       num(x.calls)+num(x.emails)+num(x.notes)+
-      '<td>'+((x.domain||peek)?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
+      '<td style="white-space:nowrap">'+((x.domain||x.company_id)?'<i class="ph ph-clock-counter-clockwise" title="full audit trail" style="color:var(--mut);cursor:pointer" onclick="event.stopPropagation();auditTrail(\''+esc(x.domain||'')+'\',\''+esc(String(x.company_id||''))+'\',\''+esc(String(x.company||x.domain||'').replace(/'/g,''))+'\')"></i> ':'')+((x.domain||peek)?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
   }).join("")||'<tr><td colspan="12"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
   // page selector: every lead is reachable, not just the first screen
   var pager=document.getElementById("lmpager");
@@ -4270,6 +4395,7 @@ function renderDash(p){
         '<div class="sb-group mgmtonly" style="display:none">Manage</div>'+
         '<button class="nv mgmtonly" style="display:none" data-v="pulse" onclick="setView(this)"><i class="ph ph-heartbeat"></i>Pulse</button>'+
         '<button class="nv mgmtonly" style="display:none" data-v="settings" onclick="setView(this)"><i class="ph ph-gear"></i>Settings</button>'+
+        '<button class="nv admonly" style="display:none" data-v="admin" onclick="setView(this)"><i class="ph ph-shield-check"></i>Admin</button>'+
       '</nav>'+
       '<div class="sb-foot">'+
         '<select id="viewas" class="select select-sm wfull" style="display:none" onchange="setViewAs(this.value)"></select>'+
@@ -4295,6 +4421,7 @@ function renderDash(p){
     '<div id="view-calllist" class="view" style="display:none"><div class="page-head"><div><div class="t">Cold list</div><p class="sub">Ranked by fit and by whether we can actually reach them. Log the outcome and a callback becomes a HubSpot task, so it reaches you in Front and on your phone.</p></div></div><div id="clboard">'+spinner()+'</div></div>'+
     '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Team</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
     '<div id="view-settings" class="view" style="display:none"><div class="page-head"><div><div class="t">Settings</div><p class="sub">Commission structures per person, and what each has earned from their customers&rsquo; first year of trading. Only you see this.</p></div></div><div id="settingsboard">'+spinner()+'</div></div>'+
+    '<div id="view-admin" class="view" style="display:none"><div class="page-head"><div><div class="t">Admin</div><p class="sub">Connector usage, cost estimates and the audit trail across every system. Only you can see this.</p></div></div><div id="adminboard">'+spinner()+'</div></div>'+
     '<div id="view-monitor" class="view" style="display:none"><div class="page-head"><div><div class="t">Monitor</div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p></div></div><div id="monboard">'+spinner()+'</div></div>'+
     '<div id="view-simulation" class="view" style="display:none"><div class="page-head"><div><div class="t">Simulation</div><p class="sub">Dry-run preview of the automatic CRM updates and reminders. Nothing is written until you go live.</p></div></div><div id="simboard">'+spinner()+'</div></div>'+
     '<div id="view-pipeline" class="view" style="display:none">'+
@@ -4320,6 +4447,7 @@ function renderDash(p){
       '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-users-three"></i>Team</button>'+
       '<button class="nv mgmtonly" style="display:none" data-v="pulse" onclick="setView(this)"><i class="ph ph-heartbeat"></i>Pulse</button>'+
       '<button class="nv mgmtonly" style="display:none" data-v="settings" onclick="setView(this)"><i class="ph ph-gear"></i>Settings</button>'+
+      '<button class="nv admonly" style="display:none" data-v="admin" onclick="setView(this)"><i class="ph ph-shield-check"></i>Admin</button>'+
       '<button class="nv" onclick="out()"><i class="ph ph-sign-out"></i>Sign out</button>'+
     '</div>'+
     '<nav class="tabbar nav">'+
@@ -4343,6 +4471,7 @@ function bootDesk(){
     if(r&&r.ok){
       paintFreshness(r.tms);
       if(r.can_manage){ revealMgmt(); }
+      if(r.is_admin){ window.IS_ADMIN=true; var ad=document.querySelectorAll(".admonly"); for(var i=0;i<ad.length;i++) ad[i].style.display=""; }
     }
   });
   // Activate the Today tab for real - the shell renders with the assistant
