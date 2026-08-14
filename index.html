@@ -1753,9 +1753,13 @@ function renderDashView(el,r){
           '<b>£'+nf(c.recent_monthly)+'/mo</b>'+(c.margin_pct!=null?'<span class="hint">'+c.margin_pct+'%</span>':'')+'</div></div>';
       }).join(''):'<div class="empty" style="padding:10px">No customers yet.</div>')+'</div>';
   };
+  // a small book makes the two ends overlap - names in Top never repeat in
+  // Lowest
+  var topNames={}; (r.top_customers||[]).forEach(function(c){ topNames[c.customer_name]=1; });
+  var bottom=(r.bottom_customers||[]).filter(function(c){ return !topNames[c.customer_name]; });
   h+='<div class="panel"><div style="display:flex;gap:34px;flex-wrap:wrap">'+
     custCol('Top spenders',r.top_customers,'#0A6B4A')+
-    custCol('Lowest spenders',r.bottom_customers,'#C2740B')+
+    custCol('Lowest spenders',bottom,'#C2740B')+
     '</div></div>';
   h+='<div class="panel"><div class="phead" style="padding:0 0 8px"><span class="bdot" style="background:#0060C7"></span><h3>Activity &mdash; last 12 weeks</h3>'+
     (tr?'<span class="pill" style="margin-left:auto;background:'+(tr.up?'#E7F6EF;color:#0A6B4A':'#FEE2E2;color:#B91C1C')+'" title="holiday weeks and the current part-week excluded">'+(tr.up?'&#9650;':'&#9660;')+' '+Math.abs(tr.pct)+'% vs the four working weeks before</span>':'')+'</div>'+
