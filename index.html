@@ -2057,7 +2057,7 @@ function lmScaffold(){
 }
 // slim receipt of what's filtering the table right now, each bit removable
 function lmActiveBar(){
-  var parts=[], lbl={positive:'warm',mixed:'mixed',stale:'gone quiet',negative:'negative',none:'no read yet'};
+  var parts=[], lbl={positive:'warm',mixed:'mixed',stale:'gone quiet',negative:'negative',no_contact:'no established contact',none:'no read yet'};
   if(window.__lmEng) parts.push('<button class="chip active" onclick="lmEngSet(null)">'+esc(lbl[window.__lmEng]||window.__lmEng)+' &times;</button>');
   if(window.__lmHstat) parts.push('<button class="chip active" onclick="lmHstatSet(null)">'+esc(window.__lmHstat==='none'?'HubSpot: not set':('HubSpot: '+((HSTAT[window.__lmHstat]||[window.__lmHstat])[0])))+' &times;</button>');
   if(window.__lmOwner) parts.push('<button class="chip active" onclick="lmOwnSet(null)">'+esc(window.__lmOwner)+' &times;</button>');
@@ -2115,10 +2115,16 @@ function lmMenu(key,ic){
     items.push(mk('Anyone',null,!window.__lmOwner,''));
     Object.keys(oc).sort().forEach(function(o){ items.push(mk(o,oc[o],window.__lmOwner===o,o)); });
   } else if(key==='status'){
-    var sc={positive:0,mixed:0,stale:0,negative:0,none:0};
-    L.forEach(function(x){ if(x.engagement&&sc[x.engagement]!=null) sc[x.engagement]++; else if(!x.engagement) sc.none++; });
-    items.push(mk('Any status',null,!window.__lmEng,''));
-    [['positive','Warm'],['mixed','Mixed'],['stale','Gone quiet'],['negative','Negative'],['none','No read yet']].forEach(function(p){
+    // 'no_contact' (deterministic: outreach only, nothing back) and the AI's
+    // own 'none' verdict mean the same thing to a rep - one bucket
+    var sc={positive:0,mixed:0,stale:0,negative:0,no_contact:0,none:0};
+    L.forEach(function(x){
+      if(x.engagement==='no_contact'||x.engagement==='none') sc.no_contact++;
+      else if(x.engagement&&sc[x.engagement]!=null) sc[x.engagement]++;
+      else if(!x.engagement) sc.none++;
+    });
+    items.push(mk('Any',null,!window.__lmEng,''));
+    [['positive','Warm'],['mixed','Mixed'],['stale','Gone quiet'],['negative','Negative'],['no_contact','No established contact'],['none','No read yet']].forEach(function(p){
       items.push(mk(p[1],sc[p[0]],window.__lmEng===p[0],p[0]));
     });
   } else if(key==='hstat'){
@@ -2322,6 +2328,7 @@ function renderLmRows(){
       +(fx.uses_couriers==='confirmed'?' confirmed courier user':'')).toLowerCase();
     return hay.indexOf(q)>=0; });
   if(window.__lmEng==='none') ls=ls.filter(function(x){ return !x.engagement; });
+  else if(window.__lmEng==='no_contact') ls=ls.filter(function(x){ return x.engagement==='no_contact'||x.engagement==='none'; });
   else if(window.__lmEng) ls=ls.filter(function(x){ return x.engagement===window.__lmEng; });
   if(window.__lmOwner) ls=ls.filter(function(x){ return String(x.rep||'').split(' ')[0]===window.__lmOwner; });
   if(window.__lmHstat) ls=ls.filter(function(x){ return window.__lmHstat==='none' ? !x.lead_status : x.lead_status===window.__lmHstat; });
@@ -2348,7 +2355,7 @@ function renderLmRows(){
   var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   box.innerHTML=shown.map(function(x){
     // engagement is state, so it reads as a dot + word, not another pill;
-    var sb={positive:["#0E9F6E","warm"],mixed:["#C2740B","mixed"],stale:["#98989F","gone quiet"],negative:["#DC2626","negative"]}[x.engagement]||null;
+    var sb={positive:["#0E9F6E","warm"],mixed:["#C2740B","mixed"],stale:["#98989F","gone quiet"],negative:["#DC2626","negative"],no_contact:["#C7C7CC","no established contact"],none:["#C7C7CC","no established contact"]}[x.engagement]||null;
     var whenB="&ndash;", whenS="never engaged";
     if(x.last_touch){ var d=new Date(x.last_touch); whenB=d.getDate()+" "+M[d.getMonth()];
       whenS=(x.days_since===0?"today":(x.days_since!=null?x.days_since+"d ago":"")); }
