@@ -1531,7 +1531,7 @@ function admConnHtml(){
     var openRow=!!ADM.open[c.connector];
     var row='<div class="actrow crow" style="align-items:center" onclick="admExpand(\''+c.connector+'\')">'+
       '<div class="co" style="min-width:170px"><b>'+esc(c.label)+'</b><div class="dom">'+esc(c.category||'')+' &middot; '+esc(c.billing_model||'')+'</div></div>'+
-      '<div class="rt" style="gap:18px;flex-wrap:wrap">'+
+      '<div class="rt" style="display:flex;align-items:center;gap:18px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end">'+
         '<div style="text-align:right;min-width:90px"><b style="font-variant-numeric:tabular-nums">'+nf(calls)+'</b><div class="dom">calls &middot; '+d.days+'d</div></div>'+
         '<div style="text-align:right;min-width:80px"><b style="font-variant-numeric:tabular-nums">'+(c.cron.runs?nf(c.cron.runs):'&ndash;')+'</b><div class="dom">cron runs'+(c.cron.failed?' &middot; <span style="color:#DC2626">'+c.cron.failed+' failed</span>':'')+'</div></div>'+
         '<div style="text-align:right;min-width:80px"><b style="font-variant-numeric:tabular-nums">£'+nf(Math.round(c.usage_est_gbp))+'</b><div class="dom">usage est &middot; '+d.days+'d</div></div>'+
@@ -1585,7 +1585,7 @@ function admAuditHtml(){
       '<div style="min-width:96px"><b style="font-size:12.5px;font-variant-numeric:tabular-nums">'+when+'</b></div>'+
       '<div class="co"><b style="font-size:13px">'+esc(e.actor||'system')+'</b> <span style="color:var(--ink2);font-size:13px">'+esc(e.action)+'</span>'+
         (e.summary?'<div class="dom" style="max-width:560px;overflow:hidden;text-overflow:ellipsis">'+esc(e.summary)+'</div>':'')+'</div>'+
-      '<div class="rt">'+(ent?'<span class="pill" style="cursor:pointer" title="open this record’s audit trail" onclick="auditTrail(\''+esc(String(e.entity_key||'').indexOf('.')>0?e.entity_key:'')+'\',\''+esc(String(e.entity_key||'').indexOf('.')>0?'':String(e.entity_key||''))+'\',\''+esc(String(e.entity_name||e.entity_key||'').replace(/'/g,''))+'\')">'+esc(String(ent).slice(0,28))+'</span>':'')+
+      '<div class="rt" style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end">'+(ent?'<span class="pill" style="cursor:pointer" title="open this record’s audit trail" onclick="auditTrail(\''+esc(String(e.entity_key||'').indexOf('.')>0?e.entity_key:'')+'\',\''+esc(String(e.entity_key||'').indexOf('.')>0?'':String(e.entity_key||''))+'\',\''+esc(String(e.entity_name||e.entity_key||'').replace(/'/g,''))+'\')">'+esc(String(ent).slice(0,28))+'</span>':'')+
         '<span class="pill" style="background:'+(srcCol[e.source]||'#98989F')+'18;color:'+(srcCol[e.source]||'#636366')+'">'+esc(e.source)+'</span></div></div>';
   }).join(''):'<div class="empty" style="padding:18px">Nothing in this window.</div>')+'</div></div>'+
   '<p class="hint" style="margin-top:8px">App changes land here the moment they happen. HubSpot and call activity arrives with the hourly syncs, credited to whoever logged it.</p>';
