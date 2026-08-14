@@ -799,6 +799,10 @@ function assistantView(){
       '<h1>What do you need?</h1>'+
       '<p>Ask about your accounts, pipeline, calls, emails and meetings &mdash; or run a deep research brief on any company. It can draft follow-ups and set tasks, with your say-so.</p>'+
       '<div id="briefcard"></div>'+
+      '<div class="controls" style="max-width:680px;margin:0 auto 4px;justify-content:flex-end;gap:8px;padding:0">'+
+        '<button class="chip" id="newchatbtn" style="display:none" onclick="newChat()"><i class="ph ph-plus" style="margin-right:4px;vertical-align:-2px"></i>New chat</button>'+
+        '<button class="chip" onclick="chatRecent(this)"><i class="ph ph-clock-counter-clockwise" style="margin-right:4px;vertical-align:-2px"></i>Recent chats</button>'+
+      '</div>'+
       '<div id="chatlog" class="chatlog"></div>'+
       '<div class="askwrap"><div class="askbox">'+
         '<input id="askq" placeholder="Ask anything   ·   or paste a company to research" onkeydown="askKey(event)" autocomplete="off">'+
@@ -819,6 +823,62 @@ function assistantView(){
 var AGENT_URL=null, AGENT={session:null,busy:false,n:0,acts:{}};
 var TOOLNAMES={my_accounts:"checking your accounts",my_leads:"reading the pipeline",company_profile:"pulling the company record",chase_list:"checking who's waiting on us",open_tasks:"reading your tasks",meetings:"reading your calendar",recent_calls:"reading call summaries",geo_area:"mapping the area",scoreboard:"reading the scoreboard",sql_query:"querying the database"};
 function quickAsk(t){ var i=document.getElementById("askq"); if(i) i.value=t; sendChat(); }
+/* chats persist server-side per user (agent_session); these controls expose
+   that: revisit any recent thread with its context intact, or start clean */
+function agentApi(payload,cb){
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(URL_+"/functions/v1/sales-agent",{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb(null); });
+  });
+}
+function newChat(){
+  AGENT.session=null; AGENT.acts={};
+  var l=document.getElementById("chatlog"); if(l) l.innerHTML="";
+  var nb=document.getElementById("newchatbtn"); if(nb) nb.style.display="none";
+  var i=document.getElementById("askq"); if(i) i.focus();
+}
+function chatRecent(el){
+  if(document.getElementById('lmmenu')){ lmMenuClose(); return; }
+  var m=document.createElement('div'); m.id='lmmenu';
+  var r=el.getBoundingClientRect();
+  m.style.top=(r.bottom+6)+'px';
+  m.style.left=Math.max(8,Math.min(r.left-10,window.innerWidth-262))+'px';
+  m.innerHTML='<div class="lmmi" style="cursor:default;color:var(--faint)">Loading&hellip;</div>';
+  m.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.body.appendChild(m);
+  setTimeout(function(){ document.addEventListener('click',function h(){ document.removeEventListener('click',h); lmMenuClose(); }); },0);
+  agentApi({action:"sessions"},function(res){
+    var mm=document.getElementById('lmmenu'); if(!mm) return;
+    var ss=(res&&res.sessions)||[];
+    if(!ss.length){ mm.innerHTML='<div class="lmmi" style="cursor:default;color:var(--mut)">No chats yet &mdash; ask something below.</div>'; return; }
+    var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    mm.innerHTML='<div class="lmmi" style="cursor:default;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">Recent chats</div>'+
+      ss.map(function(s){
+        var d=new Date(s.updated_at);
+        var on=AGENT.session===s.id;
+        return '<div class="lmmi'+(on?' on':'')+'" onclick="chatResume(\''+esc(s.id)+'\')">'+
+          '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(s.title||'(untitled)')+'</span>'+
+          '<span style="color:var(--faint);font-size:11px;margin-left:auto;padding-left:10px;flex:none">'+d.getDate()+' '+M[d.getMonth()]+'</span></div>';
+      }).join('');
+  });
+}
+function chatResume(id){
+  lmMenuClose();
+  agentApi({action:"history",session_id:id},function(r){
+    if(!r||!r.ok) return;
+    AGENT.session=id; AGENT.acts={};
+    var log=document.getElementById("chatlog"); if(!log) return;
+    log.innerHTML=(r.turns||[]).map(function(t){
+      if(t.role==="user") return '<div class="cmsg user"><span>'+esc(t.text)+'</span></div>';
+      if(t.role==="action") return '<div class="cmsg ai"><div class="actchip done"><span class="as"><i class="ph ph-lightning"></i> Proposed: '+esc(t.summary||t.kind)+'</span></div></div>';
+      return '<div class="cmsg ai">'+fmtMd(t.text||"")+'</div>';
+    }).join('');
+    var nb=document.getElementById("newchatbtn"); if(nb) nb.style.display="";
+    var last=log.lastElementChild; if(last) last.scrollIntoView({behavior:"auto",block:"end"});
+    var i=document.getElementById("askq"); if(i) i.focus();
+  });
+}
 // tiny markdown: bold, bullets, paragraphs - enough for the model's answers
 function fmtMd(t){
   var s=esc(t).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
@@ -867,7 +927,7 @@ function sendChat(){
   });
   function handle(ev){
     var tl=document.getElementById("ct-"+n), bd=document.getElementById("cb-"+n);
-    if(ev.type==="started"){ AGENT.session=ev.session_id; }
+    if(ev.type==="started"){ AGENT.session=ev.session_id; var nb=document.getElementById("newchatbtn"); if(nb) nb.style.display=""; }
     else if(ev.type==="tool"){
       var nm=TOOLNAMES[ev.name]||ev.name;
       if(toolSeen.indexOf(nm)<0) toolSeen.push(nm);
