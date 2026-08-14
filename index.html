@@ -2004,7 +2004,7 @@ function loadLeadsMine(){
   if(window.CAN_MANAGE && !window.VIEW_AS && window.__lmAll) payload.all=true;
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
-    window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmQ=""; window.__lmPage=1;
+    window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmReps=r.reps||[]; window.__lmQ=""; window.__lmPage=1;
     window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
@@ -2020,7 +2020,8 @@ function lmFun(k){
 }
 // the rep-set pipeline status straight from the HubSpot company record
 // (hs_lead_status) - label + colour per stage of the journey
-var HSTAT={NEW:['New','#F0F6FF','#0060C7'],OPEN:['Open','#E7F8F0','#0A6B4A'],IN_PROGRESS:['In progress','#FEF6E7','#7A4E07'],ATTEMPTED_TO_CONTACT:['Attempted','#F2F4F8','#3A455B'],CONNECTED:['Connected','#E7F8F0','#0A6B4A'],OPEN_DEAL:['Open deal','#0A6B4A','#fff'],UNQUALIFIED:['Unqualified','#FEF2F2','#8F1D1D'],BAD_TIMING:['Bad timing','#F2F4F8','#3A455B']};
+var HSTAT={NEW:['New','#F0F6FF','#0060C7'],OPEN:['Open','#E7F8F0','#0A6B4A'],IN_PROGRESS:['In progress','#FEF6E7','#7A4E07'],ATTEMPTED_TO_CONTACT:['Attempted','#F2F4F8','#3A455B'],CONNECTED:['Connected','#E7F8F0','#0A6B4A'],OPEN_DEAL:['Open deal','#0A6B4A','#fff'],UNQUALIFIED:['Unqualified','#FEF2F2','#8F1D1D'],BAD_TIMING:['Bad timing','#F2F4F8','#3A455B'],
+  'CONTACTED':['Contacted','#F0F6FF','#0060C7'],'IN CONVERSATION':['In conversation','#E7F8F0','#0A6B4A'],'ACTIVE OPPORTUNITY':['Active opportunity','#0A6B4A','#fff'],'HOT LEAD':['Hot lead','#0A6B4A','#fff'],'DONUT DROP':['Donut drop','#FEF6E7','#7A4E07'],'MARKETING DROP':['Marketing drop','#F2F4F8','#3A455B'],'DOOR KNOCK':['Door knock','#F2F4F8','#3A455B']};
 function lmHstatPill(v){
   if(!v) return '<span class="faint">&ndash;</span>';
   var s=HSTAT[v]||[String(v).toLowerCase().replace(/_/g,' '),'#F2F4F8','#3A455B'];
@@ -2200,6 +2201,47 @@ function lmTagCells(x){
   var row=function(arr){ return arr.length?'<div class="pillrow" style="margin:0;gap:4px">'+arr.join('')+'</div>':'<span class="faint">&ndash;</span>'; };
   return { c:row(conv), a:row(act) };
 }
+// owner pill dropdown: reassign the lead's HubSpot owner in place. The
+// server writes HubSpot, verifies by reading the record back, and updates
+// the mirror - so what the table shows next IS what HubSpot holds.
+function lmOwnerMenu(el,cid,curName){
+  if(document.getElementById('lmmenu')){ lmMenuClose(); return; }
+  if(!cid) return;
+  var reps=window.__lmReps||[];
+  if(!reps.length) return;
+  var items=reps.map(function(p){
+    var on=curName&&String(p.full_name||'')===curName;
+    return '<div class="lmmi'+(on?' on':'')+'" onclick="lmOwnerPick(\''+esc(cid)+'\',\''+esc(p.email)+'\')">'+
+      '<span class="avi" style="width:20px;height:20px;font-size:8px;background:'+avColor(p.full_name)+';margin-right:8px;flex:none">'+esc(initials(p.full_name))+'</span>'+
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.full_name)+'</span>'+
+      (on?'<i class="ph ph-check" style="color:#0071E3;margin-left:auto;flex:none"></i>':'')+'</div>';
+  });
+  items.unshift('<div class="lmmi" style="cursor:default;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700">Reassign to</div>');
+  var m=document.createElement('div'); m.id='lmmenu';
+  var r=el.getBoundingClientRect();
+  m.style.top=(r.bottom+6)+'px';
+  m.style.left=Math.max(8,Math.min(r.left-10,window.innerWidth-252))+'px';
+  m.innerHTML=items.join('');
+  m.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.body.appendChild(m);
+  setTimeout(function(){
+    document.addEventListener('click',function h(){ document.removeEventListener('click',h); lmMenuClose(); });
+  },0);
+}
+function lmOwnerPick(cid,em){
+  var m=document.getElementById('lmmenu');
+  if(m) m.innerHTML='<div class="lmmi" style="cursor:default"><span class="loading loading-spinner" style="width:13px;height:13px;margin-right:8px"></span>Updating HubSpot&hellip;</div>';
+  desk2Post({action:'lead_owner_set',company_id:cid,owner_email:em},function(r){
+    lmMenuClose();
+    if(r&&r.ok){
+      var row=(window.__lm||[]).filter(function(x){return String(x.company_id)===String(cid);})[0];
+      if(row){ row.rep=r.owner_name; row.owner_mismatch=false; }
+      renderLmRows();
+    } else {
+      alert((r&&r.error)||'Could not reassign - try again.');
+    }
+  });
+}
 // peek for domain-less leads: the HubSpot record has no website, so there is
 // no profile to join - show the raw synced activity so logged calls and
 // notes are never invisible
@@ -2318,7 +2360,10 @@ function renderLmRows(){
     var open=x.domain?(' class="crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):(peek?(' class="crow" onclick="lmHsPeek(\''+esc(x.company_id)+'\')"'):'');
     var num=function(n){ n=Number(n)||0; return '<td class="num" style="font-variant-numeric:tabular-nums;'+(n?'font-weight:650':'color:var(--faint)')+'">'+n+'</td>'; };
     return '<tr'+open+'>'+
-      (team?'<td style="white-space:nowrap">'+(x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'<span class="faint">&ndash;</span>')+
+      (team?'<td style="white-space:nowrap">'+
+        '<span class="repchip" style="cursor:pointer;background:var(--color-base-200);border-radius:999px;padding:3px 9px 3px '+(x.rep?'4px':'9px')+'" title="click to reassign this lead" onclick="event.stopPropagation();lmOwnerMenu(this,\''+esc(String(x.company_id||''))+'\',\''+esc(String(x.rep||'').replace(/'/g,''))+'\')">'+
+          (x.rep?'<span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0]):'<span class="faint">unowned</span>')+
+          ' <i class="ph ph-caret-down" style="font-size:10px;color:var(--mut)"></i></span>'+
         (x.owner_mismatch&&x.worked_by?'<div style="font-size:10.5px;color:#B45309;margin-top:3px" title="The HubSpot owner has never logged activity here - these reps have">&#9888; worked by '+esc(x.worked_by)+'</div>':'')+'</td>':'')+
       '<td class="company-cell" style="max-width:260px"><b>'+esc(x.company||x.domain||"(unnamed)")+'</b>'+
         '<div class="dom">'+esc(x.domain||'')+
