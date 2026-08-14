@@ -10,6 +10,26 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* map view + card view */
+.viewseg{ display:inline-flex; gap:2px; background:#F5F5F7; border-radius:9px; padding:2px; margin-left:10px; }
+.viewseg button{ border:none; background:transparent; font:inherit; font-size:12px; padding:4px 10px; border-radius:7px; cursor:pointer; color:var(--mut, #6E6E73); }
+.viewseg button.on{ background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.1); font-weight:650; color:#1D1D1F; }
+.cardgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:10px; padding:14px 20px 18px; }
+.dcard{ background:#fff; border:1px solid var(--line-soft, #E8E8ED); border-radius:12px; padding:12px 14px; cursor:pointer; display:flex; flex-direction:column; gap:6px; transition:box-shadow .12s, transform .1s; }
+.dcard:hover{ box-shadow:0 4px 14px rgba(0,0,0,.08); }
+.dcard .drow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.dcard .dhead{ font-weight:700; font-size:14px; }
+.dcard .dsub{ font-size:11.5px; color:var(--faint, #98989F); }
+.dcard .dnote{ font-size:12px; color:var(--mut, #6E6E73); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.mapwrap{ position:relative; height:72vh; min-height:420px; }
+#bigmap{ position:absolute; inset:0; z-index:1; }
+.mapwarn{ position:absolute; top:10px; right:10px; z-index:800; background:#FEF6E7; color:#7A4E07; font-size:12px; font-weight:600; padding:7px 12px; border-radius:9px; box-shadow:0 2px 8px rgba(0,0,0,.15); max-width:260px; }
+.maproute{ position:absolute; left:10px; bottom:10px; z-index:800; background:#fff; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.18); padding:12px 14px; max-width:340px; max-height:46vh; overflow:auto; font-size:12.5px; }
+.rtnum{ background:#FF9500; color:#fff; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+</style>
 <style>
 /* ============================ design tokens ============================ */
 /* Apple-language calm: their greys (#F5F5F7 page, #1D1D1F ink), ONE accent
@@ -2010,8 +2030,19 @@ function renderCustomers(){
     '</div></div>'+
     '<div class="panel flush"><div class="phead"><h3>Customers</h3>'+
       '<input id="custq" class="input" placeholder="Search customer, domain, postcode, rep..." value="'+esc(window.__custQ||'')+'" oninput="custSearch(this.value)" style="margin-left:auto;flex:1;max-width:380px;padding:8px 13px;font-size:13.5px;border-radius:10px">'+
+      '<span class="viewseg">'+
+        '<button'+((window.__cuView||'table')==='table'?' class="on"':'')+' onclick="cuViewSet(\'table\')" title="table view"><i class="ph ph-table"></i></button>'+
+        '<button'+(window.__cuView==='cards'?' class="on"':'')+' onclick="cuViewSet(\'cards\')" title="compact card view"><i class="ph ph-squares-four"></i></button>'+
+        '<button'+(window.__cuView==='map'?' class="on"':'')+' onclick="cuViewSet(\'map\')" title="map view"><i class="ph ph-map-trifold"></i></button>'+
+      '</span>'+
       '<span class="hint" id="custcount" style="white-space:nowrap"></span></div>'+
+    ((window.__cuView==='cards'||window.__cuView==='map')?funBar('cu'):'')+
     '<div id="cubar"></div>'+
+    (window.__cuView==='map'
+      ? '<div id="mapregion"></div></div>'
+      : (window.__cuView==='cards'
+        ? '<div id="cucards" class="cardgrid"></div></div>'
+        :
     '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm lmtable"><thead><tr>'+
       (window.__custAll?'<th onclick="cuSortH(\'rep\')">Rep'+cuArr('rep')+cuFun('rep')+'</th>':'')+
       '<th onclick="cuSortH(\'name\')">Customer'+cuArr('name')+'</th>'+
@@ -2025,8 +2056,27 @@ function renderCustomers(){
       '<th class="num" onclick="cuSortH(\'lifetime\')">Lifetime &pound;'+cuArr('lifetime')+'</th>'+
       '<th onclick="cuSortH(\'trend\')">Trend'+cuArr('trend')+cuFun('trend')+'</th>'+
       '<th style="width:28px"></th>'+
-    '</tr></thead><tbody id="custrows"></tbody></table></div></div>';
-  renderCustTable();
+    '</tr></thead><tbody id="custrows"></tbody></table></div></div>'));
+  if(window.__cuView==='map') mapRender('customers'); else renderCustTable();
+}
+function cuViewSet(v){ window.__cuView=v; renderCustomers(); }
+// compact customer cards: the account's health in one glance
+function renderCuCards(box, cs){
+  var now=Date.now();
+  box.innerHTML=cs.slice(0,200).map(function(x){
+    var days=x.last_contact?Math.floor((now-new Date(x.last_contact).getTime())/864e5):null;
+    return '<div class="dcard" onclick="'+(x.domain?('openCallLead(\''+esc(x.domain)+'\')'):'')+'">'+
+      '<div class="drow">'+(x.salesperson?'<span class="avi" style="width:20px;height:20px;font-size:8px;background:'+avColor(x.salesperson)+'">'+esc(initials(x.salesperson))+'</span><span class="dsub">'+esc(String(x.salesperson).split(' ')[0])+'</span>':'')+
+        '<span style="margin-left:auto">'+trendPill(x)+'</span></div>'+
+      '<div><div class="dhead">'+esc(custName(x.customer_name))+'</div>'+
+      '<div class="dsub">'+(x.postcode?esc(String(x.postcode).toUpperCase())+' &middot; ':'')+(x.first_job?'since '+esc(fmtShortD(x.first_job))+' &middot; ':'')+(Number(x.jobs_per_week)?Number(x.jobs_per_week).toFixed(1)+' jobs/wk':'')+'</div></div>'+
+      '<div class="drow" style="font-size:12.5px;font-weight:650">&pound;'+nf(Math.round(x.recent_monthly||0))+'/mo &middot; '+(x.margin_pct!=null?x.margin_pct+'% margin':'')+' &middot; &pound;'+nf(Math.round(x.revenue_total||0))+' lifetime</div>'+
+      '<div class="drow"><span class="dsub">'+(days!=null?('contacted '+(days===0?'today':days+'d ago')+(days>60?' &#9888;':'')):'no contact logged')+'</span>'+
+        '<span style="margin-left:auto">'+((Number(x.open_actions)>0)?'<span class="pill" style="background:#F0F6FF;color:#0060C7">'+x.open_actions+' task'+(x.open_actions>1?'s':'')+'</span>':'')+
+        (x.action_tags?'<span class="pill" style="background:#1D1D1F;color:#fff">'+esc(String(x.action_tags).split(', ')[0])+'</span>':'')+'</span></div>'+
+      '<div style="margin-top:2px">'+spendSpark(x.monthly)+'</div>'+
+    '</div>';
+  }).join('')||'<div class="empty" style="grid-column:1/-1">Nothing matches.</div>';
 }
 function custSearch(q){ window.__custQ=String(q||"").toLowerCase(); renderCustTable(); }
 /* customers table: every funnel is independent and they ALL stack - SK
@@ -2110,10 +2160,9 @@ function fmtShortD(d){
   var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return x.getDate()+' '+M[x.getMonth()]+' '+String(x.getFullYear()).slice(2);
 }
-function renderCustTable(){
-  var box=document.getElementById("custrows"); if(!box) return;
-  var bar=document.getElementById("cubar"); if(bar) bar.innerHTML=cuBar();
-  var F=window.__cuF||{}, cs=(window.__cust||[]).slice(), q=window.__custQ||"", team=!!window.__custAll;
+// shared filter+sort pipeline for the customers table, cards and map
+function cuFilteredList(){
+  var F=window.__cuF||{}, cs=(window.__cust||[]).slice(), q=window.__custQ||"";
   if(q) cs=cs.filter(function(x){
     return (String(x.customer_name||"")+" "+String(x.domain||"")+" "+String(x.salesperson||"")+" "+String(x.postcode||"")+" "+String(x.action_tags||"")).toLowerCase().indexOf(q)>=0; });
   if(F.rep) cs=cs.filter(function(x){ return String(x.salesperson||'').split(' ')[0]===F.rep; });
@@ -2145,7 +2194,16 @@ function renderCustTable(){
     trend:function(a,b){ return String(a.trend||"").localeCompare(String(b.trend||"")); },
   }[window.__cuSort||'lifetime'];
   if(srt) cs.sort(function(a,b){ return srt(a,b)*(window.__cuDir||-1); });
+  return cs;
+}
+function renderCustTable(){
+  var box=document.getElementById("custrows")||document.getElementById("cucards");
+  if(!box) return;
+  var bar=document.getElementById("cubar"); if(bar) bar.innerHTML=cuBar();
+  var team=!!window.__custAll;
+  var cs=cuFilteredList();
   var cnt=document.getElementById("custcount"); if(cnt) cnt.textContent=cs.length+' customers';
+  if(box.id==="cucards"){ renderCuCards(box,cs); return; }
   var now2=Date.now();
   box.innerHTML=cs.map(function(x){
     var open=x.domain?(' class="crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
@@ -2258,8 +2316,20 @@ function lmScaffold(){
       '<button class="chip" style="border:none;padding:4px 12px;font-size:12.5px;'+(window.__lmAll!==false?'background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:650':'background:transparent;color:var(--mut)')+'" onclick="lmViewAll(true)">Everyone</button>'+
       '<button class="chip" style="border:none;padding:4px 12px;font-size:12.5px;'+(window.__lmAll===false?'background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:650':'background:transparent;color:var(--mut)')+'" onclick="lmViewAll(false)">Mine</button></span>':'')+
     '<input id="lmq" class="input" placeholder="Search company, domain, owner, tag..." value="'+esc(window.__lmQ||'')+'" oninput="lmSearch(this.value)" style="margin-left:auto;flex:1;max-width:440px;padding:9px 14px;font-size:14px;border-radius:10px">'+
+    '<span class="viewseg">'+
+      '<button'+((window.__lmView||'table')==='table'?' class="on"':'')+' onclick="lmViewSet(\'table\')" title="table view"><i class="ph ph-table"></i></button>'+
+      '<button'+(window.__lmView==='cards'?' class="on"':'')+' onclick="lmViewSet(\'cards\')" title="compact card view"><i class="ph ph-squares-four"></i></button>'+
+      '<button'+(window.__lmView==='map'?' class="on"':'')+' onclick="lmViewSet(\'map\')" title="map view"><i class="ph ph-map-trifold"></i></button>'+
+    '</span>'+
     '<span class="hint" id="lmcount" style="white-space:nowrap"></span></div>'+
+    ((window.__lmView==='cards'||window.__lmView==='map')?funBar('lm'):'')+
     lmActiveBar()+
+    (window.__lmView==='map'
+      ? '<div id="mapregion"></div>'
+      : (window.__lmView==='cards'
+        ? '<div id="lmcards" class="cardgrid"></div><div id="lmpager"></div>'
+        : ''))+
+    (window.__lmView&&window.__lmView!=='table'?'</div>':
     '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm lmtable"><thead><tr>'+
       (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+lmFun('owner')+'</th>':'')+
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
@@ -2274,8 +2344,182 @@ function lmScaffold(){
       '<th class="num" onclick="lmSortH(\'notes\')">Notes'+lmArr('notes')+'</th>'+
       '<th style="width:28px"></th>'+
     '</tr></thead><tbody id="lmrows"></tbody></table></div>'+
-    '<div id="lmpager"></div></div>';
-  renderLmRows();
+    '<div id="lmpager"></div></div>');
+  if(window.__lmView==='map') mapRender('leads'); else renderLmRows();
+}
+function lmViewSet(v){ window.__lmView=v; window.__lmPage=1; lmScaffold(); }
+// funnel chips for card/map views, where there are no table headers to hang
+// the funnels off - same menus, same stacking behaviour
+function funBar(kind){
+  var defs = kind==='lm'
+    ? [['owner','Owner'],['status','Indication'],['hstat','HubSpot'],['pc','Postcode'],['ctags','Tags'],['atags','Action tags']]
+    : [['rep','Rep'],['pc','Postcode'],['act','Actions'],['contact','Last contact'],['trend','Trend']];
+  var openFn = kind==='lm' ? 'lmMenu' : 'cuMenu';
+  return '<div class="controls" style="padding:8px 20px;border-bottom:1px solid var(--line-soft);gap:6px;flex-wrap:wrap">'+
+    '<span class="hint">Filter:</span>'+
+    defs.map(function(d){ return '<button class="chip" onclick="event.stopPropagation();'+openFn+'(\''+d[0]+'\',this)">'+d[1]+' <i class="ph ph-caret-down" style="font-size:10px"></i></button>'; }).join('')+
+    '</div>';
+}
+// compact card view: the whole row's story at a glance, no horizontal scroll
+function renderLmCards(box, ls, cnt){
+  var PAGE=60, pages=Math.max(1,Math.ceil(ls.length/PAGE));
+  var pg=Math.min(Math.max(1,window.__lmPage||1),pages); window.__lmPage=pg;
+  if(cnt) cnt.textContent=ls.length+' leads';
+  box.innerHTML=ls.slice((pg-1)*PAGE,pg*PAGE).map(function(x){
+    var sb={positive:["#0E9F6E","warm"],mixed:["#C2740B","mixed"],stale:["#98989F","gone quiet"],negative:["#DC2626","negative"],no_contact:["#C7C7CC","no contact"],none:["#C7C7CC","no contact"]}[x.engagement]||null;
+    return '<div class="dcard" onclick="'+(x.domain?('openCallLead(\''+esc(x.domain)+'\')'):(x.company_id?('lmHsPeek(\''+esc(String(x.company_id))+'\')'):''))+'">'+
+      '<div class="drow">'+(x.rep?'<span class="avi" style="width:20px;height:20px;font-size:8px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span><span class="dsub">'+esc(String(x.rep).split(' ')[0])+'</span>':'')+
+        (sb?'<span class="dsub" style="color:'+sb[0]+';font-weight:650">&bull; '+sb[1]+'</span>':'')+
+        '<span style="margin-left:auto">'+lmHstatPill(x.lead_status)+'</span></div>'+
+      '<div><div class="dhead">'+esc(x.company||x.domain||'(unnamed)')+'</div>'+
+      '<div class="dsub">'+esc(x.domain||'')+(x.postcode?' &middot; '+esc(String(x.postcode).toUpperCase()):'')+(x.last_touch?' &middot; '+(x.days_since===0?'today':x.days_since+'d ago'):'')+'</div></div>'+
+      (x.headline?'<div class="dnote">'+esc(x.headline)+'</div>':'')+
+      '<div class="drow">'+(x.dropped_ball?'<span class="pill" style="background:#FEF2F2;color:#8F1D1D">ball dropped</span>':'')+
+        ((x.utags||[]).filter(function(u){return u.kind==='action';}).slice(0,2).map(function(u){return '<span class="pill" style="background:#1D1D1F;color:#fff">'+esc(u.tag)+'</span>';}).join(''))+
+        '<span class="dsub" style="margin-left:auto">'+(x.calls||0)+' calls &middot; '+(x.emails||0)+' emails</span></div>'+
+    '</div>';
+  }).join('')||'<div class="empty" style="grid-column:1/-1">Nothing matches.</div>';
+  var pager=document.getElementById("lmpager");
+  if(pager) pager.innerHTML = pages>1 ? '<div class="controls" style="padding:12px 20px;align-items:center"><button class="chip" '+(pg>1?'onclick="lmPage('+(pg-1)+')"':'disabled style="opacity:.4"')+'>&larr; Prev</button><span class="hint">page '+pg+' of '+pages+'</span><button class="chip" '+(pg<pages?'onclick="lmPage('+(pg+1)+')"':'disabled style="opacity:.4"')+'>Next &rarr;</button></div>' : '';
+}
+/* ---- map view: shared by leads and customers, honours the live filters ----
+   Geocoding: postcodes.io (free UK service), cached in localStorage so each
+   postcode is looked up once per browser, ever. Routing order: nearest-
+   neighbour + 2-opt over straight-line miles; Google drive-routes each leg. */
+var MAP={sel:{}, mode:null, host:null, leaf:null, routeLayer:null, items:{}};
+function normPc(pc){
+  var s=String(pc||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(s.length<5||s.length>7) return null;
+  return s.slice(0,-3)+' '+s.slice(-3);
+}
+async function geocode(pcs){
+  var g; try{ g=JSON.parse(localStorage.getItem('cd-geo-v1')||'{}'); }catch(_e){ g={}; }
+  var need=pcs.filter(function(p){ return p && !(p in g); });
+  for(var i=0;i<need.length;i+=90){
+    try{
+      var r=await fetch('https://api.postcodes.io/postcodes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({postcodes:need.slice(i,i+90)})});
+      var j=await r.json();
+      (j.result||[]).forEach(function(x){ g[String(x.query).toUpperCase()]=x.result?[x.result.latitude,x.result.longitude]:0; });
+    }catch(_e){ break; }
+  }
+  try{ localStorage.setItem('cd-geo-v1',JSON.stringify(g)); }catch(_e){}
+  return g;
+}
+function mapItems(){
+  var items=[], hidden=0;
+  if(MAP.mode==='leads'||MAP.mode==='both'){
+    lmFiltered().forEach(function(x){
+      var pc=normPc(x.postcode);
+      if(!pc){ hidden++; return; }
+      items.push({id:'L:'+(x.domain||x.company_id), kind:'lead', name:x.company||x.domain||'(unnamed)', pc:pc, dom:x.domain, sub:(x.rep?String(x.rep).split(' ')[0]:'')+(x.lead_status?' &middot; '+esc((HSTAT[x.lead_status]||[x.lead_status])[0]):'')});
+    });
+  }
+  if(MAP.mode==='customers'||MAP.mode==='both'){
+    cuFilteredList().forEach(function(x){
+      var pc=normPc(x.postcode);
+      if(!pc){ hidden++; return; }
+      items.push({id:'C:'+(x.domain||x.customer_name), kind:'customer', name:custName(x.customer_name), pc:pc, dom:x.domain, sub:(x.salesperson?String(x.salesperson).split(' ')[0]+' &middot; ':'')+'&pound;'+nf(Math.round(x.recent_monthly||0))+'/mo'});
+    });
+  }
+  return {items:items, hidden:hidden};
+}
+function mapRender(host){
+  MAP.host=host;
+  if(!MAP.mode) MAP.mode=(host==='customers')?'customers':'leads';
+  var region=document.getElementById('mapregion'); if(!region) return;
+  region.innerHTML='<div class="controls" style="padding:8px 20px;border-bottom:1px solid var(--line-soft);gap:8px;align-items:center;flex-wrap:wrap">'+
+    '<span class="viewseg" style="margin-left:0">'+['leads','customers','both'].map(function(m){ return '<button'+(MAP.mode===m?' class="on"':'')+' onclick="mapMode(\''+m+'\')">'+m.charAt(0).toUpperCase()+m.slice(1)+'</button>'; }).join('')+'</span>'+
+    '<span class="hint" id="mapselcount">0 selected</span>'+
+    '<button class="chip" onclick="mapClearSel()">Clear</button>'+
+    '<span style="margin-left:auto;display:inline-flex;gap:6px;align-items:center">'+
+      '<input id="rtstart" class="input" placeholder="Start postcode..." style="padding:6px 10px;font-size:12.5px;width:150px" value="'+esc(window.__rtStart||'')+'">'+
+      '<button class="btn btn-primary btn-sm" onclick="mapRoute()">Route selected</button>'+
+    '</span></div>'+
+    '<div class="mapwrap"><div id="bigmap"></div><div class="mapwarn" id="mapwarn" style="display:none"></div><div class="maproute" id="maprouteout" style="display:none"></div></div>';
+  mapDraw();
+}
+function mapMode(m){
+  MAP.mode=m;
+  if((m==='customers'||m==='both')&&!(window.__cust&&window.__cust.length)){
+    var payload={action:"customers"};
+    if(window.CAN_MANAGE && !window.VIEW_AS && window.__custTeam!==false) payload.all=true;
+    desk2Post(payload,function(r){ if(r&&r.ok){ window.__cust=r.customers||[]; window.__custWatch=r.watch||[]; window.__custAll=!!r.all; } mapRender(MAP.host); });
+    return;
+  }
+  mapRender(MAP.host);
+}
+async function mapDraw(){
+  var el=document.getElementById('bigmap'); if(!el||!window.L) return;
+  if(MAP.leaf){ try{ MAP.leaf.remove(); }catch(_e){} MAP.leaf=null; }
+  var it=mapItems();
+  var g=await geocode(Array.from(new Set(it.items.map(function(i){return i.pc;}))));
+  el=document.getElementById('bigmap'); if(!el) return; // view changed mid-geocode
+  var pts=[], badpc=0;
+  MAP.items={};
+  it.items.forEach(function(i){ var ll=g[i.pc]; if(!ll){ badpc++; return; } i.ll=ll; MAP.items[i.id]=i; pts.push(i); });
+  var hidden=it.hidden+badpc;
+  MAP.leaf=L.map('bigmap');
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(MAP.leaf);
+  var warn=document.getElementById('mapwarn');
+  if(warn){ if(hidden>0){ warn.style.display=''; warn.textContent=hidden+' not on the map (no or unrecognised postcode)'; } else warn.style.display='none'; }
+  var bounds=[];
+  pts.forEach(function(i){
+    var mk=L.circleMarker(i.ll, mapStyle(i)).addTo(MAP.leaf);
+    mk.bindTooltip('<b>'+esc(i.name)+'</b><br>'+esc(i.pc)+(i.sub?'<br>'+i.sub:'')+'<br><i>click to select for routing</i>');
+    mk.on('click',function(){ if(MAP.sel[i.id]) delete MAP.sel[i.id]; else MAP.sel[i.id]=1; mk.setStyle(mapStyle(i)); mapSelCount(); });
+    bounds.push(i.ll);
+  });
+  if(bounds.length) MAP.leaf.fitBounds(bounds,{padding:[30,30]}); else MAP.leaf.setView([53.4,-2.2],6);
+  mapSelCount();
+}
+function mapStyle(i){
+  var sel=!!MAP.sel[i.id];
+  return { radius: sel?9:6, color: sel?'#FF9500':'#fff', weight: sel?3:1.5, fillColor: sel?'#FF9500':(i.kind==='lead'?'#0060C7':'#0A6B4A'), fillOpacity:.9 };
+}
+function mapSelCount(){ var n=Object.keys(MAP.sel).length; var e=document.getElementById('mapselcount'); if(e) e.textContent=n+' selected'; }
+function mapClearSel(){ MAP.sel={}; var o=document.getElementById('maprouteout'); if(o) o.style.display='none'; mapDraw(); }
+function hav(a,b){ var R=6371,dLa=(b[0]-a[0])*Math.PI/180,dLo=(b[1]-a[1])*Math.PI/180; var s=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2); return 2*R*Math.asin(Math.sqrt(s)); }
+async function mapRoute(){
+  var out=document.getElementById('maprouteout');
+  var say=function(m){ if(out){ out.style.display=''; out.innerHTML=m; } };
+  var stops=Object.keys(MAP.sel).map(function(id){ return MAP.items[id]; }).filter(Boolean);
+  if(!stops.length) return say('Click some pins to select them first.');
+  var startPc=normPc((document.getElementById('rtstart')||{}).value);
+  if(!startPc) return say('Enter a start postcode first.');
+  window.__rtStart=startPc;
+  var g=await geocode([startPc]);
+  var start=g[startPc];
+  if(!start) return say('Could not find that start postcode.');
+  // nearest-neighbour, then 2-opt improvement
+  var rem=stops.slice(), order=[], cur=start;
+  while(rem.length){ var bi=0,bd=1e18; rem.forEach(function(p,i){ var d=hav(cur,p.ll); if(d<bd){bd=d;bi=i;} }); var n=rem.splice(bi,1)[0]; order.push(n); cur=n.ll; }
+  function len(o){ var d=hav(start,o[0].ll); for(var i=0;i<o.length-1;i++) d+=hav(o[i].ll,o[i+1].ll); return d; }
+  var improved=true, guard=0;
+  while(improved&&guard++<60){ improved=false;
+    for(var a2=0;a2<order.length-1;a2++) for(var b2=a2+1;b2<order.length;b2++){
+      var no=order.slice(0,a2).concat(order.slice(a2,b2+1).reverse(),order.slice(b2+1));
+      if(len(no)+1e-9<len(order)){ order=no; improved=true; }
+    } }
+  if(MAP.routeLayer){ try{ MAP.leaf.removeLayer(MAP.routeLayer); }catch(_e){} }
+  var latlngs=[start].concat(order.map(function(o){return o.ll;}));
+  MAP.routeLayer=L.layerGroup().addTo(MAP.leaf);
+  L.polyline(latlngs,{color:'#FF9500',weight:3,dashArray:'6 6'}).addTo(MAP.routeLayer);
+  order.forEach(function(o,i){ L.marker(o.ll,{icon:L.divIcon({className:'',html:'<div class="rtnum">'+(i+1)+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(MAP.routeLayer); });
+  MAP.leaf.fitBounds(latlngs,{padding:[40,40]});
+  // Google Maps: the /maps/dir/ path takes ~10 points per link, so long
+  // routes chain into legs, each starting where the last ended
+  var pcsAll=[startPc].concat(order.map(function(o){return o.pc;}));
+  var links=[], i2=0, leg=1;
+  while(i2<pcsAll.length-1){
+    var chunk=pcsAll.slice(i2, i2+10);
+    links.push({leg:leg++, url:'https://www.google.com/maps/dir/'+chunk.map(function(p){return encodeURIComponent(p+', UK');}).join('/')});
+    i2+=9;
+  }
+  var mi=Math.round(len(order)*0.621);
+  say('<b>Route: '+order.length+' stops &middot; ~'+mi+' mi direct</b>'+
+    '<ol style="margin:8px 0 8px 18px;padding:0">'+order.map(function(o){ return '<li style="margin:3px 0"><b>'+esc(o.name)+'</b> <span class="hint">'+esc(o.pc)+'</span></li>'; }).join('')+'</ol>'+
+    links.map(function(l){ return '<a class="chip" style="text-decoration:none;display:inline-block;margin:2px 4px 2px 0;background:#0060C7;color:#fff;border-color:#0060C7" href="'+esc(l.url)+'" target="_blank" rel="noopener"><i class="ph ph-navigation-arrow" style="vertical-align:-2px"></i> Open in Google Maps'+(links.length>1?' &middot; leg '+l.leg:'')+'</a>'; }).join('')+
+    '<div class="hint" style="margin-top:4px">Order optimised over direct distance; Google drive-routes each leg in this order.</div>');
 }
 // slim receipt of what's filtering the table right now, each bit removable
 function lmActiveBar(){
@@ -2546,10 +2790,10 @@ function lmTagRemove(dom,tag,kind){
   if(l&&l.utags) l.utags=l.utags.filter(function(u){ return !(u.tag===tag&&u.kind===kind); });
   lmScaffold();
 }
-function renderLmRows(){
-  var box=document.getElementById("lmrows"), cnt=document.getElementById("lmcount");
-  if(!box) return;
-  var ls=(window.__lm||[]).slice(), team=!!window.__lmTeam, q=window.__lmQ||"";
+// one filtering + sorting pipeline serving the table, the card view and the
+// map - so every view honours exactly the same stacked filters
+function lmFiltered(){
+  var ls=(window.__lm||[]).slice(), q=window.__lmQ||"";
   if(q) ls=ls.filter(function(x){
     var fx=x.facts||{};
     var hay=(String(x.company||"")+" "+String(x.domain||"")+" "+String(x.rep||"")+" "+String(x.postcode||"")+" "
@@ -2581,6 +2825,14 @@ function renderLmRows(){
     recent:function(a,b){ return new Date(a.last_touch||0)-new Date(b.last_touch||0); }
   }[srt]||function(){return 0;};
   ls.sort(function(a,b){ return dir*cmp(a,b); });
+  return ls;
+}
+function renderLmRows(){
+  var box=document.getElementById("lmrows")||document.getElementById("lmcards"), cnt=document.getElementById("lmcount");
+  if(!box) return;
+  var team=!!window.__lmTeam;
+  var ls=lmFiltered();
+  if(box.id==="lmcards"){ renderLmCards(box,ls,cnt); return; }
   var PAGE=100, pages=Math.max(1,Math.ceil(ls.length/PAGE));
   var pg=Math.min(Math.max(1,window.__lmPage||1),pages); window.__lmPage=pg;
   var shown=ls.slice((pg-1)*PAGE, pg*PAGE);
