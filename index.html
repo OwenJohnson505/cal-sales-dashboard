@@ -2005,7 +2005,7 @@ function loadLeadsMine(){
   desk2Post(payload,function(r){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load leads.")+'</div>'; return; }
     window.__lm=r.leads||[]; window.__lmTeam=!!r.all; window.__lmQ=""; window.__lmPage=1;
-    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
+    window.__lmSort="recent"; window.__lmDir=-1; window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmX={};
     if(!window.__lm.length){ el.innerHTML='<div class="empty"><div class="ei">&#127793;</div>Nothing owned in HubSpot yet. Companies you own there appear here automatically, freshest engagement first.</div>'; return; }
     lmScaffold();
   });
@@ -2015,8 +2015,16 @@ function loadLeadsMine(){
 // the same place. One prominent search box up top.
 function lmArr(k){ return window.__lmSort===k?(' <span style="font-size:9px">'+(window.__lmDir>0?'&#9650;':'&#9660;')+'</span>'):''; }
 function lmFun(k){
-  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='ctags'&&window.__lmTagC)||(k==='atags'&&window.__lmTagA);
+  var on=(k==='owner'&&window.__lmOwner)||(k==='status'&&window.__lmEng)||(k==='hstat'&&window.__lmHstat)||(k==='ctags'&&window.__lmTagC)||(k==='atags'&&window.__lmTagA);
   return '<i class="ph '+(on?'ph-funnel-simple-fill on':'ph-funnel-simple')+' lmfun" title="filter" onclick="event.stopPropagation();lmMenu(\''+k+'\',this)"></i>';
+}
+// the rep-set pipeline status straight from the HubSpot company record
+// (hs_lead_status) - label + colour per stage of the journey
+var HSTAT={NEW:['New','#F0F6FF','#0060C7'],OPEN:['Open','#E7F8F0','#0A6B4A'],IN_PROGRESS:['In progress','#FEF6E7','#7A4E07'],ATTEMPTED_TO_CONTACT:['Attempted','#F2F4F8','#3A455B'],CONNECTED:['Connected','#E7F8F0','#0A6B4A'],OPEN_DEAL:['Open deal','#0A6B4A','#fff'],UNQUALIFIED:['Unqualified','#FEF2F2','#8F1D1D'],BAD_TIMING:['Bad timing','#F2F4F8','#3A455B']};
+function lmHstatPill(v){
+  if(!v) return '<span class="faint">&ndash;</span>';
+  var s=HSTAT[v]||[String(v).toLowerCase().replace(/_/g,' '),'#F2F4F8','#3A455B'];
+  return '<span class="pill" style="background:'+s[1]+';color:'+s[2]+';cursor:pointer" title="HubSpot lead status - set on the company record" onclick="event.stopPropagation();lmHstatSet(\''+esc(v)+'\')">'+esc(s[0])+'</span>';
 }
 function lmScaffold(){
   var el=document.getElementById("lmboard"); if(!el) return;
@@ -2034,6 +2042,7 @@ function lmScaffold(){
       (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+lmFun('owner')+'</th>':'')+
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
       '<th onclick="lmSortH(\'status\')">Status'+lmArr('status')+lmFun('status')+'</th>'+
+      '<th onclick="lmSortH(\'hstat\')">HubSpot'+lmArr('hstat')+lmFun('hstat')+'</th>'+
       '<th>Conversation tags'+lmFun('ctags')+'</th>'+
       '<th>Action tags'+lmFun('atags')+'</th>'+
       '<th class="num" onclick="lmSortH(\'recent\')">Last engagement'+lmArr('recent')+'</th>'+
@@ -2049,6 +2058,7 @@ function lmScaffold(){
 function lmActiveBar(){
   var parts=[], lbl={positive:'warm',mixed:'mixed',stale:'gone quiet',negative:'negative',none:'no read yet'};
   if(window.__lmEng) parts.push('<button class="chip active" onclick="lmEngSet(null)">'+esc(lbl[window.__lmEng]||window.__lmEng)+' &times;</button>');
+  if(window.__lmHstat) parts.push('<button class="chip active" onclick="lmHstatSet(null)">'+esc(window.__lmHstat==='none'?'HubSpot: not set':('HubSpot: '+((HSTAT[window.__lmHstat]||[window.__lmHstat])[0])))+' &times;</button>');
   if(window.__lmOwner) parts.push('<button class="chip active" onclick="lmOwnSet(null)">'+esc(window.__lmOwner)+' &times;</button>');
   if(window.__lmTagC) parts.push('<button class="chip active" onclick="lmTagCSet(null)">'+esc(window.__lmTagC)+' &times;</button>');
   if(window.__lmTagA) parts.push('<button class="chip active" style="background:#1D1D1F;border-color:#1D1D1F" onclick="lmTagASet(null)">'+esc(window.__lmTagA)+' &times;</button>');
@@ -2061,9 +2071,10 @@ function lmSearch(q){ window.__lmQ=String(q||"").toLowerCase(); window.__lmPage=
 function lmNorm(s){ return String(s||"").replace(/'/g,''); }
 function lmEngSet(v){ window.__lmEng=v; window.__lmPage=1; lmScaffold(); }
 function lmOwnSet(v){ window.__lmOwner=v; window.__lmPage=1; lmScaffold(); }
+function lmHstatSet(v){ window.__lmHstat=v; window.__lmPage=1; lmScaffold(); }
 function lmTagCSet(v){ window.__lmTagC=v; window.__lmPage=1; lmScaffold(); }
 function lmTagASet(v){ window.__lmTagA=v; window.__lmPage=1; lmScaffold(); }
-function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmPage=1; lmScaffold(); }
+function lmClearF(){ window.__lmEng=null; window.__lmOwner=null; window.__lmHstat=null; window.__lmTagC=null; window.__lmTagA=null; window.__lmPage=1; lmScaffold(); }
 function lmViewAll(v){ window.__lmAll=v; loadLeadsMine(); }
 function lmExpandTags(dom){ window.__lmX=window.__lmX||{}; window.__lmX[dom]=!window.__lmX[dom]; renderLmRows(); }
 // sector labels don't move a sale and the account record holds them anyway
@@ -2086,6 +2097,7 @@ function lmMenuClose(){ var m=document.getElementById('lmmenu'); if(m&&m.parentN
 function lmMenuPick(key,v){
   v=(v===''?null:v);
   if(key==='owner') lmOwnSet(v); else if(key==='status') lmEngSet(v);
+  else if(key==='hstat') lmHstatSet(v);
   else if(key==='atags') lmTagASet(v); else lmTagCSet(v);
 }
 function lmMenu(key,ic){
@@ -2107,6 +2119,14 @@ function lmMenu(key,ic){
     items.push(mk('Any status',null,!window.__lmEng,''));
     [['positive','Warm'],['mixed','Mixed'],['stale','Gone quiet'],['negative','Negative'],['none','No read yet']].forEach(function(p){
       items.push(mk(p[1],sc[p[0]],window.__lmEng===p[0],p[0]));
+    });
+  } else if(key==='hstat'){
+    var hc={};
+    L.forEach(function(x){ var k2=x.lead_status||'none'; hc[k2]=(hc[k2]||0)+1; });
+    items.push(mk('Any',null,!window.__lmHstat,''));
+    Object.keys(hc).sort(function(a,b){ return hc[b]-hc[a]; }).forEach(function(v){
+      var lbl=v==='none'?'Not set':((HSTAT[v]||[String(v).toLowerCase().replace(/_/g,' ')])[0]);
+      items.push(mk(lbl,hc[v],window.__lmHstat===v,v));
     });
   } else if(key==='atags'){
     var ac={};
@@ -2233,6 +2253,7 @@ function renderLmRows(){
   if(window.__lmEng==='none') ls=ls.filter(function(x){ return !x.engagement; });
   else if(window.__lmEng) ls=ls.filter(function(x){ return x.engagement===window.__lmEng; });
   if(window.__lmOwner) ls=ls.filter(function(x){ return String(x.rep||'').split(' ')[0]===window.__lmOwner; });
+  if(window.__lmHstat) ls=ls.filter(function(x){ return window.__lmHstat==='none' ? !x.lead_status : x.lead_status===window.__lmHstat; });
   if(window.__lmTagC){ var tc=lmNorm(window.__lmTagC);
     ls=ls.filter(function(x){ return lmAllTags(x).c.some(function(t){return lmNorm(t)===tc;}); }); }
   if(window.__lmTagA){ var ta=lmNorm(window.__lmTagA);
@@ -2244,6 +2265,7 @@ function renderLmRows(){
     notes:function(a,b){ return (Number(a.notes)||0)-(Number(b.notes)||0); },
     company:function(a,b){ return String(a.company||a.domain||"").localeCompare(String(b.company||b.domain||"")); },
     owner:function(a,b){ return String(a.rep||"").localeCompare(String(b.rep||"")); },
+    hstat:function(a,b){ return String(a.lead_status||"zz").localeCompare(String(b.lead_status||"zz")); },
     status:function(a,b){ var o={positive:1,mixed:2,stale:3,negative:4}; return (o[a.engagement]||9)-(o[b.engagement]||9); },
     recent:function(a,b){ return new Date(a.last_touch||0)-new Date(b.last_touch||0); }
   }[srt]||function(){return 0;};
@@ -2271,13 +2293,14 @@ function renderLmRows(){
         (!team&&x.owner_mismatch&&x.worked_by?' <span style="color:#B45309" title="Owned by you in HubSpot, but the activity is someone else&#39;s">&#9888; worked by '+esc(x.worked_by)+'</span>':'')+'</div>'+
         (insight?'<div class="dom" style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px" title="'+esc(insight)+'">'+esc(insight)+'</div>':'')+'</td>'+
       '<td style="white-space:nowrap">'+(sb?'<span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)"><span class="bdot" style="width:7px;height:7px;background:'+sb[0]+'"></span>'+sb[1]+'</span>':'<span class="faint" style="font-size:12.5px">no read yet</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+lmHstatPill(x.lead_status)+'</td>'+
       (function(){ var tg=lmTagCells(x);
         return '<td style="min-width:200px;max-width:320px">'+tg.c+'</td>'+
                '<td style="min-width:110px;max-width:210px">'+tg.a+'</td>'; })()+
       '<td class="num" style="white-space:nowrap">'+(x.last_touch?('<b>'+whenB+'</b><div class="dom">'+esc(whenS)+'</div>'):'<span class="faint">never</span>')+'</td>'+
       num(x.calls)+num(x.emails)+num(x.notes)+
       '<td>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
-  }).join("")||'<tr><td colspan="10"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
+  }).join("")||'<tr><td colspan="11"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
   // page selector: every lead is reachable, not just the first screen
   var pager=document.getElementById("lmpager");
   if(pager){
