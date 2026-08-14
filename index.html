@@ -2041,8 +2041,8 @@ function lmScaffold(){
     '<div class="tblwrap" style="box-shadow:none;border-radius:0"><table class="table table-sm lmtable"><thead><tr>'+
       (team?'<th onclick="lmSortH(\'owner\')">Owner'+lmArr('owner')+lmFun('owner')+'</th>':'')+
       '<th onclick="lmSortH(\'company\')">Company'+lmArr('company')+'</th>'+
-      '<th onclick="lmSortH(\'status\')">Status'+lmArr('status')+lmFun('status')+'</th>'+
-      '<th onclick="lmSortH(\'hstat\')">HubSpot'+lmArr('hstat')+lmFun('hstat')+'</th>'+
+      '<th onclick="lmSortH(\'status\')" title="The AI&#39;s read of how the conversation is going, taken from the actual calls and emails - not set by anyone">Indication'+lmArr('status')+lmFun('status')+'</th>'+
+      '<th onclick="lmSortH(\'hstat\')" title="The lead status the rep set on the company record in HubSpot">HubSpot lead status'+lmArr('hstat')+lmFun('hstat')+'</th>'+
       '<th>Conversation tags'+lmFun('ctags')+'</th>'+
       '<th>Action tags'+lmFun('atags')+'</th>'+
       '<th class="num" onclick="lmSortH(\'recent\')">Last engagement'+lmArr('recent')+'</th>'+
@@ -2200,6 +2200,35 @@ function lmTagCells(x){
   var row=function(arr){ return arr.length?'<div class="pillrow" style="margin:0;gap:4px">'+arr.join('')+'</div>':'<span class="faint">&ndash;</span>'; };
   return { c:row(conv), a:row(act) };
 }
+// peek for domain-less leads: the HubSpot record has no website, so there is
+// no profile to join - show the raw synced activity so logged calls and
+// notes are never invisible
+function lmHsPeek(cid){
+  var m=document.getElementById("cmodal"); if(!m) return;
+  m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>HubSpot activity</b><span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody" id="peekbody">'+spinner("Fetching the record...")+'</div></div>';
+  desk2Post({action:"hs_activity",company_id:cid},function(r){
+    var b=document.getElementById("peekbody"); if(!b) return;
+    if(!r||!r.ok){ b.innerHTML='<div class="empty">Could not load this record.</div>'; return; }
+    var L=r.lead||{};
+    var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    var icons={calls:'ph-phone',emails:'ph-envelope-simple',notes:'ph-note',tasks:'ph-check-square',meetings:'ph-calendar-blank'};
+    var rows=(r.activity||[]).map(function(a){
+      var d=new Date(a.at);
+      return '<div style="padding:10px 0;border-top:1px solid var(--color-base-200)">'+
+        '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">'+
+          '<i class="ph '+(icons[a.type]||'ph-circle')+'" style="color:var(--mut)"></i>'+
+          '<b style="font-size:13.5px">'+esc(a.subject||a.type)+'</b>'+
+          '<span class="hint">'+d.getDate()+' '+M[d.getMonth()]+' '+d.getFullYear()+(a.by?' &middot; '+esc(a.by):'')+'</span></div>'+
+        (a.body?'<p style="margin:5px 0 0;font-size:13px;color:var(--ink2)">'+esc(a.body)+'</p>':'')+
+        (a.call_summary?'<p style="margin:5px 0 0;font-size:13px;color:#5B21B6"><b>AI call summary:</b> '+esc(a.call_summary)+'</p>':'')+
+      '</div>';
+    }).join('');
+    b.innerHTML='<p style="margin:0 0 3px"><b>'+esc(L.name||"(unnamed)")+'</b>'+(L.owner_name?' <span class="hint">owned by '+esc(L.owner_name)+'</span>':'')+'</p>'+
+      '<p class="hint" style="margin:0 0 8px">This HubSpot record has no website domain, so there is no full profile to open &mdash; this is its raw activity log. Add the company&rsquo;s domain in HubSpot and the full view (AI read, contacts, history) unlocks on the next hourly sync.</p>'+
+      (rows||'<div class="empty">No activity synced for this record.</div>');
+  });
+}
 // inline tag adder: the row it lives on decides the species, so it's just
 // type + Add, with an x (or Escape, or clicking away) to back out
 function lmTagAdder(el,dom,kind){
@@ -2283,7 +2312,10 @@ function renderLmRows(){
       whenS=(x.days_since===0?"today":(x.days_since!=null?x.days_since+"d ago":"")); }
     var insight=x.headline?String(x.headline):"";
     if(x.next_step) insight+=(insight?" ":"")+"Next: "+String(x.next_step);
-    var open=x.domain?(' class="crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):'';
+    // a lead without a website domain has no full profile to open, but its
+    // synced HubSpot activity is still readable - the peek is that door
+    var peek=!x.domain&&x.company_id&&((Number(x.calls)||0)+(Number(x.emails)||0)+(Number(x.notes)||0))>0;
+    var open=x.domain?(' class="crow" onclick="openCallLead(\''+esc(x.domain)+'\')"'):(peek?(' class="crow" onclick="lmHsPeek(\''+esc(x.company_id)+'\')"'):'');
     var num=function(n){ n=Number(n)||0; return '<td class="num" style="font-variant-numeric:tabular-nums;'+(n?'font-weight:650':'color:var(--faint)')+'">'+n+'</td>'; };
     return '<tr'+open+'>'+
       (team?'<td style="white-space:nowrap">'+(x.rep?'<span class="repchip"><span class="avi" style="width:22px;height:22px;font-size:9px;background:'+avColor(x.rep)+'">'+esc(initials(x.rep))+'</span>'+esc(String(x.rep).split(" ")[0])+'</span>':'<span class="faint">&ndash;</span>')+
@@ -2299,7 +2331,7 @@ function renderLmRows(){
                '<td style="min-width:110px;max-width:210px">'+tg.a+'</td>'; })()+
       '<td class="num" style="white-space:nowrap">'+(x.last_touch?('<b>'+whenB+'</b><div class="dom">'+esc(whenS)+'</div>'):'<span class="faint">never</span>')+'</td>'+
       num(x.calls)+num(x.emails)+num(x.notes)+
-      '<td>'+(x.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
+      '<td>'+((x.domain||peek)?'<i class="ph ph-caret-right chv"></i>':'')+'</td></tr>';
   }).join("")||'<tr><td colspan="11"><div class="empty" style="padding:16px">Nothing matches.</div></td></tr>';
   // page selector: every lead is reachable, not just the first screen
   var pager=document.getElementById("lmpager");
