@@ -652,6 +652,8 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .calev.visit{ background:#E7F8F0; color:#0A6B4A; }
 .calev.meet{ background:#F3EFFB; color:#5B21B6; }
 .calev.meet b{ font-weight:700; font-variant-numeric:tabular-nums; }
+.calev.off{ background:#EAF3F2; color:#0F6B62; }
+.calev.off.sick{ background:#FEF2F2; color:#8F1D1D; }
 .calev.more{ background:transparent; color:var(--faint); padding:1px 7px 0; }
 /* the productivity bar lives at the foot of the tile */
 .calcell .prod{ margin-top:auto; display:flex; flex-direction:column; gap:3px; }
@@ -2705,12 +2707,13 @@ function loadCalendar(){
   // due), site visits (where you're going), and the Outlook/Teams calendar
   // graph-sync pulls hourly - Front has no calendar API; its calendar IS the
   // Office 365 one.
-  var got={}, need=4;
+  var got={}, need=5;
   function fin(k,r){ got[k]=r; if(--need===0) renderCalendar(el,m,got); }
   deskPost({action:"calendar",month:m},function(r){ fin("act",r); });
   deskPost({action:"hstasks"},function(r){ fin("tasks",r); });
   desk2Post({action:"visits",from:m+"-01",to:lastIso},function(r){ fin("visits",r); });
   desk2Post({action:"meetings",from:m+"-01",to:lastIso},function(r){ fin("meets",r); });
+  desk2Post({action:"absences",from:m+"-01",to:lastIso},function(r){ fin("abs",r); });
 }
 function renderCalendar(el,m,got){
   var r=got.act;
@@ -2734,7 +2737,18 @@ function renderCalendar(el,m,got){
     var iso=ev.is_all_day?String(ev.starts_at||"").slice(0,10):(ev.starts_at?localISO(new Date(ev.starts_at)):"");
     if(!iso) return; (mBy[iso]=mBy[iso]||[]).push(ev);
   });
-  window.__calTasks=tBy; window.__calVisits=vBy; window.__calMeets=mBy;
+  // absences span date ranges - burst them into per-day entries clipped to
+  // this month, so holiday/sick shows on every day it covers
+  var aBy={};
+  ((got.abs&&got.abs.absences)||[]).forEach(function(a){
+    var d0=new Date(a.start_date+"T12:00:00"), d1=new Date(a.end_date+"T12:00:00");
+    for(var d=new Date(d0); d<=d1; d.setDate(d.getDate()+1)){
+      var iso=localISO(d);
+      if(iso.slice(0,7)!==m) continue;
+      (aBy[iso]=aBy[iso]||[]).push(a);
+    }
+  });
+  window.__calTasks=tBy; window.__calVisits=vBy; window.__calMeets=mBy; window.__calAbs=aBy;
   var MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
   var first=new Date(m+"-01"), year=first.getFullYear(), mo=first.getMonth();
   var startDow=(first.getDay()+6)%7; // Monday-first week, UK
@@ -2750,6 +2764,10 @@ function renderCalendar(el,m,got){
     // what's on: meetings first (time-fixed), then tasks (overdue reads red),
     // then visits, max 3 lines
     var evs=[];
+    ((window.__calAbs||{})[iso]||[]).forEach(function(a){
+      var sick=/sick/i.test(a.leave_type||'');
+      evs.push('<span class="calev off'+(sick?' sick':'')+'" title="'+esc((a.user_name||'')+' - '+(a.leave_type||'off')+' ('+a.start_date+' to '+a.end_date+')')+'">'+(sick?'&#129301; ':'&#127958; ')+esc(a.leave_type||'Off')+'</span>');
+    });
     ((window.__calMeets||{})[iso]||[]).forEach(function(ev){
       var tm=ev.is_all_day?'':'<b>'+meetHM(ev.starts_at)+'</b> ';
       evs.push('<span class="calev meet" title="'+esc(ev.subject||'meeting')+'">'+tm+esc(ev.subject||'meeting')+'</span>');
@@ -2767,6 +2785,7 @@ function renderCalendar(el,m,got){
   }
   el.innerHTML='<div class="calhead"><span class="mt">'+MN[mo]+' '+year+'</span>'+
     '<span class="callegend" style="margin-left:18px">'+
+      '<span><span class="bdot" style="background:#0F6B62"></span> Off work</span>'+
       '<span><span class="bdot" style="background:#5B21B6"></span> Meeting</span>'+
       '<span><span class="bdot" style="background:#0060C7"></span> HubSpot task due</span>'+
       '<span><span class="bdot" style="background:#0A6B4A"></span> Site visit</span>'+
@@ -2797,9 +2816,16 @@ function calSelect(iso){
   var dt=new Date(iso);
   var lbl=W[dt.getDay()]+" "+dt.getDate()+" "+M[dt.getMonth()];
   var todayIso=localISO(new Date());
-  var tasks=(window.__calTasks||{})[iso]||[], visits=(window.__calVisits||{})[iso]||[], meets=(window.__calMeets||{})[iso]||[];
+  var tasks=(window.__calTasks||{})[iso]||[], visits=(window.__calVisits||{})[iso]||[], meets=(window.__calMeets||{})[iso]||[], offs=(window.__calAbs||{})[iso]||[];
   var bm=function(v,l,col){ return '<div class="m" style="text-align:left"><b style="display:block;font-size:24px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+(v||0)+'</b><span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+l+'</span></div>'; };
   var plan='';
+  if(offs.length) plan+='<div style="margin-top:12px">'+
+    offs.map(function(a){
+      var sick=/sick/i.test(a.leave_type||'');
+      return '<div class="frow" style="margin-top:6px"><span class="fl"><i class="ph '+(sick?'ph-first-aid-kit':'ph-island')+'" style="color:'+(sick?'#8F1D1D':'#0F6B62')+'"></i><b>'+esc(a.leave_type||'Off work')+'</b>'+
+        (a.start_date!==a.end_date?' <span class="hint">'+esc(a.start_date)+' to '+esc(a.end_date)+'</span>':'')+'</span>'+
+        '<span class="pill" style="background:'+(sick?'#FEF2F2;color:#8F1D1D':'#EAF3F2;color:#0F6B62')+'">off work</span></div>';
+    }).join('')+'</div>';
   if(meets.length) plan+='<div style="margin-top:12px"><div class="msec" style="margin:0 0 6px">Meetings</div>'+
     meets.map(function(ev){
       var when=ev.is_all_day?'all day':(meetHM(ev.starts_at)+(ev.ends_at?'&ndash;'+meetHM(ev.ends_at):''));
