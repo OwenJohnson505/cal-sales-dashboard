@@ -2158,7 +2158,84 @@ function renderSettings(){
         '<div id="setx-'+cssId(x.email)+'" style="flex-basis:100%"></div>'+
       '</div>';
     }).join("")+'</div></div>'+
-    '<div class="panel"><h2>How it is calculated</h2><p class="sub" style="margin:0">A customer belongs to whoever the TMS names as salesperson. Year one runs 12 months from their first job; revenue comes from the monthly TMS series and the margin band from their real profit. Change a scheme above and every figure recalculates instantly.</p></div>';
+    '<div class="panel"><h2>How it is calculated</h2><p class="sub" style="margin:0">A customer belongs to whoever the TMS names as salesperson. Year one runs 12 months from their first job; revenue comes from the monthly TMS series and the margin band from their real profit. Change a scheme above and every figure recalculates instantly.</p></div>'+
+    '<div id="mapboard"><div class="panel">'+spinner("Loading the Delivery Master identities...")+'</div></div>';
+  loadMapping();
+}
+// ---- Mapping: clean up the messy Delivery Master identities ----------------
+var MAPD=null;
+function mapPost(payload,cb){
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(URL_+"/functions/v1/sales-map",{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach mapping."}); });
+  });
+}
+function loadMapping(){ mapPost({action:"list"},function(r){ if(r&&r.ok){ MAPD=r; renderMapping(); } else { var el=document.getElementById("mapboard"); if(el) el.innerHTML='<div class="panel"><div class="empty">'+esc((r&&r.error)||'Could not load mappings.')+'</div></div>'; } }); }
+// what the stats engine does with an unmapped name - shown so a mapping is
+// only needed where the guess is wrong
+function mapAuto(name){
+  var n=String(name||'').toLowerCase();
+  var hit=(MAPD.reps||[]).filter(function(rp){ return n.indexOf(rp.full_name.split(' ')[0].toLowerCase())===0; })[0];
+  return hit?hit.full_name.split(' ')[0]:null;
+}
+function mapSet(kind,src,target,sel){
+  if(sel) sel.disabled=true;
+  mapPost({action:"set",kind:kind,src:src,target:target},function(r){
+    if(!r||!r.ok){ alert((r&&r.error)||'Could not save.'); }
+    loadMapping();
+    if(window.__lmView||true){} // dashboard picks the change up on its next load
+  });
+}
+function renderMapping(){
+  var el=document.getElementById("mapboard"); if(!el||!MAPD) return;
+  var reps=MAPD.reps||[];
+  var nameRows=(MAPD.names||[]).map(function(n){
+    var auto=mapAuto(n.sales_name);
+    var state=n.mapped_to
+      ? (n.mapped_to==='house'?'<span class="pill" style="background:#F5F5F7;color:#636366">house &middot; not a rep</span>':'<span class="pill" style="background:#E7F6EF;color:#0A6B4A">mapped &rarr; '+esc(String(n.mapped_to).split('@')[0])+'</span>')
+      : (auto?'<span class="pill" style="background:#F0F6FF;color:#0060C7">auto &rarr; '+esc(auto)+'</span>':'<span class="pill" style="background:#FEF6E7;color:#7A4E07">unassigned</span>');
+    var opts='<option value="">'+(auto?'auto ('+esc(auto)+')':'unassigned')+'</option>'+
+      reps.map(function(rp){ return '<option value="'+esc(rp.email)+'"'+(n.mapped_to===rp.email?' selected':'')+'>'+esc(rp.full_name)+'</option>'; }).join('')+
+      '<option value="house"'+(n.mapped_to==='house'?' selected':'')+'>House / not a rep</option>';
+    return '<div class="actrow" style="align-items:center">'+
+      '<div class="co" style="min-width:180px"><b style="font-size:13.5px">'+esc(n.sales_name)+'</b>'+
+      '<div class="dom">'+nf(n.jobs)+' jobs &middot; '+nf(n.quotes)+' quotes &middot; &pound;'+nf(Math.round(n.revenue))+'</div></div>'+
+      '<div class="rt" style="display:flex;gap:10px;align-items:center;margin-left:auto">'+state+
+      '<select class="select select-sm" style="font-size:12.5px" onchange="mapSet(\'sales_name\',\''+esc(String(n.sales_name).replace(/'/g,"\\'"))+'\',this.value,this)">'+opts+'</select></div></div>';
+  }).join('');
+  var accRows=(MAPD.accounts||[]).map(function(a){
+    return '<div class="actrow" style="align-items:center"><div class="co"><b style="font-size:13px">'+esc(a.src)+'</b> <span class="hint">&rarr; '+esc(a.target)+'</span></div>'+
+      '<div class="rt" style="margin-left:auto"><span class="mx" title="remove this merge" style="cursor:pointer" onclick="mapSet(\'account\',\''+esc(String(a.src).replace(/'/g,"\\'"))+'\',\'\')">&times;</span></div></div>';
+  }).join('');
+  el.innerHTML='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#5B21B6"></span><h3>Mapping &mdash; sales names</h3><span class="hint">whose numbers each Delivery Master &ldquo;Sales Name&rdquo; counts toward &middot; a mapping beats the automatic first-name match</span></div><div class="plist">'+nameRows+'</div></div>'+
+    '<div class="panel flush"><div class="phead"><span class="bdot" style="background:#C2740B"></span><h3>Mapping &mdash; accounts</h3><span class="hint">fold a duplicate DM customer into its real account &middot; applies to revenue and cancellation attribution</span></div>'+
+    '<div style="padding:12px 20px 4px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">'+
+      '<div style="min-width:240px"><input id="mapsrc" class="input" placeholder="duplicate account (type 2+ letters)..." style="width:100%;padding:7px 10px;font-size:13px" oninput="mapAccSearch(this,\'mapsrcres\')"><div id="mapsrcres"></div></div>'+
+      '<i class="ph ph-arrow-right" style="margin-top:10px;color:var(--mut)"></i>'+
+      '<div style="min-width:240px"><input id="maptgt" class="input" placeholder="real account it belongs to..." style="width:100%;padding:7px 10px;font-size:13px" oninput="mapAccSearch(this,\'maptgtres\')"><div id="maptgtres"></div></div>'+
+      '<button class="btn btn-primary btn-sm" style="margin-top:5px" onclick="mapAccMerge()">Merge</button></div>'+
+    '<div class="plist">'+(accRows||'<div class="empty" style="padding:12px">No account merges yet.</div>')+'</div></div>';
+}
+var MAP_ACC_T=null;
+function mapAccSearch(inp,resId){
+  clearTimeout(MAP_ACC_T);
+  var q=inp.value;
+  MAP_ACC_T=setTimeout(function(){
+    if(q.trim().length<2){ var e0=document.getElementById(resId); if(e0) e0.innerHTML=''; return; }
+    mapPost({action:"accounts_search",q:q},function(r){
+      var e=document.getElementById(resId); if(!e) return;
+      e.innerHTML=(r&&r.ok?(r.rows||[]):[]).map(function(x){
+        return '<span class="chip" style="margin:4px 4px 0 0;font-size:11.5px" onclick="document.getElementById(\''+(resId==='mapsrcres'?'mapsrc':'maptgt')+'\').value=\''+esc(String(x.name).replace(/'/g,"\\'"))+'\';this.parentElement.innerHTML=\'\'">'+esc(x.name)+' <span class="faint">'+nf(x.jobs)+'</span></span>';
+      }).join('')||'<div class="hint" style="padding:4px 0">nothing matches</div>';
+    });
+  },350);
+}
+function mapAccMerge(){
+  var s=(document.getElementById('mapsrc')||{}).value,t=(document.getElementById('maptgt')||{}).value;
+  if(!s||!t) return alert('Pick both the duplicate and the real account.');
+  mapSet('account',s.trim(),t.trim());
+  document.getElementById('mapsrc').value=''; document.getElementById('maptgt').value='';
 }
 function setBreakdown(email){ var box=document.getElementById('setx-'+cssId(email)); if(!box) return;
   if(box.dataset.open==='bd'){ box.dataset.open=''; box.innerHTML=''; return; }
