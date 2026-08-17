@@ -1761,6 +1761,24 @@ function renderDashView(el,r){
     custCol('Top spenders',r.top_customers,'#0A6B4A')+
     custCol('Lowest spenders',bottom,'#C2740B')+
     '</div></div>';
+  // real Delivery Master numbers: booked jobs, quote conversion, cancellations
+  if(r.dm&&(Number(r.dm.jobs)||Number(r.dm.quotes))){
+    var dm=r.dm;
+    var dmCell=function(v,lab,col){ return '<div style="text-align:center;min-width:96px"><b style="display:block;font-size:20px;font-weight:750;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+v+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+lab+'</span></div>'; };
+    h+='<div class="panel"><div class="phead" style="padding:0 0 6px"><span class="bdot" style="background:#0A6B4A"></span><h3>From the TMS</h3><span class="hint">Delivery Master, last '+dm.days+' days &middot; '+(r.dm_scope==='team'?'whole desk (DM has no jobs under your name)':'jobs and quotes under your sales name')+'</span></div>'+
+      '<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;padding:4px 0 2px">'+
+      dmCell(nf(dm.jobs),'jobs booked')+
+      dmCell('£'+nf(dm.revenue),'revenue')+
+      dmCell(dm.margin_pct!=null?dm.margin_pct+'%':'&ndash;','margin &middot; £'+nf(dm.margin))+
+      '<span style="width:1px;align-self:stretch;background:var(--line-soft)"></span>'+
+      dmCell(nf(dm.quotes),'quotes')+
+      dmCell(dm.conv_pct!=null?dm.conv_pct+'%':'&ndash;','converted &middot; '+nf(dm.quotes_won)+' won',dm.conv_pct!=null&&dm.conv_pct<30?'#B45309':'#0A6B4A')+
+      dmCell('£'+nf(dm.quote_value_lost),'quote value lost','#B45309')+
+      '<span style="width:1px;align-self:stretch;background:var(--line-soft)"></span>'+
+      dmCell(nf(dm.cancellations),'cancellations','#DC2626')+
+      dmCell('£'+nf(dm.cancel_value),'cancelled value','#DC2626')+
+      '</div></div>';
+  }
   h+='<div class="panel"><div class="phead" style="padding:0 0 8px"><span class="bdot" style="background:#0060C7"></span><h3>Activity &mdash; last 12 weeks</h3>'+
     (tr?'<span class="pill" style="margin-left:auto;background:'+(tr.up?'#E7F6EF;color:#0A6B4A':'#FEE2E2;color:#B91C1C')+'" title="holiday weeks and the current part-week excluded">'+(tr.up?'&#9650;':'&#9660;')+' '+Math.abs(tr.pct)+'% vs the four working weeks before</span>':'')+'</div>'+
     dashChart(r.weekly,hol)+'</div>';
