@@ -1721,7 +1721,7 @@ function renderDashView(el,r){
     stat("Contacted &middot; 30d",nf(r.contacted_30d),pct+"% of your book touched this month",pct<25?"alarm":"")+
     stat("Positive intent",nf(r.positive_intent),"AI reads the conversation as warm")+
     stat("Customers",nf(r.customers_count),"trading accounts on your book")+
-    stat("Avg weekly revenue","£"+nf(r.avg_weekly_rev),"from your customers&rsquo; recent monthly spend")+
+    stat("Avg weekly revenue","£"+nf(r.avg_weekly_rev),"from your "+nf(r.assessable_count||0)+" assessable accounts &middot; last 3 full months")+
     '</div></div>';
   // activity metrics: what actually got done, three horizons
   var cell=function(v,lab){ return '<div style="text-align:center;min-width:86px"><b style="display:block;font-size:20px;font-weight:750;font-variant-numeric:tabular-nums">'+nf(v)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+lab+'</span></div>'; };
@@ -1750,7 +1750,7 @@ function renderDashView(el,r){
         return '<div class="actrow" style="padding:7px 0;align-items:center'+(c.domain?';cursor:pointer" onclick="openCallLead(\''+esc(c.domain)+'\')':'"')+'">'+
           '<div class="co"><b style="font-size:13px">'+esc(custName(c.customer_name))+'</b></div>'+
           '<div class="rt" style="display:flex;gap:12px;align-items:baseline;margin-left:auto;font-variant-numeric:tabular-nums">'+
-          '<b>£'+nf(c.recent_monthly)+'/mo</b>'+(c.margin_pct!=null?'<span class="hint">'+c.margin_pct+'%</span>':'')+'</div></div>';
+          '<b>£'+nf(c.monthly_shown!=null?c.monthly_shown:c.recent_monthly)+'/mo</b>'+(c.margin_pct!=null?'<span class="hint">'+c.margin_pct+'%</span>':'')+'</div></div>';
       }).join(''):'<div class="empty" style="padding:10px">No customers yet.</div>')+'</div>';
   };
   // a small book makes the two ends overlap - names in Top never repeat in
@@ -1760,7 +1760,14 @@ function renderDashView(el,r){
   h+='<div class="panel"><div style="display:flex;gap:34px;flex-wrap:wrap">'+
     custCol('Top spenders',r.top_customers,'#0A6B4A')+
     custCol('Lowest spenders',bottom,'#C2740B')+
-    '</div></div>';
+    '</div>'+
+    '<p class="hint" style="margin:10px 0 0">Only accounts with 3+ full months of steady bookings carry a monthly figure. Not shown: '+
+      (r.new_count?nf(r.new_count)+' too new':'')+(r.new_count&&(r.occasional_count||r.lapsed_count)?' &middot; ':'')+
+      (r.occasional_count?nf(r.occasional_count)+' too occasional to average':'')+((r.occasional_count&&r.lapsed_count)?' &middot; ':'')+
+      (r.lapsed_count?nf(r.lapsed_count)+' lapsed (90d+ without a job)':'')+'</p>'+
+    ((r.newest_customers||[]).length?'<div style="margin-top:10px;border-top:1px solid var(--line-soft);padding-top:8px"><div class="phead" style="padding:0 0 4px"><span class="bdot" style="background:#0060C7"></span><h3 style="font-size:14px">Newest accounts &mdash; too early to judge</h3></div>'+
+      r.newest_customers.map(function(c){ return '<div class="actrow" style="padding:6px 0;align-items:center'+(c.domain?';cursor:pointer" onclick="openCallLead(\''+esc(c.domain)+'\')':'"')+'"><div class="co"><b style="font-size:13px">'+esc(custName(c.customer_name))+'</b></div><div class="rt" style="margin-left:auto"><span class="hint">'+esc(c.spend_note||'')+'</span></div></div>'; }).join('')+'</div>':'')+
+    '</div>';
   // real Delivery Master numbers: booked jobs, quote conversion, cancellations
   if(r.dm&&(Number(r.dm.jobs)||Number(r.dm.quotes))){
     var dm=r.dm;
@@ -2446,7 +2453,7 @@ function renderCuCards(box, cs){
         '<span style="margin-left:auto">'+trendPill(x)+'</span></div>'+
       '<div><div class="dhead">'+esc(custName(x.customer_name))+'</div>'+
       '<div class="dsub">'+(x.postcode?esc(String(x.postcode).toUpperCase())+' &middot; ':'')+(x.first_job?'since '+esc(fmtShortD(x.first_job))+' &middot; ':'')+(Number(x.jobs_per_week)?Number(x.jobs_per_week).toFixed(1)+' jobs/wk':'')+'</div></div>'+
-      '<div class="drow" style="font-size:12.5px;font-weight:650">&pound;'+nf(Math.round(x.recent_monthly||0))+'/mo &middot; '+(x.margin_pct!=null?x.margin_pct+'% margin':'')+' &middot; &pound;'+nf(Math.round(x.revenue_total||0))+' lifetime</div>'+
+      '<div class="drow" style="font-size:12.5px;font-weight:650">'+(x.spend_assess==='ok'?'&pound;'+nf(Math.round(x.monthly_shown||0))+'/mo &middot; ':'<span class="hint" style="font-weight:600">'+esc(x.spend_note||'')+'</span> &middot; ')+(x.margin_pct!=null?x.margin_pct+'% margin':'')+' &middot; &pound;'+nf(Math.round(x.revenue_total||0))+' lifetime</div>'+
       '<div class="drow"><span class="dsub">'+(days!=null?('contacted '+(days===0?'today':days+'d ago')+(days>60?' &#9888;':'')):'no contact logged')+'</span>'+
         '<span style="margin-left:auto">'+((Number(x.open_actions)>0)?'<span class="pill" style="background:#F0F6FF;color:#0060C7">'+x.open_actions+' task'+(x.open_actions>1?'s':'')+'</span>':'')+
         (x.action_tags?'<span class="pill" style="background:#1D1D1F;color:#fff">'+esc(String(x.action_tags).split(', ')[0])+'</span>':'')+'</span></div>'+
@@ -2564,7 +2571,7 @@ function cuFilteredList(){
     contact:function(a,b){ return String(a.last_contact||"").localeCompare(String(b.last_contact||"")); },
     started:function(a,b){ return String(a.first_job||"").localeCompare(String(b.first_job||"")); },
     jobswk:function(a,b){ return (Number(a.jobs_per_week)||0)-(Number(b.jobs_per_week)||0); },
-    monthly:function(a,b){ return (Number(a.recent_monthly)||0)-(Number(b.recent_monthly)||0); },
+    monthly:function(a,b){ return (Number(a.monthly_shown!=null?a.monthly_shown:a.recent_monthly)||0)-(Number(b.monthly_shown!=null?b.monthly_shown:b.recent_monthly)||0); },
     margin:function(a,b){ return (Number(a.margin_pct)||0)-(Number(b.margin_pct)||0); },
     lifetime:function(a,b){ return (Number(a.revenue_total)||0)-(Number(b.revenue_total)||0); },
     trend:function(a,b){ return String(a.trend||"").localeCompare(String(b.trend||"")); },
@@ -2600,7 +2607,9 @@ function renderCustTable(){
       '<td style="white-space:nowrap">'+lc+'</td>'+
       '<td style="white-space:nowrap">'+(x.first_job?fmtShortD(x.first_job):'<span class="faint">&ndash;</span>')+'</td>'+
       num(x.jobs_per_week,function(v){return Number(v).toFixed(1);})+
-      num(x.recent_monthly,function(v){return '£'+nf(Math.round(v));})+
+      (x.spend_assess==='ok'
+        ? num(x.monthly_shown,function(v){return '£'+nf(Math.round(v));})
+        : '<td style="white-space:nowrap;max-width:170px"><span class="hint" style="font-size:11.5px" title="'+esc(x.spend_note||'')+'">'+esc(x.spend_note||'–')+'</span></td>')+
       num(x.margin_pct,function(v){return v+'%';})+
       num(x.revenue_total,function(v){return '£'+nf(Math.round(v));})+
       '<td style="white-space:nowrap">'+spendSpark(x.monthly)+' '+trendPill(x)+'</td>'+
@@ -2805,7 +2814,7 @@ function mapItems(){
     cuFilteredList().forEach(function(x){
       var pc=normPc(x.postcode);
       if(!pc){ hidden++; return; }
-      items.push({id:'C:'+(x.domain||x.customer_name), kind:'customer', name:custName(x.customer_name), pc:pc, dom:x.domain, sub:(x.salesperson?String(x.salesperson).split(' ')[0]+' &middot; ':'')+'&pound;'+nf(Math.round(x.recent_monthly||0))+'/mo'});
+      items.push({id:'C:'+(x.domain||x.customer_name), kind:'customer', name:custName(x.customer_name), pc:pc, dom:x.domain, sub:(x.salesperson?String(x.salesperson).split(' ')[0]+' &middot; ':'')+(x.spend_assess==='ok'?'&pound;'+nf(Math.round(x.monthly_shown||0))+'/mo':esc(String(x.spend_assess||'')))});
     });
   }
   return {items:items, hidden:hidden};
