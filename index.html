@@ -73,10 +73,22 @@ h1,h2,h3{ letter-spacing:-.025em; }
    and no authority; one rule lifts Pipeline, Leads and Cold outreach too, not
    just the screens added last. Nested tables (inside a panel or a modal) opt
    out so the card does not double up. */
-.tblwrap{ overflow-x:auto; background:#fff; border:0;
-  border-radius:var(--radius-box); box-shadow:var(--sh-2); }
+.tblwrap{ overflow:auto; background:#fff; border:0;
+  border-radius:var(--radius-box); box-shadow:var(--sh-2);
+  /* the TABLE is the scroll surface, not the page: cap tall tables to the
+     viewport so the horizontal scrollbar is always in reach (it used to sit
+     at the bottom of a 5000px-tall wrapper), scroll both axes inside */
+  max-height:max(340px, calc(100dvh - 210px)); overscroll-behavior:contain; }
+.mbody .tblwrap{ max-height:none; } /* modals already scroll themselves */
 .panel .tblwrap,.mbody .tblwrap{ background:none; border:0; border-radius:0; box-shadow:none; }
 .panel.flush .tblwrap{ margin:0; }
+/* header rides along while the body scrolls under it */
+.tblwrap .table thead th{ position:sticky; top:0; z-index:3; background:var(--color-base-200); }
+/* the scrollbars ARE the affordance - keep them visible, not overlay-hidden */
+.tblwrap::-webkit-scrollbar{ width:11px; height:11px; }
+.tblwrap::-webkit-scrollbar-thumb{ background:#C7C7CC; border-radius:99px; border:3px solid #fff; }
+.tblwrap::-webkit-scrollbar-thumb:hover{ background:#A2A2A7; }
+.tblwrap::-webkit-scrollbar-corner{ background:transparent; }
 .tblwrap>.table thead th{ background:var(--color-base-200); }
 .tblwrap>.table thead th:first-child{ border-top-left-radius:var(--radius-box); }
 .tblwrap>.table thead th:last-child{ border-top-right-radius:var(--radius-box); }
@@ -706,6 +718,9 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .lmtable th,.lmtable td{ padding:11px 10px; }
 .lmtable th:first-child,.lmtable td:first-child{ padding-left:20px; }
 .lmtable th:last-child,.lmtable td:last-child{ padding-right:14px; }
+/* squeeze before scrolling: on smaller screens the dense tables trade
+   padding first, so the scrollbar is the last resort not the first */
+@media (max-width:1400px){ .lmtable th,.lmtable td{ padding:9px 7px; } .lmtable th:first-child,.lmtable td:first-child{ padding-left:14px; } }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
