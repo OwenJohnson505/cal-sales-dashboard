@@ -743,11 +743,26 @@ var LEADS=[], LEADSloaded=false, leadFilter="new", MEEMAIL="";
 // other tab waiting on "Loading..." forever. A pass-through lock removes that
 // whole failure class (Supabase tolerates the rare concurrent refresh).
 var sb=supabase.createClient(URL_,KEY_,{auth:{lock:async function(_n,_t,fn){ return await fn(); }}});
+// Telemetry: every boot/login step lands in client_log so "it doesn't work"
+// comes with a trace. Fire-and-forget, never blocks the UI, never sends a
+// password.
+var DSID=Math.random().toString(36).slice(2,10);
+function dlog(step,detail){
+  try{
+    fetch(URL_+"/functions/v1/client-log",{method:"POST",keepalive:true,
+      headers:{Authorization:"Bearer "+KEY_,apikey:KEY_,"Content-Type":"application/json"},
+      body:JSON.stringify({sid:DSID,step:step,detail:typeof detail==="string"?detail:JSON.stringify(detail||{}),
+        email:window.DEMAIL||null,url:location.pathname+location.hash.slice(0,20),ua:navigator.userAgent})
+    }).catch(function(){});
+  }catch(_e){}
+}
+window.addEventListener("error",function(e){ dlog("js_error",(e.message||"")+" @ "+(e.filename||"")+":"+(e.lineno||"")); });
+window.addEventListener("unhandledrejection",function(e){ dlog("js_rejection",String((e.reason&&e.reason.message)||e.reason||"").slice(0,300)); });
 // Boot watchdog: if nothing real has rendered after 15s, stop spinning and
 // say so, with a way out - never an endless spinner.
 setTimeout(function(){
   var stuck=document.querySelector('#app .loading-spinner')&&!document.querySelector('#app .shell, #app .authwrap');
-  if(stuck) bootStuck();
+  if(stuck){ dlog("boot_stuck","spinner still showing at 15s"); bootStuck(); }
 },15000);
 function bootStuck(){
   h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Taking too long</h2>'+
@@ -781,11 +796,14 @@ function avColor(n){ n=n||"?"; var s=0; for(var i=0;i<n.length;i++) s=(s*31+n.ch
 function avatar(n,cls){ return '<span class="avi'+(cls?' '+cls:'')+'" style="background:'+avColor(n)+'">'+initials(n)+'</span>'; }
 function defaultRange(){var to=new Date();var from=new Date(Date.now()-7*86400000);RANGE={from:isoDay(from),to:isoDay(to),preset:7};}
 async function boot(){
+  dlog("boot_start");
   var s=await sb.auth.getSession();
+  window.DEMAIL=(s.data.session&&s.data.session.user&&s.data.session.user.email)||null;
+  dlog("boot_session",{has_session:!!s.data.session,err:s.error?String(s.error.message):null});
   if(!s.data.session){return login();}
   // invited users arrive on a temporary password - make them pick their own
   var u=s.data.session.user||{};
-  if(u.user_metadata&&u.user_metadata.must_change){return firstPw();}
+  if(u.user_metadata&&u.user_metadata.must_change){dlog("boot_must_change");return firstPw();}
   if(!RANGE.from) defaultRange();
   loadData();
 }
@@ -801,7 +819,8 @@ async function saveFirstPw(){
   if(!a||a.length<8) return setMsg("Use at least 8 characters.");
   if(a!==b) return setMsg("Those don't match.");
   var r=await sb.auth.updateUser({password:a,data:{must_change:false}});
-  if(r.error) return setMsg(r.error.message);
+  if(r.error){ dlog("first_pw_error",r.error.message); return setMsg(r.error.message); }
+  dlog("first_pw_ok");
   boot();
 }
 async function loadData(){
@@ -823,15 +842,52 @@ async function loadData(){
   renderDash(payload);
 }
 function login(){
+  dlog("login_screen");
   h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Cal Sameday</h2><p>Sales assistant - sign in to continue.</p>'+
-    '<input id="em" class="input wfull" placeholder="Work email"><input id="pw" type="password" class="input wfull" placeholder="Password">'+
-    '<div class="row"><button class="btn btn-primary" onclick="doIn()">Sign in</button><button class="btn btn-soft" onclick="doUp()">Request access</button></div>'+
-    '<div id="msg" class="msg"></div></div></div>');
+    '<input id="em" class="input wfull" placeholder="Work email"><input id="pw" type="password" class="input wfull" placeholder="Password" onkeydown="if(event.key===\'Enter\')doIn()">'+
+    '<div class="row"><button id="signinbtn" class="btn btn-primary" onclick="doIn()">Sign in</button><button class="btn btn-soft" onclick="doUp()">Request access</button></div>'+
+    '<div id="msg" class="msg"></div>'+
+    '<p style="margin:10px 0 0"><a href="#" style="font-size:12px;color:var(--mut)" onclick="runDiag();return false">Having trouble? Run diagnostics</a></p></div></div>');
 }
-async function doIn(){ setMsg(""); var r=await sb.auth.signInWithPassword({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { boot(); } }
+// sign-in with a hard timeout and a full trace: the button can never
+// silently do nothing again
+async function doIn(){
+  setMsg("Signing in...");
+  var btn=document.getElementById("signinbtn"); if(btn) btn.disabled=true;
+  window.DEMAIL=val("em")||null;
+  dlog("login_attempt",{email:val("em")});
+  var timed=false;
+  var t=setTimeout(function(){ timed=true; dlog("login_timeout","no answer after 20s"); setMsg("The sign-in service is not answering. Check your connection, or run diagnostics below."); if(btn) btn.disabled=false; },20000);
+  var r;
+  try{ r=await sb.auth.signInWithPassword({email:val("em"),password:val("pw")}); }
+  catch(e){ clearTimeout(t); dlog("login_exception",String(e&&e.message||e)); if(btn) btn.disabled=false; return setMsg("Sign-in failed: "+String(e&&e.message||e)); }
+  clearTimeout(t);
+  if(timed&&!r.error){ /* late success - carry on */ }
+  if(btn) btn.disabled=false;
+  if(r.error){ dlog("login_error",{status:r.error.status,message:r.error.message}); setMsg(r.error.message); }
+  else { dlog("login_ok"); boot(); }
+}
+// connectivity probes a rep can run from the login screen - results shown
+// AND logged, so the trace exists even when they just screenshot it
+async function runDiag(){
+  setMsg("Running diagnostics...");
+  var out=[];
+  async function probe(name,url,opts){
+    var t0=Date.now();
+    try{ var r=await Promise.race([fetch(url,opts||{}), new Promise(function(_,rej){setTimeout(function(){rej(new Error("timeout 8s"));},8000);})]);
+      out.push(name+": HTTP "+r.status+" in "+(Date.now()-t0)+"ms"); }
+    catch(e){ out.push(name+": FAILED ("+String(e&&e.message||e).slice(0,60)+") after "+(Date.now()-t0)+"ms"); }
+  }
+  await probe("Auth service","https://bbklqpmojvfoqsmxbtfv.supabase.co/auth/v1/health",{headers:{apikey:KEY_}});
+  await probe("Data service",URL_+"/rest/v1/",{headers:{apikey:KEY_}});
+  await probe("App functions",URL_+"/functions/v1/client-log",{method:"POST",headers:{Authorization:"Bearer "+KEY_,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify({sid:DSID,step:"diag_ping"})});
+  out.push("Browser: "+(navigator.onLine?"online":"OFFLINE")+" · "+new Date().toTimeString().slice(0,8));
+  dlog("diagnostics",out.join(" | "));
+  setMsg(out.join(" · "));
+}
 async function doUp(){ setMsg(""); var r=await sb.auth.signUp({email:val("em"),password:val("pw")}); if(r.error){setMsg(r.error.message);} else { setMsg("Request sent. An admin will approve you, then sign in."); } }
-function pending(email){ h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Awaiting approval</h2><p><b>'+esc(email)+'</b> is signed in, but an admin has not approved access yet.</p><div class="row"><button class="btn btn-primary" onclick="boot()">Check again</button><button class="btn btn-soft" onclick="out()">Sign out</button></div></div></div>'); }
-function errScreen(m){ h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Something went wrong</h2><p>'+esc(m)+'</p><div class="row"><button class="btn btn-primary" onclick="boot()">Retry</button><button class="btn btn-soft" onclick="out()">Sign out</button></div></div></div>'); }
+function pending(email){ dlog("pending_screen",{email:email}); h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Awaiting approval</h2><p><b>'+esc(email)+'</b> is signed in, but an admin has not approved access yet.</p><div class="row"><button class="btn btn-primary" onclick="boot()">Check again</button><button class="btn btn-soft" onclick="out()">Sign out</button></div></div></div>'); }
+function errScreen(m){ dlog("error_screen",m); h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Something went wrong</h2><p>'+esc(m)+'</p><div class="row"><button class="btn btn-primary" onclick="boot()">Retry</button><button class="btn btn-soft" onclick="out()">Sign out</button></div></div></div>'); }
 async function out(){ await sb.auth.signOut(); boot(); }
 
 /* =========================== ASSISTANT (home) =========================== */
