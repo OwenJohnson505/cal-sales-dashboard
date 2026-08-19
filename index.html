@@ -3743,12 +3743,26 @@ function deleteTask(id,btn){
     else { btn.disabled=false; btn.dataset.armed=''; btn.textContent='Delete task'; }
   });
 }
-// the tick fills, holds a beat so the change is felt, then the row fades
+// the tick fills, holds a beat so the change is felt, then the row fades -
+// but stays tickable, so a mis-click can be reverted just like in HubSpot
 function tickTask(btn,id){
+  var row=btn.closest(".actrow");
+  if(btn.classList.contains("done")){
+    // unticking: reopen the task in HubSpot and bring the row back
+    btn.classList.remove("done"); btn.title="Mark done";
+    deskPost({action:"hstask_update",task_id:id,status:"NOT_STARTED"},function(r){
+      if(r&&r.ok){ if(row){ row.style.transition="opacity .2s ease"; row.style.opacity="1"; row.style.pointerEvents=""; } }
+      else { btn.classList.add("done"); btn.title="Undo - mark as not done"; }
+    });
+    return;
+  }
   btn.classList.add("done");
   deskPost({action:"hstask_done",id:id},function(r){
-    var row=btn.closest(".actrow");
-    if(r&&r.ok){ if(row){ row.style.transition="opacity .4s ease .3s"; row.style.opacity=".28"; row.style.pointerEvents="none"; } }
+    if(r&&r.ok){
+      btn.title="Undo - mark as not done";
+      // fade the row but keep the tick itself clickable for the undo
+      if(row){ row.style.transition="opacity .4s ease .3s"; row.style.opacity=".28"; row.style.pointerEvents="none"; btn.style.pointerEvents="auto"; }
+    }
     else btn.classList.remove("done");
   });
 }
