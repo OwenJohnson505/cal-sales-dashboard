@@ -1787,28 +1787,65 @@ function identifyCaller(phone,btn){
   }
   ask();
 }
+// 12-week revenue line from the rep's own Delivery Master jobs
+function dashRevChart(wkly){
+  var W=640,H=170,padL=44,padR=10,padT=14,padB=26;
+  var wks=wkly||[]; if(!wks.length) return '<div class="empty">No booked jobs yet.</div>';
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var max=1; wks.forEach(function(x){ max=Math.max(max,Number(x.revenue)||0); });
+  var X=function(i){ return padL+(W-padL-padR)*(wks.length>1?i/(wks.length-1):0); };
+  var Y=function(v){ return padT+(H-padT-padB)*(1-v/max); };
+  var fmtK=function(v){ return v>=1000?(Math.round(v/100)/10)+'k':String(Math.round(v)); };
+  var pts=wks.map(function(x,i){ return X(i)+','+Y(Number(x.revenue)||0); }).join(' ');
+  var dots=wks.map(function(x,i){ var v=Number(x.revenue)||0; return '<circle cx="'+X(i)+'" cy="'+Y(v)+'" r="3.2" fill="#0A6B4A" stroke="#fff" stroke-width="1.3"><title>£'+nf(v)+' &middot; '+nf(x.jobs)+' jobs &middot; wk of '+x.wk+'</title></circle>'; }).join('');
+  var grid='',labels='';
+  [0,.5,1].forEach(function(f){ var v=max*f; var y=Y(v); grid+='<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="var(--line-soft,#E8E8ED)" stroke-width="1"/>'; labels+='<text x="'+(padL-6)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="10" fill="var(--faint,#98989F)">£'+fmtK(v)+'</text>'; });
+  wks.forEach(function(x,i){ if(i%2) return; var d=new Date(x.wk); labels+='<text x="'+X(i)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9.5" fill="var(--faint,#98989F)">'+d.getDate()+' '+M[d.getMonth()]+'</text>'; });
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+grid+labels+
+    '<polyline points="'+pts+'" fill="none" stroke="#0A6B4A" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+dots+'</svg>';
+}
+// The dashboard answers three questions, in order: what am I doing, what is
+// it producing, how well am I handling it.
 function renderDashView(el,r){
   var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var unret=(r.missed||[]).filter(function(m){ return !m.returned; });
   var hol=dashHolWeeks(r.weekly,r.absences);
   var tr=dashTrend(r.weekly,hol);
   var pct=r.leads_in_pipeline?Math.round(r.contacted_30d/r.leads_in_pipeline*100):0;
-  var a=r.activity||{};
-  var h='<div class="statwrap"><div class="statgrid">'+
-    stat("Missed inbound",nf(r.missed_total),(r.has_line?"your line":"whole team")+" &middot; "+r.days+" days &middot; "+r.unreturned+" never called back",r.unreturned?"alarm":"ok")+
-    stat("Inbound answered",nf(r.inbound_answered_team),(r.inbound_answered_mine?nf(r.inbound_answered_mine)+" by you &middot; ":"")+"whole team, "+r.days+" days")+
-    stat("Leads owned",nf(r.leads_in_pipeline),"HubSpot companies in your name")+
-    stat("Contacted &middot; 30d",nf(r.contacted_30d),pct+"% of your book touched this month",pct<25?"alarm":"")+
-    stat("Positive intent",nf(r.positive_intent),"AI reads the conversation as warm")+
-    stat("Customers",nf(r.customers_count),"trading accounts on your book")+
-    stat("Avg weekly revenue","£"+nf(r.avg_weekly_rev),"from your "+nf(r.assessable_count||0)+" assessable accounts &middot; last 3 full months")+
+  var a=r.activity||{}, dm=r.dm||{}, eq=r.email_quality;
+  var sect=function(t,sub){ return '<div style="margin:20px 0 8px"><h2 style="font-size:16px;font-weight:750;letter-spacing:-.01em;margin:0">'+t+'</h2>'+(sub?'<p class="hint" style="margin:2px 0 0">'+sub+'</p>':'')+'</div>'; };
+
+  // ---- 1 · ACTIVITY: what you are putting in -----------------------------
+  var h=sect('Activity','what you are actually doing &mdash; calls and emails logged to HubSpot');
+  h+='<div class="statwrap"><div class="statgrid">'+
+    stat("Calls today",nf(a.calls_today),nf(a.calls_week)+" this week &middot; "+nf(a.calls_month)+" this month")+
+    stat("Emails today",nf(a.emails_today),nf(a.emails_week)+" this week &middot; "+nf(a.emails_month)+" this month",a.emails_month===0?"alarm":"")+
+    stat("Inbound answered",nf(r.inbound_answered_mine||r.inbound_answered_team),(r.inbound_answered_mine?"by you":"whole team")+" &middot; "+r.days+" days")+
+    stat("Contacted &middot; 30d",nf(r.contacted_30d),pct+"% of your "+nf(r.leads_in_pipeline)+" leads touched",pct<25?"alarm":"")+
     '</div></div>';
-  // activity metrics: what actually got done, three horizons
-  var cell=function(v,lab){ return '<div style="text-align:center;min-width:86px"><b style="display:block;font-size:20px;font-weight:750;font-variant-numeric:tabular-nums">'+nf(v)+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+lab+'</span></div>'; };
-  h+='<div class="panel"><div class="phead" style="padding:0 0 6px"><span class="bdot" style="background:#5B21B6"></span><h3>Your activity</h3><span class="hint">outbound calls and emails logged to HubSpot</span></div>'+
-    '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;padding:4px 0 2px">'+
-    '<div style="display:flex;gap:14px;align-items:center"><i class="ph ph-phone-outgoing" style="color:#0060C7;font-size:18px"></i>'+cell(a.calls_today,'calls today')+cell(a.calls_week,'this week')+cell(a.calls_month,'this month')+'</div>'+
-    '<div style="display:flex;gap:14px;align-items:center;margin-left:12px"><i class="ph ph-envelope-simple" style="color:#0A6B4A;font-size:18px"></i>'+cell(a.emails_today,'emails today')+cell(a.emails_week,'this week')+cell(a.emails_month,'this month')+'</div>'+
+  h+='<div class="panel"><div class="phead" style="padding:0 0 8px"><span class="bdot" style="background:#0060C7"></span><h3>Last 12 weeks</h3>'+
+    (tr?'<span class="pill" style="margin-left:auto;background:'+(tr.up?'#E7F6EF;color:#0A6B4A':'#FEE2E2;color:#B91C1C')+'" title="holiday weeks and the current part-week excluded">'+(tr.up?'&#9650;':'&#9660;')+' '+Math.abs(tr.pct)+'% vs the four working weeks before</span>':'')+'</div>'+
+    dashChart(r.weekly,hol)+'</div>';
+
+  // ---- 2 · OUTCOME: what it is producing ---------------------------------
+  h+=sect('Outcome','what your work is generating &mdash; real Delivery Master numbers'+(r.dm_scope==='team'?' (whole desk &mdash; DM has no jobs under your name yet)':''));
+  h+='<div class="statwrap"><div class="statgrid">'+
+    stat("Revenue &middot; 90d","£"+nf(dm.revenue||0),nf(dm.jobs||0)+" jobs booked &middot; "+(dm.margin_pct!=null?dm.margin_pct+"% margin":"margin n/a"))+
+    stat("Quotes won",nf(dm.quotes_won||0),"£"+nf(dm.quote_value_won||0)+" won of "+nf(dm.quotes||0)+" quotes &middot; 90d")+
+    stat("Run-rate","£"+nf(r.avg_weekly_rev)+"/wk","from "+nf(r.assessable_count||0)+" steady accounts of "+nf(r.customers_count))+
+    stat("New accounts",nf(r.new_count||0),"opened in the last ~10 weeks &middot; details in Accounts")+
+    '</div></div>';
+  h+='<div class="panel"><div class="phead" style="padding:0 0 8px"><span class="bdot" style="background:#0A6B4A"></span><h3>Revenue &mdash; last 12 weeks</h3><span class="hint">your booked jobs, by week</span></div>'+
+    dashRevChart(r.dm_weekly)+'</div>';
+
+  // ---- 3 · PERFORMANCE: how well you are handling it ---------------------
+  h+=sect('Performance','how well the calls and emails are being handled');
+  h+='<div class="statwrap"><div class="statgrid">'+
+    stat("Quote conversion",(dm.conv_pct!=null?dm.conv_pct+"%":"&ndash;"),"£"+nf(dm.quote_value_lost||0)+" of quote value lost &middot; 90d",(dm.conv_pct!=null&&dm.conv_pct<30)?"alarm":"")+
+    stat("Missed calls",nf(r.missed_total),(r.has_line?"your line":"whole team")+" &middot; "+r.days+"d &middot; "+r.unreturned+" never called back",r.unreturned?"alarm":"ok")+
+    (eq?stat("Personal emails",(100-(eq.near_dup_pct||0))+"%",nf(eq.emails_30d)+" sent &middot; 30d &middot; "+(eq.near_dup_pct||0)+"% near-duplicates",(eq.near_dup_pct||0)>50?"alarm":""):"")+
+    stat("Positive intent",nf(r.positive_intent),"leads the AI reads as warm conversations")+
+    stat("Cancellations",nf(dm.cancellations||0),"£"+nf(dm.cancel_value||0)+" cancelled value &middot; your customers &middot; 90d",dm.cancellations>50?"alarm":"")+
     '</div></div>';
   if(unret.length||r.missed_total){
     h+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#DC2626"></span><h3>Missed and never called back</h3><span class="hint">'+(r.has_line?'callers to your direct line':'no direct line on file &mdash; showing the whole team&rsquo;s')+' &mdash; each one might have been a job</span></div><div class="plist">'+
@@ -1823,52 +1860,6 @@ function renderDashView(el,r){
           (m.phone?'<a class="btn btn-primary btn-sm tel" href="tel:'+esc(m.phone)+'">Call back</a>':'')+'</div></div>';
       }).join(''):'<div class="empty" style="padding:14px">Every missed call has been returned. As it should be.</div>')+'</div></div>';
   }
-  // top and bottom of their book, side by side
-  var custCol=function(title,list,dotCol){
-    return '<div style="flex:1;min-width:280px"><div class="phead" style="padding:0 0 4px"><span class="bdot" style="background:'+dotCol+'"></span><h3 style="font-size:14px">'+title+'</h3></div>'+
-      (list&&list.length?list.map(function(c){
-        return '<div class="actrow" style="padding:7px 0;align-items:center'+(c.domain?';cursor:pointer" onclick="openCallLead(\''+esc(c.domain)+'\')':'"')+'">'+
-          '<div class="co"><b style="font-size:13px">'+esc(custName(c.customer_name))+'</b></div>'+
-          '<div class="rt" style="display:flex;gap:12px;align-items:baseline;margin-left:auto;font-variant-numeric:tabular-nums">'+
-          '<b>£'+nf(c.monthly_shown!=null?c.monthly_shown:c.recent_monthly)+'/mo</b>'+(c.margin_pct!=null?'<span class="hint">'+c.margin_pct+'%</span>':'')+'</div></div>';
-      }).join(''):'<div class="empty" style="padding:10px">No customers yet.</div>')+'</div>';
-  };
-  // a small book makes the two ends overlap - names in Top never repeat in
-  // Lowest
-  var topNames={}; (r.top_customers||[]).forEach(function(c){ topNames[c.customer_name]=1; });
-  var bottom=(r.bottom_customers||[]).filter(function(c){ return !topNames[c.customer_name]; });
-  h+='<div class="panel"><div style="display:flex;gap:34px;flex-wrap:wrap">'+
-    custCol('Top spenders',r.top_customers,'#0A6B4A')+
-    custCol('Lowest spenders',bottom,'#C2740B')+
-    '</div>'+
-    '<p class="hint" style="margin:10px 0 0">Only accounts with 3+ full months of steady bookings carry a monthly figure. Not shown: '+
-      (r.new_count?nf(r.new_count)+' too new':'')+(r.new_count&&(r.occasional_count||r.lapsed_count)?' &middot; ':'')+
-      (r.occasional_count?nf(r.occasional_count)+' too occasional to average':'')+((r.occasional_count&&r.lapsed_count)?' &middot; ':'')+
-      (r.lapsed_count?nf(r.lapsed_count)+' lapsed (90d+ without a job)':'')+'</p>'+
-    ((r.newest_customers||[]).length?'<div style="margin-top:10px;border-top:1px solid var(--line-soft);padding-top:8px"><div class="phead" style="padding:0 0 4px"><span class="bdot" style="background:#0060C7"></span><h3 style="font-size:14px">Newest accounts &mdash; too early to judge</h3></div>'+
-      r.newest_customers.map(function(c){ return '<div class="actrow" style="padding:6px 0;align-items:center'+(c.domain?';cursor:pointer" onclick="openCallLead(\''+esc(c.domain)+'\')':'"')+'"><div class="co"><b style="font-size:13px">'+esc(custName(c.customer_name))+'</b></div><div class="rt" style="margin-left:auto"><span class="hint">'+esc(c.spend_note||'')+'</span></div></div>'; }).join('')+'</div>':'')+
-    '</div>';
-  // real Delivery Master numbers: booked jobs, quote conversion, cancellations
-  if(r.dm&&(Number(r.dm.jobs)||Number(r.dm.quotes))){
-    var dm=r.dm;
-    var dmCell=function(v,lab,col){ return '<div style="text-align:center;min-width:96px"><b style="display:block;font-size:20px;font-weight:750;font-variant-numeric:tabular-nums;color:'+(col||'var(--ink)')+'">'+v+'</b><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)">'+lab+'</span></div>'; };
-    h+='<div class="panel"><div class="phead" style="padding:0 0 6px"><span class="bdot" style="background:#0A6B4A"></span><h3>From the TMS</h3><span class="hint">Delivery Master, last '+dm.days+' days &middot; '+(r.dm_scope==='team'?'whole desk (DM has no jobs under your name)':'jobs and quotes under your sales name')+'</span></div>'+
-      '<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;padding:4px 0 2px">'+
-      dmCell(nf(dm.jobs),'jobs booked')+
-      dmCell('£'+nf(dm.revenue),'revenue')+
-      dmCell(dm.margin_pct!=null?dm.margin_pct+'%':'&ndash;','margin &middot; £'+nf(dm.margin))+
-      '<span style="width:1px;align-self:stretch;background:var(--line-soft)"></span>'+
-      dmCell(nf(dm.quotes),'quotes')+
-      dmCell(dm.conv_pct!=null?dm.conv_pct+'%':'&ndash;','converted &middot; '+nf(dm.quotes_won)+' won',dm.conv_pct!=null&&dm.conv_pct<30?'#B45309':'#0A6B4A')+
-      dmCell('£'+nf(dm.quote_value_lost),'quote value lost','#B45309')+
-      '<span style="width:1px;align-self:stretch;background:var(--line-soft)"></span>'+
-      dmCell(nf(dm.cancellations),'cancellations','#DC2626')+
-      dmCell('£'+nf(dm.cancel_value),'cancelled value','#DC2626')+
-      '</div></div>';
-  }
-  h+='<div class="panel"><div class="phead" style="padding:0 0 8px"><span class="bdot" style="background:#0060C7"></span><h3>Activity &mdash; last 12 weeks</h3>'+
-    (tr?'<span class="pill" style="margin-left:auto;background:'+(tr.up?'#E7F6EF;color:#0A6B4A':'#FEE2E2;color:#B91C1C')+'" title="holiday weeks and the current part-week excluded">'+(tr.up?'&#9650;':'&#9660;')+' '+Math.abs(tr.pct)+'% vs the four working weeks before</span>':'')+'</div>'+
-    dashChart(r.weekly,hol)+'</div>';
   el.innerHTML=h;
 }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
