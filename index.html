@@ -4909,7 +4909,9 @@ function renderDash(p){
   var s=p.summary;
   ACTIONS=p.actions||[];
   DATA=p.companies||[];
-  var adminBtn=p.is_admin?'<button class="btn btn-ghost btn-sm" onclick="adminView()">Manage users</button>':'';
+  // users are managed on the Scoreboard page (logins, approvals, add a team
+  // member) - this shortcut jumps there rather than to the old bare screen
+  var adminBtn=p.is_admin?'<button class="btn btn-ghost btn-sm" onclick="goTeamView()">Manage users</button>':'';
   var twoRate=s.prospects>0?Math.round(100*s.two_way/s.prospects):0;
   var stats='<div class="statwrap"><div class="statgrid">'+
     stat("Reply due",nf(s.followups_due),"24h SLA",Number(s.followups_due)>0?"alarm":"ok")+
@@ -5065,12 +5067,9 @@ function flt(){
   var pg=document.getElementById("pager");
   if(pg){ if(pages<=1){ pg.innerHTML=""; } else { pg.innerHTML='<div class="pager"><button class="btn btn-soft btn-xs" '+(PAGE<=1?"disabled":"")+' onclick="pageGo(-1)">Prev</button><span>Page '+PAGE+' of '+pages+'</span><button class="btn btn-soft btn-xs" '+(PAGE>=pages?"disabled":"")+' onclick="pageGo(1)">Next</button></div>'; } }
 }
-async function adminView(){
-  var us=(await sb.from("app_user").select("id,email,approved,is_admin")).data||[];
-  var rows=us.map(function(u){var act=u.approved?'<span class="muted">approved</span>':'<button class="btn btn-primary btn-xs" onclick="appr(\''+u.id+'\')">Approve</button>';return '<tr><td>'+esc(u.email||u.id)+'</td><td>'+(u.is_admin?'<span class="badge badge-soft badge-info badge-sm">admin</span>':(u.approved?'<span class="badge badge-soft badge-success badge-sm">member</span>':'<span class="badge badge-soft badge-warning badge-sm">pending</span>'))+'</td><td>'+act+'</td></tr>';}).join("");
-  h('<div class="content"><div class="page-head"><div><div class="t">Manage users</div></div><div class="daterow"><button class="btn btn-soft btn-sm" onclick="boot()">Back</button><button class="btn btn-soft btn-sm" onclick="out()">Sign out</button></div></div><div class="panel"><div class="tblwrap"><table class="table table-sm"><thead><tr><th>User</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div></div>');
-}
-async function appr(id){ await sb.from("app_user").update({approved:true}).eq("id",id); adminView(); }
+// the old standalone "Manage users" screen is retired - team management
+// (logins, approvals, add a team member) all lives on the Scoreboard page
+function goTeamView(){ var b=document.querySelector('.nv[data-v="team"]'); if(b) setView(b); }
 boot();
 </script>
 </body>
