@@ -738,7 +738,28 @@ var SIM_=URL_+"/functions/v1/crm-sim"; var SIMloaded=false;
 var LEADS_=URL_+"/functions/v1/leads";
 var ASK_=URL_+"/functions/v1/prospect-research";
 var LEADS=[], LEADSloaded=false, leadFilter="new", MEEMAIL="";
-var sb=supabase.createClient(URL_,KEY_);
+// The default client serialises token work through a cross-tab lock; with
+// several dashboard tabs open, Chrome throttling the lock-holder leaves every
+// other tab waiting on "Loading..." forever. A pass-through lock removes that
+// whole failure class (Supabase tolerates the rare concurrent refresh).
+var sb=supabase.createClient(URL_,KEY_,{auth:{lock:async function(_n,_t,fn){ return await fn(); }}});
+// Boot watchdog: if nothing real has rendered after 15s, stop spinning and
+// say so, with a way out - never an endless spinner.
+setTimeout(function(){
+  var stuck=document.querySelector('#app .loading-spinner')&&!document.querySelector('#app .shell, #app .authwrap');
+  if(stuck) bootStuck();
+},15000);
+function bootStuck(){
+  h('<div class="authwrap"><div class="card-auth"><span class="blogo">C</span><h2>Taking too long</h2>'+
+    '<p>The dashboard did not finish loading. This usually happens when several dashboard tabs are open at once, or on a flaky connection. Close the spare tabs, then:</p>'+
+    '<div class="row" style="gap:8px"><button class="btn btn-primary" onclick="location.reload()">Try again</button>'+
+    '<button class="btn btn-ghost" onclick="bootFresh()">Sign in afresh</button></div>'+
+    '<div id="msg" class="msg"></div></div></div>');
+}
+function bootFresh(){
+  try{ for(var i=localStorage.length-1;i>=0;i--){ var k=localStorage.key(i); if(k&&k.indexOf('sb-')===0) localStorage.removeItem(k); } }catch(_e){}
+  location.reload();
+}
 var app=document.getElementById("app");
 var DATA=[], sortK="rank", sortDir=-1, filter="all";
 var ACTIONS=[], wlRep="all";
@@ -789,8 +810,11 @@ async function loadData(){
   app.innerHTML='<div class="content">'+spinner()+'</div>';
   var url=DATA_+"?from="+RANGE.from+"&to="+RANGE.to;
   var res;
-  try{ res=await fetch(url,{headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_}}); }
-  catch(e){ return errScreen("Could not reach the data service."); }
+  // a stalled request must become an error screen, not an eternal spinner
+  var ab=new AbortController(); var abT=setTimeout(function(){ ab.abort(); },25000);
+  try{ res=await fetch(url,{headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_},signal:ab.signal}); }
+  catch(e){ return errScreen(e&&e.name==="AbortError"?"The data service took too long to answer. Check your connection and try again.":"Could not reach the data service."); }
+  finally{ clearTimeout(abT); }
   if(res.status===401){ await sb.auth.signOut(); return login(); }
   if(res.status===403){ var p=await res.json().catch(function(){return{};}); return pending(p.email||s.data.session.user.email); }
   if(!res.ok){ return errScreen("Server error ("+res.status+")."); }
