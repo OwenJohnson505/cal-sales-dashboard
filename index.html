@@ -2411,7 +2411,7 @@ function renderCustomers(){
     stat("Spend falling",nf(declining.length),"\u00a3"+nf(Math.round(declValue))+"/mo at risk",declining.length?"alarm":"ok")+
     stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days")+
     '</div></div>'+
-    '<div class="panel flush"><div class="phead"><h3>Customers</h3>'+
+    '<div class="panel flush"><div class="phead"><h3>Accounts</h3>'+
       '<input id="custq" class="input" placeholder="Search customer, domain, postcode, rep..." value="'+esc(window.__custQ||'')+'" oninput="custSearch(this.value)" style="margin-left:auto;flex:1;max-width:380px;padding:8px 13px;font-size:13.5px;border-radius:10px">'+
       '<span class="viewseg">'+
         '<button'+((window.__cuView||'table')==='table'?' class="on"':'')+' onclick="cuViewSet(\'table\')" title="table view"><i class="ph ph-table"></i></button>'+
@@ -2585,7 +2585,7 @@ function renderCustTable(){
   var bar=document.getElementById("cubar"); if(bar) bar.innerHTML=cuBar();
   var team=!!window.__custAll;
   var cs=cuFilteredList();
-  var cnt=document.getElementById("custcount"); if(cnt) cnt.textContent=cs.length+' customers';
+  var cnt=document.getElementById("custcount"); if(cnt) cnt.textContent=cs.length+' accounts';
   if(box.id==="cucards"){ renderCuCards(box,cs); return; }
   var now2=Date.now();
   box.innerHTML=cs.map(function(x){
@@ -4653,14 +4653,19 @@ function renderDash(p){
     '<aside class="sidebar">'+
       '<div class="sb-brand"><span class="blogo">C</span><span>Cal Sameday</span></div>'+
       '<nav class="sb-nav nav">'+
-        '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i>Today</button>'+
+        // the sidebar reads as the sales journey: fresh ground -> live
+        // conversations -> trading accounts, then the rep's own day
+        '<div class="sb-group" style="padding-top:2px">Pipeline</div>'+
+        '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i>New leads</button>'+
+        '<button class="nv" data-v="leadsmine" onclick="setView(this)"><i class="ph ph-chats-circle"></i>Established leads</button>'+
+        '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i>Accounts</button>'+
+        '<div class="sb-group">My day</div>'+
         '<button class="nv" data-v="dash" onclick="setView(this)"><i class="ph ph-gauge"></i>Dashboard</button>'+
         '<button class="nv" data-v="tasks" onclick="setView(this)"><i class="ph ph-check-circle"></i>Tasks</button>'+
-        '<button class="nv" data-v="leadsmine" onclick="setView(this)"><i class="ph ph-chats-circle"></i>Leads</button>'+
-        '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i>Customers</button>'+
         '<button class="nv" data-v="calendar" onclick="setView(this)"><i class="ph ph-calendar-blank"></i>Calendar</button>'+
+        '<div class="sb-group">Tools</div>'+
         '<button class="nv" data-v="assistant" onclick="setView(this)"><i class="ph ph-sparkle"></i>Assistant</button>'+
-        '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-users-three"></i>Team</button>'+
+        '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-trophy"></i>Scoreboard</button>'+
         '<div class="sb-group mgmtonly" style="display:none">Manage</div>'+
         '<button class="nv mgmtonly" style="display:none" data-v="pulse" onclick="setView(this)"><i class="ph ph-heartbeat"></i>Pulse</button>'+
         '<button class="nv mgmtonly" style="display:none" data-v="settings" onclick="setView(this)"><i class="ph ph-gear"></i>Settings</button>'+
@@ -4680,16 +4685,16 @@ function renderDash(p){
       coldPanel(p.instantly)+
     '</div>'+
     '<div id="view-leads" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">AI-hunted and Apollo lookalike prospects. Assign one to yourself, add a note, then push it into HubSpot with you as the owner.</p></div></div><div id="leadboard">'+spinner()+'</div></div>'+
-    '<div id="view-today" class="view" style="display:none"><div class="page-head"><div><div class="t">Today</div><p class="sub">Ranked by obligation, not by score &mdash; what we owe someone, then what you promised, then accounts going quiet, then fresh ground. It refills itself.</p></div></div><div id="todayboard">'+spinner()+'</div></div>'+
+    '<div id="view-today" class="view" style="display:none"><div class="page-head"><div><div class="t">New leads</div><p class="sub">Fresh ground, ranked by obligation &mdash; what we owe someone, then what you promised, then today&rsquo;s researched fifty. It refills itself every morning.</p></div></div><div id="todayboard">'+spinner()+'</div></div>'+
     '<div id="view-dash" class="view" style="display:none"><div class="page-head"><div><div class="t">Dashboard</div><p class="sub">Your numbers at a glance &mdash; the calls picture, your pipeline, your revenue, and whether your activity is climbing or sliding.</p></div></div><div id="dashboard2">'+spinner()+'</div></div>'+
     '<div id="view-pulse" class="view" style="display:none"><div class="page-head"><div><div class="t">Pulse</div><p class="sub">Productivity, effort, outcome and quality &mdash; per person, from the phones, the inboxes and HubSpot. Only you see this.</p></div></div><div id="pulseboard">'+spinner()+'</div></div>'+
-    '<div id="view-customers" class="view" style="display:none"><div class="page-head"><div><div class="t">Customers</div><p class="sub">Your converted accounts &mdash; on the system and spending. Booking history comes from HubSpot deals until the TMS is wired in.</p></div></div><div id="custboard">'+spinner()+'</div></div>'+
-    '<div id="view-leadsmine" class="view" style="display:none"><div class="page-head"><div><div class="t">Leads</div><p class="sub">Everyone you have reached where something constructive happened. Open one for the full history.</p></div></div><div id="lmboard">'+spinner()+'</div></div>'+
+    '<div id="view-customers" class="view" style="display:none"><div class="page-head"><div><div class="t">Accounts</div><p class="sub">Your converted accounts &mdash; on the system and trading, with revenue and margin straight from Delivery Master.</p></div></div><div id="custboard">'+spinner()+'</div></div>'+
+    '<div id="view-leadsmine" class="view" style="display:none"><div class="page-head"><div><div class="t">Established leads</div><p class="sub">Everyone you have reached where something constructive happened. Open one for the full history.</p></div></div><div id="lmboard">'+spinner()+'</div></div>'+
     '<div id="view-tasks" class="view" style="display:none"><div class="page-head"><div><div class="t">Tasks</div><p class="sub">Straight from your HubSpot task list, plus what the system spotted in your calls and emails.</p></div></div><div id="taskboard">'+spinner()+'</div></div>'+
     '<div id="view-calendar" class="view" style="display:none"><div class="page-head"><div><div class="t">Calendar</div><p class="sub">What you actually did each day &mdash; calls, emails, outcomes.</p></div></div><div id="calboard">'+spinner()+'</div></div>'+
     '<div id="view-accounts" class="view" style="display:none"><div class="page-head"><div><div class="t">All accounts</div><p class="sub">Every real company we know of, however it got here. Vendors, communities and one-off addresses are filtered out.</p></div></div><div id="acctboard">'+spinner()+'</div></div>'+
     '<div id="view-calllist" class="view" style="display:none"><div class="page-head"><div><div class="t">Cold list</div><p class="sub">Ranked by fit and by whether we can actually reach them. Log the outcome and a callback becomes a HubSpot task, so it reaches you in Front and on your phone.</p></div></div><div id="clboard">'+spinner()+'</div></div>'+
-    '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Team</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
+    '<div id="view-team" class="view" style="display:none"><div class="page-head"><div><div class="t">Scoreboard</div><p class="sub">Outcomes first, activity to explain them &mdash; plus whose logging is broken, because the numbers are only as good as what reaches the CRM.</p></div></div><div id="teamboard">'+spinner()+'</div></div>'+
     '<div id="view-settings" class="view" style="display:none"><div class="page-head"><div><div class="t">Settings</div><p class="sub">Commission structures per person, and what each has earned from their customers&rsquo; first year of trading. Only you see this.</p></div></div><div id="settingsboard">'+spinner()+'</div></div>'+
     '<div id="view-admin" class="view" style="display:none"><div class="page-head"><div><div class="t">Admin</div><p class="sub">Connector usage, cost estimates and the audit trail across every system. Only you can see this.</p></div></div><div id="adminboard">'+spinner()+'</div></div>'+
     '<div id="view-monitor" class="view" style="display:none"><div class="page-head"><div><div class="t">Monitor</div><p class="sub">Deliverability, campaign performance and the lead-to-contact funnel.</p></div></div><div id="monboard">'+spinner()+'</div></div>'+
@@ -4715,17 +4720,17 @@ function renderDash(p){
       '<button class="nv" data-v="dash" onclick="setView(this)"><i class="ph ph-gauge"></i>Dashboard</button>'+
       '<button class="nv" data-v="calendar" onclick="setView(this)"><i class="ph ph-calendar-blank"></i>Calendar</button>'+
       '<button class="nv" data-v="assistant" onclick="setView(this)"><i class="ph ph-sparkle"></i>Assistant</button>'+
-      '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-users-three"></i>Team</button>'+
+      '<button class="nv" data-v="team" onclick="setView(this)"><i class="ph ph-trophy"></i>Scoreboard</button>'+
       '<button class="nv mgmtonly" style="display:none" data-v="pulse" onclick="setView(this)"><i class="ph ph-heartbeat"></i>Pulse</button>'+
       '<button class="nv mgmtonly" style="display:none" data-v="settings" onclick="setView(this)"><i class="ph ph-gear"></i>Settings</button>'+
       '<button class="nv admonly" style="display:none" data-v="admin" onclick="setView(this)"><i class="ph ph-shield-check"></i>Admin</button>'+
       '<button class="nv" onclick="out()"><i class="ph ph-sign-out"></i>Sign out</button>'+
     '</div>'+
     '<nav class="tabbar nav">'+
-      '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i><span>Today</span></button>'+
-      '<button class="nv" data-v="tasks" onclick="setView(this)"><i class="ph ph-check-circle"></i><span>Tasks</span></button>'+
+      '<button class="nv on" data-v="today" onclick="setView(this)"><i class="ph ph-phone"></i><span>New leads</span></button>'+
       '<button class="nv" data-v="leadsmine" onclick="setView(this)"><i class="ph ph-chats-circle"></i><span>Leads</span></button>'+
-      '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i><span>Customers</span></button>'+
+      '<button class="nv" data-v="customers" onclick="setView(this)"><i class="ph ph-buildings"></i><span>Accounts</span></button>'+
+      '<button class="nv" data-v="tasks" onclick="setView(this)"><i class="ph ph-check-circle"></i><span>Tasks</span></button>'+
       '<button class="nv" onclick="toggleMore()"><i class="ph ph-dots-three-circle"></i><span>More</span></button>'+
     '</nav>');
   flt();
