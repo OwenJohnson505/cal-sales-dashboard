@@ -823,16 +823,21 @@ async function saveFirstPw(){
   dlog("first_pw_ok");
   boot();
 }
-async function loadData(){
+async function loadData(isRetry){
   var s=await sb.auth.getSession();
   if(!s.data.session){return login();}
   app.innerHTML='<div class="content">'+spinner()+'</div>';
   var url=DATA_+"?from="+RANGE.from+"&to="+RANGE.to;
   var res;
-  // a stalled request must become an error screen, not an eternal spinner
+  // a stalled request must become an error screen, not an eternal spinner -
+  // but a one-off network blip gets ONE silent retry first
   var ab=new AbortController(); var abT=setTimeout(function(){ ab.abort(); },25000);
   try{ res=await fetch(url,{headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_},signal:ab.signal}); }
-  catch(e){ return errScreen(e&&e.name==="AbortError"?"The data service took too long to answer. Check your connection and try again.":"Could not reach the data service."); }
+  catch(e){
+    clearTimeout(abT);
+    if(!isRetry&&(!e||e.name!=="AbortError")){ dlog("data_fetch_retry",String(e&&e.message||e)); await new Promise(function(r){setTimeout(r,1500);}); return loadData(true); }
+    return errScreen(e&&e.name==="AbortError"?"The data service took too long to answer. Check your connection and try again.":"Could not reach the data service.");
+  }
   finally{ clearTimeout(abT); }
   if(res.status===401){ await sb.auth.signOut(); return login(); }
   if(res.status===403){ var p=await res.json().catch(function(){return{};}); return pending(p.email||s.data.session.user.email); }
