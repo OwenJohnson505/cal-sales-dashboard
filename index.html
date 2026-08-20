@@ -4526,8 +4526,8 @@ function openCallLead(dom){
         '<button class="chip" onclick="logVisitForm(\''+esc(dom)+'\')">Log a visit</button>'+
       '</div><div id="visitbox"></div>'+
       '</div>'+
-      '<h3 class="msec">Anything to correct?</h3>'+
-      '<p class="sub" style="margin:-4px 0 10px">Calls and emails record themselves. Only tap if the outcome needs saying.</p>'+
+      '<h3 class="msec">Log the call</h3>'+
+      '<p class="sub" style="margin:-4px 0 10px">On Aircall, calls record themselves &mdash; only tap if the outcome needs saying. No Aircall line? Write your notes below and tap the outcome: the call AND the notes land in HubSpot under your name.</p>'+
       '<div class="outrow">'+
         '<button class="btn btn-primary btn-sm" onclick="logCall(\''+esc(dom)+'\',\'connected\')">Got through</button>'+
         '<button class="btn btn-primary btn-sm" onclick="logCall(\''+esc(dom)+'\',\'opportunity\')">Opportunity</button>'+
@@ -4541,8 +4541,25 @@ function openCallLead(dom){
           return '<button class="chip danger" onclick="logCall(\''+esc(dom)+'\',\''+o+'\')">'+esc(o.replace(/_/g," "))+'</button>';
         }).join("")+
       '</div>'+
-      '<input id="lognote" class="input wfull" placeholder="What was said? (optional)">'+
+      '<textarea id="lognote" class="textarea wfull" rows="3" style="font-size:14px;line-height:1.5" placeholder="Call notes - who you spoke to, what was said, the next step"></textarea>'+
+      '<div class="outrow" style="margin-top:8px"><button class="chip" onclick="logNote(\''+esc(dom)+'\',this)">Save as a note only &mdash; no call outcome</button></div>'+
       '<div id="logmsg" class="foot"></div>';
+  });
+}
+// a standalone note (email chased, info gathered, anything worth recording)
+// written straight onto the HubSpot company - no call outcome attached
+function logNote(dom,btn){
+  var note=(val("lognote")||"").trim();
+  var msg=document.getElementById("logmsg");
+  if(!note){ if(msg) msg.textContent="Write the note first."; return; }
+  if(btn) btn.disabled=true;
+  if(msg) msg.textContent="Saving note...";
+  deskPost({action:"log_note",domain:dom,note:note},function(r){
+    if(btn) btn.disabled=false;
+    if(r&&r.ok){
+      if(msg) msg.textContent="Note saved to HubSpot.";
+      var t=document.getElementById("lognote"); if(t) t.value="";
+    } else if(msg) msg.textContent="Could not save: "+((r&&r.error)||"error");
   });
 }
 function logCall(dom,outcome){
