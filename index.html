@@ -721,6 +721,13 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 /* squeeze before scrolling: on smaller screens the dense tables trade
    padding first, so the scrollbar is the last resort not the first */
 @media (max-width:1400px){ .lmtable th,.lmtable td{ padding:9px 7px; } .lmtable th:first-child,.lmtable td:first-child{ padding-left:14px; } }
+/* skip: a quiet dismiss on each lead row, only asserting itself on hover */
+.skipx{ border:0; background:transparent; color:var(--faint); cursor:pointer; padding:5px;
+  border-radius:8px; line-height:0; opacity:0; transition:opacity .12s, background .12s, color .12s; flex:none; }
+.skipx i{ font-size:15px; }
+.callrow:hover .skipx,.skipx:focus-visible{ opacity:1; }
+.skipx:hover{ background:#FEF2F2; color:#C0272C; }
+@media (hover:none){ .skipx{ opacity:.55; } }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
@@ -1982,7 +1989,7 @@ function projItemNote(iid,note){
 }
 function projArchive(id){ projPost({action:"archive",id:id},function(){ loadProjects(); }); }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
-var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2";
+var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2", SKIP_=URL_+"/functions/v1/daily-skip";
 function desk2Post(payload, cb){
   if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
   sb.auth.getSession().then(function(se){
@@ -2015,6 +2022,14 @@ function deskPost(payload, cb){
       .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
   });
 }
+function skipPost(payload, cb){
+  if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(SKIP_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
+  });
+}
 function staffPost(payload, cb){
   sb.auth.getSession().then(function(s){
     if(!s.data.session) return login();
@@ -2037,11 +2052,14 @@ function loadToday(){
 function renderToday(el,got){
   var d=got.daily||{}, list=d.list||[], chase=(got.chase&&got.chase.chase)||[], tasks=(got.tasks&&got.tasks.tasks)||[];
   if(d.can_manage){ window.CAN_MANAGE=true; revealMgmt(); initViewAs(); }
+  // a skipped lead is off the list - its replacement is already in there
+  var skipped=list.filter(function(x){return x.status==="skipped";}).length;
+  list=list.filter(function(x){return x.status!=="skipped";});
   var worked=list.filter(function(x){return x.status==="worked";}).length;
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
     stat("Today's leads",nf(list.length),"fresh, researched overnight")+
-    stat("Worked",nf(worked),"of today's list",worked>=list.length&&list.length?"ok":"")+
+    stat("Worked",nf(worked),(skipped?nf(skipped)+" skipped and replaced":"of today's list"),worked>=list.length&&list.length?"ok":"")+
     stat("Chase",nf(chase.length),"emailed 3+ days ago, silence",chase.length?"alarm":"")+
     stat("Suggested tasks",nf(tasks.length),"review them in the Tasks tab")+
     '</div></div>';
@@ -2062,7 +2080,7 @@ function renderToday(el,got){
   html+='<div class="panel flush"><div class="phead"><span class="bdot" style="background:#0E9F6E"></span><h3>Today&rsquo;s fifty</h3><span class="hint">'+(list.length-worked)+' to go</span></div><div class="plist">'+
     (list.length?list.map(function(x){
       var done=x.status==="worked";
-      return '<div class="actrow callrow crow"'+(done?' style="opacity:.45"':'')+' onclick="openCallLead(\''+esc(x.domain)+'\')">'+
+      return '<div class="actrow callrow crow" data-dom="'+esc(x.domain)+'"'+(done?' style="opacity:.45"':'')+' onclick="openCallLead(\''+esc(x.domain)+'\')">'+
         scoreRing(x.score,"sm")+
         '<div class="co"><b>'+esc(x.company||x.domain)+'</b>'+
           '<div class="dom">'+esc(String(x.segment||"").slice(0,60))+'</div>'+
@@ -2074,6 +2092,7 @@ function renderToday(el,got){
           (x.contacts?'<span class="pill">'+x.contacts+' contacts</span>':'')+
           (done?'<span class="tag done">Done</span>'
             : (x.phone?'<a class="btn btn-primary btn-sm tel" href="tel:'+esc(x.phone)+'" onclick="event.stopPropagation()">Call<span class="pn"> '+esc(x.phone)+'</span></a>':'<span class="nonum">no number</span>'))+
+          (done?'':'<button class="skipx" title="Not one for me - skip it" onclick="event.stopPropagation();skipMenu(this,\''+esc(x.domain)+'\')"><i class="ph ph-x"></i></button>')+
         '</div></div>';
     }).join("")
     :'<div class="empty">No list for today yet &mdash; it builds itself overnight at 2am.</div>')+
@@ -4010,6 +4029,63 @@ function taskSet(id,to,btn){
       if(to==="accepted") showNext("Sent to HubSpot - it will appear in Front and on the phone."); }
     else if(btn){ btn.disabled=false; }
   });
+}
+// Skip: the rep decides how long it stays away. Their list is topped straight
+// back up, so skipping never costs them a call - and undo sits in the toast.
+function skipMenu(btn,dom){
+  var _row=btn.closest('.callrow'), _b=_row&&_row.querySelector('.co b');
+  var name=(_b&&_b.textContent)||dom;
+  if(document.getElementById('lmmenu')){ lmMenuClose(); return; }
+  var r=btn.getBoundingClientRect();
+  var m=document.createElement('div'); m.id='lmmenu'; m.style.width='232px';
+  m.style.top=Math.min(r.bottom+6,window.innerHeight-190)+'px';
+  m.style.left=Math.max(8,Math.min(r.left-180,window.innerWidth-244))+'px';
+  var opts=[["Not today",0,"back on your list tomorrow"],
+            ["Not this month",30,"parked for 30 days"],
+            ["Not this year",365,"off your list for good"]];
+  m.innerHTML='<div style="padding:7px 10px 5px;font-size:11px;font-weight:700;letter-spacing:.05em;'+
+      'text-transform:uppercase;color:var(--faint)">Skip '+esc(String(name).slice(0,26))+'</div>'+
+    opts.map(function(o){
+      return '<div class="lmmi" style="flex-direction:column;align-items:flex-start;gap:1px" '+
+        'onclick="doSkip(\''+esc(dom)+'\','+o[1]+')"><span>'+esc(o[0])+'</span>'+
+        '<span style="font-size:11.5px;color:var(--faint)">'+esc(o[2])+'</span></div>';
+    }).join('');
+  m.addEventListener('click',function(e){ e.stopPropagation(); });
+  document.body.appendChild(m);
+  setTimeout(function(){ document.addEventListener('click',function h(){ document.removeEventListener('click',h); lmMenuClose(); }); },0);
+}
+function doSkip(dom,days){
+  lmMenuClose();
+  var row=document.querySelector('#todayboard .callrow[data-dom="'+dom+'"]');
+  if(row){ row.style.transition='opacity .25s ease'; row.style.opacity='.25'; row.style.pointerEvents='none'; }
+  skipPost({action:"skip",domain:dom,days:days},function(r){
+    if(r&&r.ok){
+      showNextUndo((days?("Skipped "+dom+(r.until?" until "+r.until:"")):("Skipped "+dom+" for today"))+
+        (r.replaced?" - a fresh lead took its place.":"."), dom);
+      setTimeout(loadToday,1400);
+    } else {
+      if(row){ row.style.opacity='1'; row.style.pointerEvents=''; }
+      showNext("Could not skip that: "+((r&&r.error)||"error"));
+    }
+  });
+}
+function undoSkip(dom,btn){
+  if(btn) btn.disabled=true;
+  skipPost({action:"unskip",domain:dom},function(r){
+    if(r&&r.ok){ showNext(dom+" is back on your list."); loadToday(); }
+    else if(btn){ btn.disabled=false; }
+  });
+}
+// the skip toast carries its own undo - a mis-click is one tap from fixed
+function showNextUndo(msg,dom){
+  var c=[document.getElementById("nexttoast"),document.getElementById("nexttoast2")], t=null;
+  for(var i=0;i<c.length;i++){ if(c[i]&&c[i].offsetParent!==null){ t=c[i]; break; } }
+  if(!t) t=c[0]||c[1];
+  if(!t) return;
+  t.innerHTML='<div class="lcard" style="border-color:#A9DEC6;background:#F4FBF7;margin-bottom:12px;'+
+    'display:flex;align-items:center;gap:12px"><p style="margin:0;flex:1">'+esc(msg)+'</p>'+
+    '<button class="chip" onclick="undoSkip(\''+esc(dom)+'\',this)">Undo</button></div>';
+  clearTimeout(window.__ntt); window.__ntt=setTimeout(function(){ if(t) t.innerHTML=""; },9000);
 }
 function snoozeDom(dom,days,btn){
   if(btn) btn.disabled=true;
