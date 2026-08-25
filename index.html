@@ -735,6 +735,10 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .cbadge i{ font-size:12px; }
 .cbadge.trading{ background:#ECFDF3; color:#0A6B4A; }
 .cbadge.lapsed{ background:#FEF6E7; color:#7A4E07; }
+/* why the system thinks a task is finished - the evidence, in its own words */
+.vreason{ display:flex; align-items:flex-start; gap:6px; margin-top:5px; font-size:12.5px;
+  color:var(--ink2); line-height:1.45; max-width:600px; }
+.vreason i{ color:#0A6B4A; font-size:13px; margin-top:2px; flex:none; }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
@@ -1996,7 +2000,7 @@ function projItemNote(iid,note){
 }
 function projArchive(id){ projPost({action:"archive",id:id},function(){ loadProjects(); }); }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
-var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2", SKIP_=URL_+"/functions/v1/daily-skip", TRIAGE_=URL_+"/functions/v1/task-triage";
+var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2", SKIP_=URL_+"/functions/v1/daily-skip", TRIAGE_=URL_+"/functions/v1/task-triage", SWEEP_=URL_+"/functions/v1/task-sweep";
 function desk2Post(payload, cb){
   if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
   sb.auth.getSession().then(function(se){
@@ -2026,6 +2030,14 @@ function deskPost(payload, cb){
   sb.auth.getSession().then(function(s){
     if(!s.data.session) return login();
     fetch(DESK_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
+  });
+}
+function sweepPost(payload, cb){
+  if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(SWEEP_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
       .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
   });
 }
@@ -3533,6 +3545,39 @@ function taskViewAll(v){ window.__taskTeam=v; loadTasksView(); }
 // a rep's trust in their own task list. A failed lookup just renders as normal.
 // What the rep needs to see in one glance: are we still shipping for these
 // people, and when did they last send us a job.
+// Confirming a verdict: one tap closes it in HubSpot, one tap puts it back.
+function applyOne(btn,id){
+  btn.classList.add("done"); btn.disabled=true;
+  sweepPost({action:"apply",task_ids:[id]},function(r){
+    var row=btn.closest(".actrow");
+    if(r&&r.completed){
+      if(row){ row.style.transition="opacity .35s ease"; row.style.opacity=".25"; row.style.pointerEvents="none"; }
+      window.__verdictIds=(window.__verdictIds||[]).filter(function(x){ return x!==id; });
+    } else { btn.classList.remove("done"); btn.disabled=false; showNext("Could not close that one."); }
+  });
+}
+function keepTask(btn,id){
+  btn.disabled=true; btn.textContent="Kept";
+  sweepPost({action:"dismiss",task_id:id},function(){
+    var row=btn.closest(".actrow");
+    if(row){ row.style.transition="opacity .3s ease"; row.style.opacity=".3"; }
+    window.__verdictIds=(window.__verdictIds||[]).filter(function(x){ return x!==id; });
+  });
+}
+function applyVerdicts(btn){
+  var ids=window.__verdictIds||[];
+  if(!ids.length) return;
+  if(btn.dataset.armed!=='1'){
+    btn.dataset.armed='1'; btn.textContent='Close all '+ids.length+' in HubSpot?';
+    setTimeout(function(){ if(btn&&btn.dataset.armed==='1'){ btn.dataset.armed=''; btn.textContent='Complete these '+ids.length; } },5000);
+    return;
+  }
+  btn.disabled=true; btn.textContent='Closing '+ids.length+'...';
+  sweepPost({action:"apply",task_ids:ids},function(r){
+    if(r&&r.completed){ showNext(r.completed+' task'+(r.completed===1?'':'s')+' closed - they were already done.'); loadTasksView(); }
+    else { btn.disabled=false; btn.dataset.armed=''; btn.textContent='Complete these '+ids.length; showNext('Could not close those: '+((r&&r.error)||'error')); }
+  });
+}
 function custBadge(f){
   if(!f) return '';
   var when=f.days_since==null?'':(f.days_since<=1?'yesterday':
@@ -3576,11 +3621,24 @@ function triageThenRender(el,got){
     if(d&&!seenD[d]){ seenD[d]=1; doms.push(d); }
     if(t.company_name&&!seenN[t.company_name]){ seenN[t.company_name]=1; names.push(t.company_name); }
   });
-  if(!doms.length&&!names.length){ window.__taskFlags=null; return renderTasks(el,got); }
-  triagePost({action:"flag",domains:doms,names:names},function(r){
-    window.__taskFlags=(r&&r.ok)?r:null;
-    renderTasks(el,got);
+  var need=2, flagsDone=false;
+  function step(){ if(--need===0) renderTasks(el,got); }
+  if(!doms.length&&!names.length){ window.__taskFlags=null; step(); }
+  else triagePost({action:"flag",domains:doms,names:names},function(r){
+    window.__taskFlags=(r&&r.ok)?r:null; step();
   });
+  // what a previous sweep already concluded - instant, no waiting on judgement
+  sweepPost({action:"list"},function(r){
+    window.__taskVerdicts=(r&&r.ok)?(r.verdicts||[]):[];
+    step();
+  });
+  // ...then quietly look at anything not judged yet, ready for next time
+  var now2=new Date();
+  var pend=hs.filter(function(t){
+    var d=t.due?new Date(Number(t.due)||t.due):null;
+    return t.domain && d && d<now2;
+  }).map(function(t){ return {id:t.id,subject:t.subject,company_name:t.company_name,domain:t.domain,due:t.due,body:(t.body||"").slice(0,400)}; });
+  if(pend.length) sweepPost({action:"start",tasks:pend,limit:25},function(){});
 }
 function renderTasks(el,got){
   var hs=(got.hs&&got.hs.tasks)||[], sg=(got.sugg&&got.sugg.tasks)||[];
@@ -3600,12 +3658,21 @@ function renderTasks(el,got){
   var trading=hs.filter(isTrading);
   hs=hs.filter(function(t){ return !isTrading(t); });
   window.__tradingTaskIds=trading.map(function(t){ return t.id; });
+  // tasks the sweep believes are already finished, judged from the calls and
+  // emails on that account after the task fell due. They come out of the
+  // working list too - but nothing is closed until the rep says so.
+  var vlist=(window.__taskVerdicts||[]), vById={};
+  vlist.forEach(function(v){ vById[v.task_id]=v; });
+  var doneLooking=hs.filter(function(t){ return !!vById[t.id]; });
+  hs=hs.filter(function(t){ return !vById[t.id]; });
+  window.__verdictIds=doneLooking.map(function(t){ return t.id; });
   var overdueN=hs.filter(function(t){ var d=t.due?new Date(Number(t.due)||t.due):null; return d&&d<now; }).length;
   var html='<div id="nexttoast2"></div>'+
     '<div class="controls" style="margin-bottom:14px">'+
       '<button class="btn btn-primary" onclick="newTaskSheet()"><i class="ph ph-plus" style="margin-right:6px;font-size:15px;vertical-align:-2px"></i>New task</button>'+
       '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+
-        (trading.length?' &middot; '+trading.length+' set aside':'')+'</span>'+
+        (trading.length?' &middot; '+trading.length+' set aside':'')+
+        (doneLooking.length?' &middot; '+doneLooking.length+' look done':'')+'</span>'+
       ((window.CAN_MANAGE&&!window.VIEW_AS)?('<span class="seg2" style="margin-left:auto">'+
         '<button'+(!window.__taskTeam?' class="on"':'')+' onclick="taskViewAll(false)">My suggestions</button>'+
         '<button'+(window.__taskTeam?' class="on"':'')+' onclick="taskViewAll(true)">Whole team</button></span>'):'')+'</div>';
@@ -3614,7 +3681,7 @@ function renderTasks(el,got){
   // 200+ open tasks stay navigable
   // built from BOTH lists - rows in the trading section must still open the
   // edit sheet, and they are no longer part of hs
-  window.__hsTaskById={}; hs.concat(trading).forEach(function(t){ window.__hsTaskById[t.id]=t; });
+  window.__hsTaskById={}; hs.concat(trading).concat(doneLooking).forEach(function(t){ window.__hsTaskById[t.id]=t; });
   var taskRow=function(t){
     var due=t.due?new Date(Number(t.due)||t.due):null;
     var overdue=due&&due<now;
@@ -3645,6 +3712,33 @@ function renderTasks(el,got){
       '<span class="bdot" style="background:'+col+'"></span><h3 style="margin:0;display:inline">'+title+'</h3><span class="hint">'+list.length+' task'+(list.length===1?'':'s')+'</span></summary>'+
       '<div class="plist">'+list.map(taskRow).join('')+'</div></details>';
   };
+  // Already done, as far as the phones and inboxes can tell. Open by default -
+  // this is the pile the rep is here to clear.
+  if(doneLooking.length){
+    var vrow=function(t){
+      var v=vById[t.id]||{};
+      return '<div class="actrow" style="flex-wrap:nowrap">'+
+        '<button class="tickc" title="Yes - mark it done" onclick="applyOne(this,\''+esc(t.id)+'\')"><i class="ph ph-check"></i></button>'+
+        '<div class="co"><b>'+esc(t.subject||"(untitled)")+'</b>'+
+        '<div class="dom">'+esc(v.company||t.company_name||"")+'</div>'+
+        '<div class="vreason"><i class="ph ph-sparkle"></i><span>'+esc(v.reason||"")+'</span></div></div>'+
+        '<div class="rt" style="flex-wrap:nowrap">'+
+        (v.confidence==="high"?'<span class="pill" style="background:#ECFDF3;color:#0A6B4A">confident</span>'
+                              :'<span class="pill">likely</span>')+
+        '<button class="chip" onclick="keepTask(this,\''+esc(t.id)+'\')">Still to do</button>'+
+        '</div></div>';
+    };
+    var nHigh=doneLooking.filter(function(t){ return (vById[t.id]||{}).confidence==="high"; }).length;
+    html+='<details class="panel flush" style="padding:0" open><summary style="cursor:pointer;padding:13px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
+      '<span class="bdot" style="background:#0A6B4A"></span><h3 style="margin:0;display:inline">Looks already done</h3>'+
+      '<span class="hint">'+doneLooking.length+' task'+(doneLooking.length===1?'':'s')+
+      (nHigh?' &middot; '+nHigh+' confident':'')+'</span></summary>'+
+      '<div style="padding:14px 20px 4px">'+
+        '<p class="sub" style="margin:0 0 12px;max-width:660px">We looked at the calls and emails on each account <b>after</b> the task fell due. '+
+        'Tick to close it, or say it is still to do and it goes back on your list.</p>'+
+        '<button class="btn btn-soft btn-sm" onclick="applyVerdicts(this)">Complete these '+doneLooking.length+'</button>'+
+      '</div><div class="plist">'+doneLooking.map(vrow).join('')+'</div></details>';
+  }
   // Companies we are still shipping for, lifted out of the working list. Own
   // section, collapsed, with one action - so the overdue count above means
   // real outstanding outreach and nothing else.
