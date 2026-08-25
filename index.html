@@ -751,6 +751,10 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .fuphint{ font-size:12.5px; color:#0A6B4A; margin-top:9px; display:flex; align-items:center; gap:5px; line-height:1.4; }
 .fuphint:empty{ display:none; }
 .fuphint i{ font-size:13px; flex:none; }
+/* the call-back date strip inside the lead card */
+.cbrow{ margin-top:12px; padding:13px 14px 14px; border-radius:12px;
+  background:var(--tint); border:1px solid rgba(0,113,227,.18); }
+.cbhead{ font-size:12.5px; font-weight:650; color:var(--ink2); margin-bottom:10px; }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
@@ -4916,11 +4920,11 @@ function openCallLead(dom){
       '</div><div id="visitbox"></div>'+
       '</div>'+
       '<h3 class="msec">Log the call</h3>'+
-      '<p class="sub" style="margin:-4px 0 10px">On Aircall, calls record themselves &mdash; only tap if the outcome needs saying. No Aircall line? Write your notes below and tap the outcome: the call AND the notes land in HubSpot under your name.</p>'+
+      '<p class="sub" style="margin:-4px 0 10px">Write your notes, then <b>tap an outcome</b> &mdash; that is what takes the lead off your list and puts the call in HubSpot under your name. A note on its own is saved to the record but leaves the lead where it is.</p>'+
       '<div class="outrow">'+
         '<button class="btn btn-primary btn-sm" onclick="logCall(\''+esc(dom)+'\',\'connected\')">Got through</button>'+
         '<button class="btn btn-primary btn-sm" onclick="logCall(\''+esc(dom)+'\',\'opportunity\')">Opportunity</button>'+
-        '<button class="btn btn-soft btn-sm" onclick="logCall(\''+esc(dom)+'\',\'callback\')">Call back tomorrow</button>'+
+        '<button class="btn btn-soft btn-sm" onclick="cbShow(\''+esc(dom)+'\')">Call back&hellip;</button>'+
       '</div>'+
       '<div class="outrow sec">'+
         ["gatekeeper","voicemail","no_answer","wrong_number"].map(function(o){
@@ -4931,9 +4935,53 @@ function openCallLead(dom){
         }).join("")+
       '</div>'+
       '<textarea id="lognote" class="textarea wfull" rows="3" style="font-size:14px;line-height:1.5" placeholder="Call notes - who you spoke to, what was said, the next step"></textarea>'+
-      '<div class="outrow" style="margin-top:8px"><button class="chip" onclick="logNote(\''+esc(dom)+'\',this)">Save as a note only &mdash; no call outcome</button></div>'+
+      '<div id="cbrow" class="cbrow" style="display:none">'+
+        '<div class="cbhead">When should this come back to you?</div>'+
+        '<div class="fuprow" id="cbchips">'+
+          [[1,'Tomorrow'],[3,'3 days'],[7,'1 week'],[14,'2 weeks'],[30,'1 month']].map(function(o){
+            return '<button data-d="'+o[0]+'"'+(o[0]===7?' class="on"':'')+' onclick="window.__cbManual=1;cbSet('+o[0]+')">'+o[1]+'</button>';
+          }).join('')+
+          '<input id="cbdate" type="date" class="input" style="padding:5px 9px;width:auto;font-size:13px" onchange="window.__cbManual=1">'+
+        '</div>'+
+        '<div id="cbhint" class="fuphint"></div>'+
+        '<div class="row" style="gap:8px;margin-top:10px">'+
+          '<button class="btn btn-primary btn-sm" onclick="cbBook(\''+esc(dom)+'\',this)">Book the call back</button>'+
+          '<button class="btn btn-soft btn-sm" onclick="cbHide()">Cancel</button>'+
+        '</div></div>'+
+      '<div class="outrow" style="margin-top:8px"><button class="chip" onclick="logNote(\''+esc(dom)+'\',this)">Save a note only &mdash; leaves the lead on your list</button></div>'+
       '<div id="logmsg" class="foot"></div>';
   });
+}
+// "Call back..." - pick when it should come back, instead of always tomorrow.
+// Booking it logs the outcome, so the lead leaves today's list AND a HubSpot
+// task lands on the chosen day. The date is read out of the notes if the rep
+// wrote one there ("try again next week").
+function cbShow(dom){
+  var r=document.getElementById("cbrow"); if(!r) return;
+  window.__cbManual=false;
+  r.style.display="block";
+  var w=parseWhen(val("lognote"));
+  cbSet(w?w.days:7, w||null);
+  r.scrollIntoView({block:"nearest",behavior:"smooth"});
+}
+function cbHide(){ var r=document.getElementById("cbrow"); if(r) r.style.display="none"; }
+function cbSet(days,fromNote){
+  window.__cbDays=days;
+  var box=document.getElementById("cbchips");
+  if(box){ var bs=box.querySelectorAll("button");
+    for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on", Number(bs[i].dataset.d)===Number(days)); }
+  var d=fupISO(days);
+  var dt=document.getElementById("cbdate"); if(dt) dt.value=localISO(d);
+  var h=document.getElementById("cbhint");
+  if(h) h.innerHTML = fromNote
+    ? '<i class="ph ph-sparkle"></i>Picked up &ldquo;'+esc(fromNote.phrase)+'&rdquo; from your notes &mdash; '+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}))
+    : '<i class="ph ph-calendar-check"></i>'+esc(d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}));
+}
+function cbBook(dom,btn){
+  var picked=val("cbdate");
+  var when=picked?new Date(picked+"T09:00:00"):fupISO(window.__cbDays||7);
+  btn.disabled=true;
+  logCall(dom,"callback",when.toISOString());
 }
 // a standalone note (email chased, info gathered, anything worth recording)
 // written straight onto the HubSpot company - no call outcome attached
@@ -4951,11 +4999,12 @@ function logNote(dom,btn){
     } else if(msg) msg.textContent="Could not save: "+((r&&r.error)||"error");
   });
 }
-function logCall(dom,outcome){
+function logCall(dom,outcome,whenIso){
   var note=(val("lognote")||"").trim();
   var msg=document.getElementById("logmsg"); if(msg) msg.textContent="Saving...";
   var payload={action:"log",domain:dom,outcome:outcome,note:note||null};
-  if(outcome==="callback") payload.callback_at=new Date(Date.now()+864e5).toISOString();
+  // a callback carries the day the rep chose; default tomorrow if none picked
+  if(outcome==="callback") payload.callback_at=whenIso||new Date(Date.now()+864e5).toISOString();
   deskPost(payload,function(r){
     if(r&&r.ok){
       // Close, tell the rep what happens next, and put them on the next lead.
