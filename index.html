@@ -728,6 +728,13 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .callrow:hover .skipx,.skipx:focus-visible{ opacity:1; }
 .skipx:hover{ background:#FEF2F2; color:#C0272C; }
 @media (hover:none){ .skipx{ opacity:.55; } }
+/* task rows: is this company still shipping with us? The tint carries the
+   meaning - green reads "leave them alone", amber "worth a win-back". */
+.cbadge{ display:inline-flex; align-items:center; gap:5px; margin-top:5px;
+  font-size:11.5px; font-weight:600; line-height:1.35; padding:3px 8px; border-radius:99px; }
+.cbadge i{ font-size:12px; }
+.cbadge.trading{ background:#ECFDF3; color:#0A6B4A; }
+.cbadge.lapsed{ background:#FEF6E7; color:#7A4E07; }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
@@ -1989,7 +1996,7 @@ function projItemNote(iid,note){
 }
 function projArchive(id){ projPost({action:"archive",id:id},function(){ loadProjects(); }); }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
-var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2", SKIP_=URL_+"/functions/v1/daily-skip";
+var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2", SKIP_=URL_+"/functions/v1/daily-skip", TRIAGE_=URL_+"/functions/v1/task-triage";
 function desk2Post(payload, cb){
   if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
   sb.auth.getSession().then(function(se){
@@ -2019,6 +2026,14 @@ function deskPost(payload, cb){
   sb.auth.getSession().then(function(s){
     if(!s.data.session) return login();
     fetch(DESK_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
+  });
+}
+function triagePost(payload, cb){
+  if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
+  sb.auth.getSession().then(function(s){
+    if(!s.data.session) return login();
+    fetch(TRIAGE_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
       .then(function(r){return r.json();}).then(cb).catch(function(){ cb({ok:false,error:"Could not reach the sales desk."}); });
   });
 }
@@ -3504,7 +3519,7 @@ function loadTasksView(){
   var el=document.getElementById("taskboard"); if(!el) return;
   el.innerHTML=spinner();
   var got={}, need=2;
-  function fin(k,r){ got[k]=r; if(--need===0) renderTasks(el,got); }
+  function fin(k,r){ got[k]=r; if(--need===0) triageThenRender(el,got); }
   deskPost({action:"hstasks"},function(r){ fin("hs",r); });
   // suggested tasks are scoped to the viewed rep + unassigned; a manager can
   // flip to the whole team's, explicitly
@@ -3513,22 +3528,93 @@ function loadTasksView(){
   deskPost(p,function(r){ fin("sugg",r); });
 }
 function taskViewAll(v){ window.__taskTeam=v; loadTasksView(); }
+// Before the list is drawn, ask which of these companies already ship with us
+// - chasing an account that sent a job last week is the fastest way to lose
+// a rep's trust in their own task list. A failed lookup just renders as normal.
+// What the rep needs to see in one glance: are we still shipping for these
+// people, and when did they last send us a job.
+function custBadge(f){
+  if(!f) return '';
+  var when=f.days_since==null?'':(f.days_since<=1?'yesterday':
+    (f.days_since<31?f.days_since+' days ago':
+    (f.days_since<365?Math.round(f.days_since/30)+' months ago':Math.round(f.days_since/365)+'y ago')));
+  var jobs=(f.jobs||0)+' job'+((f.jobs===1)?'':'s');
+  if(f.state==='trading')
+    return '<div class="cbadge trading"><i class="ph-fill ph-truck"></i>Still shipping with us &middot; '+
+      esc(jobs)+', last '+esc(when)+'</div>';
+  return '<div class="cbadge lapsed"><i class="ph ph-clock-counter-clockwise"></i>Lapsed customer &middot; '+
+    esc(jobs)+', last '+esc(when)+'</div>';
+}
+// Clear the whole reviewed batch in HubSpot. The rep has the list open in
+// front of them - nothing is swept behind their back.
+function clearTradingTasks(btn){
+  var ids=window.__tradingTaskIds||[];
+  if(!ids.length) return;
+  if(btn.dataset.armed!=='1'){
+    btn.dataset.armed='1';
+    btn.textContent='Complete all '+ids.length+' in HubSpot?';
+    setTimeout(function(){ if(btn&&btn.dataset.armed==='1'){ btn.dataset.armed=''; btn.textContent='Clear these '+ids.length; } },5000);
+    return;
+  }
+  btn.disabled=true; btn.textContent='Clearing '+ids.length+'...';
+  triagePost({action:"bulk_done",task_ids:ids},function(r){
+    if(r&&(r.completed||0)>0){
+      showNext(r.completed+' task'+(r.completed===1?'':'s')+' completed in HubSpot'+
+        (r.failed?(' - '+r.failed+' could not be updated'):'')+'.');
+      loadTasksView();
+    } else {
+      btn.disabled=false; btn.dataset.armed=''; btn.textContent='Clear these '+ids.length;
+      showNext('Could not clear those: '+((r&&r.error)||'error'));
+    }
+  });
+}
+function triageThenRender(el,got){
+  var hs=(got.hs&&got.hs.tasks)||[];
+  var doms=[],names=[],seenD={},seenN={};
+  hs.forEach(function(t){
+    var d=t.domain?String(t.domain).toLowerCase():null;
+    if(d&&!seenD[d]){ seenD[d]=1; doms.push(d); }
+    if(t.company_name&&!seenN[t.company_name]){ seenN[t.company_name]=1; names.push(t.company_name); }
+  });
+  if(!doms.length&&!names.length){ window.__taskFlags=null; return renderTasks(el,got); }
+  triagePost({action:"flag",domains:doms,names:names},function(r){
+    window.__taskFlags=(r&&r.ok)?r:null;
+    renderTasks(el,got);
+  });
+}
 function renderTasks(el,got){
   var hs=(got.hs&&got.hs.tasks)||[], sg=(got.sugg&&got.sugg.tasks)||[];
   var note=got.hs&&got.hs.note;
   var now=new Date();
+  // a company we are still shipping for is not a prospect: those tasks come
+  // OUT of the working list into their own bucket, so the overdue count means
+  // real outstanding outreach. A LAPSED customer stays put - winning one back
+  // is legitimate work - it just gets a badge saying when they last shipped.
+  var flags=window.__taskFlags||null;
+  var flagOf=function(t){
+    if(!flags) return null;
+    return (t.domain&&flags.by_domain[String(t.domain).toLowerCase()])||
+           (t.company_name&&flags.by_name[t.company_name])||null;
+  };
+  var isTrading=function(t){ var f=flagOf(t); return !!(f&&f.state==="trading"); };
+  var trading=hs.filter(isTrading);
+  hs=hs.filter(function(t){ return !isTrading(t); });
+  window.__tradingTaskIds=trading.map(function(t){ return t.id; });
   var overdueN=hs.filter(function(t){ var d=t.due?new Date(Number(t.due)||t.due):null; return d&&d<now; }).length;
   var html='<div id="nexttoast2"></div>'+
     '<div class="controls" style="margin-bottom:14px">'+
       '<button class="btn btn-primary" onclick="newTaskSheet()"><i class="ph ph-plus" style="margin-right:6px;font-size:15px;vertical-align:-2px"></i>New task</button>'+
-      '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+'</span>'+
+      '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+
+        (trading.length?' &middot; '+trading.length+' set aside':'')+'</span>'+
       ((window.CAN_MANAGE&&!window.VIEW_AS)?('<span class="seg2" style="margin-left:auto">'+
         '<button'+(!window.__taskTeam?' class="on"':'')+' onclick="taskViewAll(false)">My suggestions</button>'+
         '<button'+(window.__taskTeam?' class="on"':'')+' onclick="taskViewAll(true)">Whole team</button></span>'):'')+'</div>';
   // manage like HubSpot: every task row can be completed, edited,
   // rescheduled or deleted right here; the full list groups by due date so
   // 200+ open tasks stay navigable
-  window.__hsTaskById={}; hs.forEach(function(t){ window.__hsTaskById[t.id]=t; });
+  // built from BOTH lists - rows in the trading section must still open the
+  // edit sheet, and they are no longer part of hs
+  window.__hsTaskById={}; hs.concat(trading).forEach(function(t){ window.__hsTaskById[t.id]=t; });
   var taskRow=function(t){
     var due=t.due?new Date(Number(t.due)||t.due):null;
     var overdue=due&&due<now;
@@ -3536,6 +3622,7 @@ function renderTasks(el,got){
       '<button class="tickc" title="Mark done" onclick="event.stopPropagation();tickTask(this,\''+esc(t.id)+'\')"><i class="ph ph-check"></i></button>'+
       '<div class="co"><b>'+esc(t.subject||"(untitled)")+'</b>'+
       '<div class="dom">'+(t.company_name?esc(t.company_name):'no company linked')+(t.contact_name?' &middot; '+esc(t.contact_name):'')+'</div>'+
+      custBadge(flagOf(t))+
       (t.body?'<div class="seg">'+esc(String(t.body).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,240))+'</div>':'')+'</div>'+
       '<div class="rt" style="flex-wrap:nowrap">'+
       (due?'<span class="dom" style="white-space:nowrap;'+(overdue?'color:#C0272C;font-weight:650':'')+'">'+fmtDue(due,overdue)+'</span>':'')+
@@ -3558,6 +3645,19 @@ function renderTasks(el,got){
       '<span class="bdot" style="background:'+col+'"></span><h3 style="margin:0;display:inline">'+title+'</h3><span class="hint">'+list.length+' task'+(list.length===1?'':'s')+'</span></summary>'+
       '<div class="plist">'+list.map(taskRow).join('')+'</div></details>';
   };
+  // Companies we are still shipping for, lifted out of the working list. Own
+  // section, collapsed, with one action - so the overdue count above means
+  // real outstanding outreach and nothing else.
+  if(trading.length){
+    html+='<details class="panel flush" style="padding:0"><summary style="cursor:pointer;padding:13px 20px;display:flex;align-items:center;gap:10px;list-style:none">'+
+      '<span class="bdot" style="background:#C2740B"></span><h3 style="margin:0;display:inline">Already trading with us</h3>'+
+      '<span class="hint">'+trading.length+' task'+(trading.length===1?'':'s')+' &middot; taken off your list</span></summary>'+
+      '<div style="padding:14px 20px 4px">'+
+        '<p class="sub" style="margin:0 0 12px;max-width:640px">These companies are still sending us jobs, so they are not prospects to chase. '+
+        'Clearing marks the tasks complete in HubSpot &mdash; the accounts themselves are untouched.</p>'+
+        '<button class="btn btn-soft btn-sm" onclick="clearTradingTasks(this)">Clear these '+trading.length+'</button>'+
+      '</div><div class="plist">'+trading.map(taskRow).join('')+'</div></details>';
+  }
   html+=(hs.length?
       grp('Overdue',gOver,'#C0272C',true)+
       grp('Today',gToday,'#0060C7',true)+
