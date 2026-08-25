@@ -739,6 +739,18 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .vreason{ display:flex; align-items:flex-start; gap:6px; margin-top:5px; font-size:12.5px;
   color:var(--ink2); line-height:1.45; max-width:600px; }
 .vreason i{ color:#0A6B4A; font-size:13px; margin-top:2px; flex:none; }
+/* close-and-rebook: the step HubSpot leaves out, given its own surface so it
+   reads as one action rather than two chores */
+.fupbox{ margin-top:16px; padding:14px 15px 15px; border-radius:12px; background:var(--color-base-200); }
+.fuphead{ font-size:12.5px; font-weight:650; color:var(--ink2); margin-bottom:10px; }
+.fuprow{ display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+.fuprow button{ border:1px solid var(--line); background:#fff; color:var(--ink2); font:inherit; font-size:13px;
+  padding:5px 11px; border-radius:99px; cursor:pointer; transition:background .12s,border-color .12s,color .12s; }
+.fuprow button:hover{ border-color:var(--color-primary); color:var(--color-primary); }
+.fuprow button.on{ background:var(--color-primary); border-color:var(--color-primary); color:#fff; font-weight:600; }
+.fuphint{ font-size:12.5px; color:#0A6B4A; margin-top:9px; display:flex; align-items:center; gap:5px; line-height:1.4; }
+.fuphint:empty{ display:none; }
+.fuphint i{ font-size:13px; flex:none; }
 /* leads table: per-header filter menus */
 .lmfun{ font-size:12px; vertical-align:-1px; cursor:pointer; color:var(--faint); margin-left:5px; }
 .lmfun:hover{ color:var(--ink); }
@@ -3937,21 +3949,128 @@ function editTaskSheet(id){
   var due=t.due?new Date(Number(t.due)||t.due):null;
   var dueIso=(due&&!isNaN(due))?localISO(due):new Date(Date.now()+864e5).toISOString().slice(0,10);
   window.__etpri=t.priority||"MEDIUM"; window.__ettype=t.type||"TODO";
+  window.__fupDays=7; window.__fupManual=false;
   var seg=function(cur,vals,labels,setter){ return '<div class="seg2">'+vals.map(function(v,i){ return '<button'+(cur===v?' class="on"':'')+' onclick="'+setter+'(this,\''+v+'\')">'+labels[i]+'</button>'; }).join('')+'</div>'; };
   m.style.display="flex";
   m.innerHTML='<div class="mcard" style="max-width:520px"><div class="mhead"><b>Edit task</b><span class="mx" onclick="closeModal()">&times;</span></div>'+
     '<div class="mbody sheetform">'+
     '<input id="etsub" class="tin" value="'+esc(t.subject||'')+'">'+
-    '<textarea id="etnote" class="tnote" placeholder="Notes">'+esc(String(t.body||'').replace(/<[^>]+>/g,' ').trim())+'</textarea>'+
+    '<textarea id="etnote" class="tnote" placeholder="What happened? e.g. spoke to Dave, doing a stocktake, try him in a week" oninput="fupNoteChanged(this.value)">'+esc(String(t.body||'').replace(/<[^>]+>/g,' ').trim())+'</textarea>'+
     (t.company_name?'<p class="sub" style="margin:2px 2px 0;font-size:12.5px"><i class="ph ph-buildings" style="vertical-align:-2px"></i> '+esc(t.company_name)+'</p>':'')+
     '<div class="frow"><span class="fl"><i class="ph ph-squares-four"></i>Type</span>'+seg(window.__ettype,["CALL","EMAIL","TODO"],["Call","Email","To-do"],"etType")+'</div>'+
     '<div class="frow"><span class="fl"><i class="ph ph-calendar-blank"></i>Due</span><input id="etdue" type="date" class="input" style="padding:6px 10px;width:auto" value="'+dueIso+'"></div>'+
     '<div class="frow"><span class="fl"><i class="ph ph-flag"></i>Priority</span>'+seg(window.__etpri,["LOW","MEDIUM","HIGH"],["Low","Medium","High"],"etPri")+'</div>'+
+    '<div class="fupbox">'+
+      '<div class="fuphead">Spoken to them? Close this off and book the next chase</div>'+
+      '<div class="fuprow" id="fupchips">'+
+        [[3,'3 days'],[7,'1 week'],[14,'2 weeks'],[30,'1 month']].map(function(o){
+          return '<button data-d="'+o[0]+'"'+(o[0]===7?' class="on"':'')+' onclick="window.__fupManual=1;fupSet('+o[0]+')">'+o[1]+'</button>';
+        }).join('')+
+        '<input id="fupdate" type="date" class="input" style="padding:5px 9px;width:auto;font-size:13px" onchange="window.__fupManual=1" value="'+localISO(fupISO(7))+'">'+
+      '</div>'+
+      '<div id="fuphint" class="fuphint"></div>'+
+      '<div class="row" style="gap:8px;margin-top:11px;flex-wrap:wrap">'+
+        '<button class="btn btn-primary btn-sm" onclick="doFollowup(\''+esc(id)+'\',true,this)">Done &mdash; book the follow-up</button>'+
+        '<button class="btn btn-soft btn-sm" onclick="doFollowup(\''+esc(id)+'\',false,this)">Done &mdash; nothing further</button>'+
+      '</div></div>'+
     '<div class="row" style="justify-content:space-between;margin-top:14px;align-items:center">'+
       '<button class="chip" style="color:#C0272C" onclick="deleteTask(\''+esc(id)+'\',this)">Delete task</button>'+
       '<span style="display:flex;gap:8px"><button class="btn btn-soft" onclick="closeModal()">Cancel</button>'+
       '<button class="btn btn-primary" onclick="saveTaskEdit(\''+esc(id)+'\',this)">Save</button></span></div>'+
     '<div id="etmsg" class="msg"></div></div></div>';
+  // a note already on the task may say when to come back
+  fupNoteChanged(String(t.body||'').replace(/<[^>]+>/g,' '));
+}
+// "he is doing a stocktake, try me in a week" - read the date straight out of
+// what the rep typed, so the follow-up is one tap instead of a date picker.
+// "he is doing a stocktake, try me in a week" - read the date straight out of
+// what the rep typed, so the follow-up is one tap instead of a date picker.
+// Text is flattened to single-spaced words first, so every phrase can be
+// matched plainly with no escaping to get wrong.
+var FUP_PHRASES=[
+  [0,  "later today",      [" later today ", " this afternoon ", " later on today "]],
+  [1,  "tomorrow",         [" tomorrow ", " tomorrow morning ", " tomorrow afternoon "]],
+  [3,  "in a few days",    [" few days ", " couple of days ", " 2 3 days ", " later in the week "]],
+  [7,  "in a week",        [" next week ", " in a week ", " in 1 week ", " in one week ", " a week or so ",
+                            " weeks time ", " week s time ", " 7 days ", " this time next week "]],
+  [14, "in two weeks",     [" two weeks ", " 2 weeks ", " fortnight ", " couple of weeks ", " 14 days ",
+                            " week after next "]],
+  [21, "in three weeks",   [" three weeks ", " 3 weeks "]],
+  [30, "in a month",       [" next month ", " in a month ", " a month or so ", " months time ", " month s time ",
+                            " four weeks ", " 4 weeks ", " 30 days "]],
+  [60, "in two months",    [" two months ", " 2 months "]],
+  [90, "in three months",  [" three months ", " 3 months ", " next quarter ", " end of the quarter "]],
+  [-1, "at the end of the month", [" end of the month ", " month end ", " end of month "]]
+];
+var FUP_DAYNAMES=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+function parseWhen(txt){
+  // strip punctuation to spaces so "week's" and "week s" both land
+  var s=" "+String(txt||"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/ +/g," ")+" ";
+  if(s.length<3) return null;
+  for(var i=0;i<FUP_PHRASES.length;i++){
+    var row=FUP_PHRASES[i];
+    for(var k=0;k<row[2].length;k++){
+      if(s.indexOf(row[2][k])>=0){
+        var days=row[0];
+        if(days===-1){ var d=new Date(); d.setMonth(d.getMonth()+1,0); days=Math.max(1,Math.round((d-new Date())/864e5)); }
+        return {days:days,label:row[1],phrase:row[2][k].trim()};
+      }
+    }
+  }
+  // "back on tuesday", "try monday"
+  for(var j=0;j<7;j++){
+    if(s.indexOf(" "+FUP_DAYNAMES[j]+" ")>=0){
+      var today=new Date().getDay(), delta=(j-today+7)%7 || 7;
+      return {days:delta,label:"on "+FUP_DAYNAMES[j].charAt(0).toUpperCase()+FUP_DAYNAMES[j].slice(1),phrase:FUP_DAYNAMES[j]};
+    }
+  }
+  return null;
+}
+function fupISO(days){
+  var d=new Date(); d.setDate(d.getDate()+Math.max(0,days)); d.setHours(9,0,0,0);
+  // never book a chase for the weekend - nobody is picking up
+  if(d.getDay()===6) d.setDate(d.getDate()+2);
+  if(d.getDay()===0) d.setDate(d.getDate()+1);
+  return d;
+}
+function fupSet(days,fromNote){
+  window.__fupDays=days;
+  var box=document.getElementById("fupchips");
+  if(box){ var bs=box.querySelectorAll("button");
+    for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on", Number(bs[i].dataset.d)===Number(days)); }
+  var dt=document.getElementById("fupdate"); if(dt) dt.value=localISO(fupISO(days));
+  var h=document.getElementById("fuphint");
+  if(h) h.innerHTML = fromNote
+    ? '<i class="ph ph-sparkle"></i>Picked up &ldquo;'+esc(fromNote.phrase)+'&rdquo; from your note &mdash; booked '+esc(fromNote.label)+', '+esc(fupISO(days).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}))
+    : '';
+}
+// re-read the note as they type, but never fight a choice they made by hand
+function fupNoteChanged(v){
+  if(window.__fupManual) return;
+  var w=parseWhen(v);
+  if(w) fupSet(w.days,w);
+}
+function doFollowup(id,withFollowup,btn){
+  var t=(window.__hsTaskById||{})[id]||{};
+  var m=document.getElementById("etmsg");
+  var note=(val("etnote")||"").trim();
+  var due=null;
+  if(withFollowup){
+    var picked=val("fupdate");
+    due=picked?new Date(picked+"T09:00:00").toISOString():fupISO(window.__fupDays||7).toISOString();
+  }
+  btn.disabled=true; if(m) m.textContent=withFollowup?"Closing and re-booking...":"Closing...";
+  triagePost({action:"followup",task_id:id,note:note,domain:t.domain||null,
+              subject:(val("etsub")||t.subject||"").trim()||null,due:due,
+              type:window.__ettype||null,priority:window.__etpri||null},function(r){
+    if(r&&r.ok){
+      closeModal();
+      showNext(r.due
+        ? "Closed. Next chase booked for "+new Date(r.due).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})+(note?" with your note attached.":".")
+        : "Closed"+(note?" and your note saved to the record.":"."));
+      loadTasksView();
+    } else { btn.disabled=false; if(m) m.textContent="Could not do that: "+((r&&r.error)||"error"); }
+  });
 }
 function etPri(b,v){ window.__etpri=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
 function etType(b,v){ window.__ettype=v; var bs=b.parentElement.querySelectorAll("button"); for(var i=0;i<bs.length;i++) bs[i].classList.toggle("on",bs[i]===b); }
