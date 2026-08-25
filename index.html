@@ -4613,6 +4613,10 @@ function openCallLead(dom){
     var body=m.querySelector(".mbody"); if(!body) return;
     if(!r||!r.ok){ body.innerHTML='<div class="empty">Could not load that lead.</div>'; return; }
     var v=r.verdict||{}, t=r.target||{}, b=r.brief&&r.brief.brief;
+    // the proper company name travels with anything we log, so HubSpot gets
+    // "Call back: Leyland Trucks" rather than the bare domain
+    window.__leadName=t.name||(r.hubspot&&r.hubspot.name)||(r.customer&&r.customer.name)||null;
+    window.__logging=false;
     var dials=r.site_dials||[];
     var phone=(t.phone)||(r.hubspot&&r.hubspot.phone)||"";
     // every number carries its origin, so the rep can always answer
@@ -4991,18 +4995,30 @@ function logNote(dom,btn){
   if(!note){ if(msg) msg.textContent="Write the note first."; return; }
   if(btn) btn.disabled=true;
   if(msg) msg.textContent="Saving note...";
-  deskPost({action:"log_note",domain:dom,note:note},function(r){
+  deskPost({action:"log_note",domain:dom,note:note,company:window.__leadName||null},function(r){
     if(btn) btn.disabled=false;
     if(r&&r.ok){
-      if(msg) msg.textContent="Note saved to HubSpot.";
+      // a note the rep cannot find is a note they did not write - link to it
+      if(msg) msg.innerHTML= r.company_url
+        ? 'Saved to <a href="'+esc(r.company_url)+'" target="_blank" rel="noopener" style="color:#0071E3">'+esc(window.__leadName||dom)+' in HubSpot</a>. The lead stays on your list &mdash; tap an outcome to clear it.'
+        : 'Note saved to HubSpot.';
       var t=document.getElementById("lognote"); if(t) t.value="";
     } else if(msg) msg.textContent="Could not save: "+((r&&r.error)||"error");
   });
 }
+function logOutcomeLock(on){
+  window.__logging=!!on;
+  var m=document.getElementById("cmodal"); if(!m) return;
+  var bs=m.querySelectorAll(".outrow button, .cbrow button");
+  for(var i=0;i<bs.length;i++) bs[i].disabled=!!on;
+}
 function logCall(dom,outcome,whenIso){
+  // a double-tap used to log the call three times over - one outcome per call
+  if(window.__logging) return;
+  logOutcomeLock(true);
   var note=(val("lognote")||"").trim();
   var msg=document.getElementById("logmsg"); if(msg) msg.textContent="Saving...";
-  var payload={action:"log",domain:dom,outcome:outcome,note:note||null};
+  var payload={action:"log",domain:dom,outcome:outcome,note:note||null,company:window.__leadName||null};
   // a callback carries the day the rep chose; default tomorrow if none picked
   if(outcome==="callback") payload.callback_at=whenIso||new Date(Date.now()+864e5).toISOString();
   deskPost(payload,function(r){
@@ -5012,7 +5028,7 @@ function logCall(dom,outcome,whenIso){
       var todayVisible=document.getElementById("view-today") && document.getElementById("view-today").style.display!=="none";
       if(todayVisible){ loadToday(); setTimeout(function(){ if(r.next) showNext(r.next); },600); }
       else loadCallList();
-    } else if(msg) msg.textContent="Could not log that: "+((r&&r.error)||"error");
+    } else { logOutcomeLock(false); if(msg) msg.textContent="Could not log that: "+((r&&r.error)||"error"); }
   });
 }
 function loadTeam(){
