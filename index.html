@@ -3745,15 +3745,22 @@ function renderTasks(el,got){
   if(doneLooking.length){
     var vrow=function(t){
       var v=vById[t.id]||{};
-      return '<div class="actrow" style="flex-wrap:nowrap">'+
-        '<button class="tickc" title="Yes - mark it done" onclick="applyOne(this,\''+esc(t.id)+'\')"><i class="ph ph-check"></i></button>'+
+      // the verdict carries its own domain - use it if HubSpot gave the task none
+      t=Object.assign({},t,{domain:t.domain||v.domain||null});
+      // same opens-the-lead behaviour as every other task row - without the
+      // crow class and the onclick these rows looked identical but were dead
+      return '<div class="actrow'+(t.domain?' crow':'')+'" style="flex-wrap:nowrap"'+
+        (t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"':'')+'>'+
+        '<button class="tickc" title="Yes - mark it done" onclick="event.stopPropagation();applyOne(this,\''+esc(t.id)+'\')"><i class="ph ph-check"></i></button>'+
         '<div class="co"><b>'+esc(t.subject||"(untitled)")+'</b>'+
         '<div class="dom">'+esc(v.company||t.company_name||"")+'</div>'+
         '<div class="vreason"><i class="ph ph-sparkle"></i><span>'+esc(v.reason||"")+'</span></div></div>'+
         '<div class="rt" style="flex-wrap:nowrap">'+
         (v.confidence==="high"?'<span class="pill" style="background:#ECFDF3;color:#0A6B4A">confident</span>'
                               :'<span class="pill">likely</span>')+
-        '<button class="chip" onclick="keepTask(this,\''+esc(t.id)+'\')">Still to do</button>'+
+        '<i class="ph ph-pencil-simple" title="edit, reschedule or delete" style="color:var(--mut);cursor:pointer;font-size:15px" onclick="event.stopPropagation();editTaskSheet(\''+esc(t.id)+'\')"></i>'+
+        '<button class="chip" onclick="event.stopPropagation();keepTask(this,\''+esc(t.id)+'\')">Still to do</button>'+
+        (t.domain?'<i class="ph ph-caret-right chv"></i>':'')+
         '</div></div>';
     };
     var nHigh=doneLooking.filter(function(t){ return (vById[t.id]||{}).confidence==="high"; }).length;
