@@ -5059,6 +5059,12 @@ function logCall(dom,outcome,whenIso){
   if(outcome==="callback") payload.callback_at=whenIso||new Date(Date.now()+864e5).toISOString();
   deskPost(payload,function(r){
     if(r&&r.ok){
+      // Booking the next call means the outstanding chase for this company is
+      // done - close it, or the rep gets chased twice for the same work.
+      var keep=[]; if(r.hubspot_task&&r.hubspot_task.id) keep.push(r.hubspot_task.id);
+      triagePost({action:"close_due_tasks",domain:dom,company_id:r.company_id||null,keep_ids:keep},function(c){
+        if(c&&c.closed) showNext(c.closed+" outstanding task"+(c.closed===1?"":"s")+" for this company closed too.");
+      });
       // Close, tell the rep what happens next, and put them on the next lead.
       closeModal();
       var todayVisible=document.getElementById("view-today") && document.getElementById("view-today").style.display!=="none";
