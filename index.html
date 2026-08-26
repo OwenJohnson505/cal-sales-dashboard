@@ -5042,6 +5042,20 @@ function logNote(dom,btn){
     } else if(msg) msg.textContent="Could not save: "+((r&&r.error)||"error");
   });
 }
+// Reload the screen the rep is ACTUALLY on. Logging from the Tasks list used
+// to refresh the cold-call list instead, so the task they had just cleared sat
+// there looking untouched.
+function refreshActiveView(){
+  var b=document.querySelector(".sidebar .nv.on[data-v]")||document.querySelector(".nv.on[data-v]");
+  var v=b?b.getAttribute("data-v"):null;
+  var shown=function(id){ var e=document.getElementById(id); return e&&e.style.display!=="none"; };
+  if(v==="tasks"||shown("view-tasks")) return loadTasksView();
+  if(v==="today"||shown("view-today")) return loadToday();
+  if(v==="leadsmine"||shown("view-leadsmine")) return loadLeadsMine();
+  if(v==="customers"||shown("view-customers")) return loadCustomers();
+  if(v==="calllist"||shown("view-calllist")) return loadCallList();
+  if(v==="dash"||shown("view-dash")) return loadDashView();
+}
 function logOutcomeLock(on){
   window.__logging=!!on;
   var m=document.getElementById("cmodal"); if(!m) return;
@@ -5062,14 +5076,14 @@ function logCall(dom,outcome,whenIso){
       // Booking the next call means the outstanding chase for this company is
       // done - close it, or the rep gets chased twice for the same work.
       var keep=[]; if(r.hubspot_task&&r.hubspot_task.id) keep.push(r.hubspot_task.id);
+      closeModal();
       triagePost({action:"close_due_tasks",domain:dom,company_id:r.company_id||null,keep_ids:keep},function(c){
         if(c&&c.closed) showNext(c.closed+" outstanding task"+(c.closed===1?"":"s")+" for this company closed too.");
+        // refresh only once the closes have landed, and give HubSpot's search
+        // index a moment - it lags a second or two behind a batch update
+        setTimeout(refreshActiveView,1500);
       });
-      // Close, tell the rep what happens next, and put them on the next lead.
-      closeModal();
-      var todayVisible=document.getElementById("view-today") && document.getElementById("view-today").style.display!=="none";
-      if(todayVisible){ loadToday(); setTimeout(function(){ if(r.next) showNext(r.next); },600); }
-      else loadCallList();
+      setTimeout(function(){ if(r.next) showNext(r.next); },600);
     } else { logOutcomeLock(false); if(msg) msg.textContent="Could not log that: "+((r&&r.error)||"error"); }
   });
 }
