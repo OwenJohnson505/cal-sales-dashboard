@@ -727,6 +727,14 @@ td.num,th.num{ text-align:right; font-variant-numeric:tabular-nums; }
 .skipx i{ font-size:15px; }
 .callrow:hover .skipx,.skipx:focus-visible{ opacity:1; }
 .skipx:hover{ background:#FEF2F2; color:#C0272C; }
+/* "spoken to them" - the positive twin of the skip, same quiet treatment */
+.gotx{ border:0; background:transparent; color:var(--faint); cursor:pointer; padding:5px;
+  border-radius:8px; line-height:0; opacity:0; transition:opacity .12s, background .12s, color .12s; flex:none; }
+.gotx i{ font-size:16px; }
+.callrow:hover .gotx,.gotx:focus-visible{ opacity:1; }
+.gotx:hover{ background:#ECFDF3; color:#0A6B4A; }
+.gotx.done{ opacity:1; background:var(--color-primary); color:#fff; }
+@media (hover:none){ .gotx{ opacity:.55; } }
 @media (hover:none){ .skipx{ opacity:.55; } }
 /* task rows: is this company still shipping with us? The tint carries the
    meaning - green reads "leave them alone", amber "worth a win-back". */
@@ -2098,11 +2106,14 @@ function renderToday(el,got){
   // a skipped lead is off the list - its replacement is already in there
   var skipped=list.filter(function(x){return x.status==="skipped";}).length;
   list=list.filter(function(x){return x.status!=="skipped";});
+  // a rolling fifty: anything worked or skipped drops off and a fresh lead
+  // takes its place, so the list never runs down to nothing mid-afternoon
   var worked=list.filter(function(x){return x.status==="worked";}).length;
+  list=list.filter(function(x){return x.status!=="worked";});
   var html='<div id="nexttoast"></div>'+
     '<div class="statwrap"><div class="statgrid">'+
     stat("Today's leads",nf(list.length),"fresh, researched overnight")+
-    stat("Worked",nf(worked),(skipped?nf(skipped)+" skipped and replaced":"of today's list"),worked>=list.length&&list.length?"ok":"")+
+    stat("Worked",nf(worked),(skipped?nf(skipped)+" skipped &middot; list refills itself":"cleared &middot; list refills itself"),worked?"ok":"")+
     stat("Chase",nf(chase.length),"emailed 3+ days ago, silence",chase.length?"alarm":"")+
     stat("Suggested tasks",nf(tasks.length),"review them in the Tasks tab")+
     '</div></div>';
@@ -2135,6 +2146,7 @@ function renderToday(el,got){
           (x.contacts?'<span class="pill">'+x.contacts+' contacts</span>':'')+
           (done?'<span class="tag done">Done</span>'
             : (x.phone?'<a class="btn btn-primary btn-sm tel" href="tel:'+esc(x.phone)+'" onclick="event.stopPropagation()">Call<span class="pn"> '+esc(x.phone)+'</span></a>':'<span class="nonum">no number</span>'))+
+          (done?'':'<button class="gotx" title="Spoken to them - take it off my list" onclick="event.stopPropagation();markContacted(this,\''+esc(x.domain)+'\')"><i class="ph ph-check"></i></button>')+
           (done?'':'<button class="skipx" title="Not one for me - skip it" onclick="event.stopPropagation();skipMenu(this,\''+esc(x.domain)+'\')"><i class="ph ph-x"></i></button>')+
         '</div></div>';
     }).join("")
@@ -4954,6 +4966,23 @@ function openCallLead(dom){
         '</div></div>'+
       '<div class="outrow" style="margin-top:8px"><button class="chip" onclick="logNote(\''+esc(dom)+'\',this)">Save a note only &mdash; leaves the lead on your list</button></div>'+
       '<div id="logmsg" class="foot"></div>';
+  });
+}
+// "Spoken to them" - straight off the list, and a fresh lead drops in behind
+// it. No modal: on a calling run the whole point is that it takes one tap.
+function markContacted(btn,dom){
+  if(btn.disabled) return;
+  btn.disabled=true; btn.classList.add("done");
+  var row=btn.closest(".callrow");
+  skipPost({action:"contacted",domain:dom},function(r){
+    if(r&&r.ok){
+      if(row){ row.style.transition="opacity .3s ease"; row.style.opacity=".2"; row.style.pointerEvents="none"; }
+      showNext("Marked as contacted"+(r.replaced?" - a fresh lead has taken its place.":". "));
+      setTimeout(loadToday,900);
+    } else {
+      btn.disabled=false; btn.classList.remove("done");
+      showNext("Could not do that: "+((r&&r.error)||"error"));
+    }
   });
 }
 // "Call back..." - pick when it should come back, instead of always tomorrow.
