@@ -3461,6 +3461,77 @@ function lmTagAdder(el,dom,kind){
     document.addEventListener('click',function h(){ document.removeEventListener('click',h); cancel(); });
   },0);
 }
+// ---- action tags on the lead card -------------------------------------
+// Reads come from the lead-tags function (nothing else exposed a per-domain
+// list). WRITES deliberately reuse desk2 tag_add/tag_remove - the same path
+// the Leads table has always used, so there is one writer, not two that can
+// drift on things like the default kind.
+var LTAGS_=URL_+"/functions/v1/lead-tags";
+function tagPost(payload,cb){
+  sb.auth.getSession().then(function(s){ if(!s.data.session) return;
+    fetch(LTAGS_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); })
+      .catch(function(){ if(cb)cb({ok:false}); }); });
+}
+function ltLoad(dom){
+  window.__ltDom=dom; window.__ltTags=[]; window.__ltVocab=[];
+  ltRender(dom);
+  tagPost({domain:dom},function(r){
+    if(!r||!r.ok||window.__ltDom!==dom) return;   // a later card may have opened
+    window.__ltTags=r.tags||[]; window.__ltVocab=r.vocab||[];
+    ltRender(dom);
+  });
+}
+function ltRender(dom){
+  var box=document.getElementById("ltags"); if(!box) return;
+  var tags=window.__ltTags||[];
+  var chips=tags.map(function(t){
+    var act=(t.kind==="action");
+    return '<span class="pill" style="display:inline-flex;gap:6px;align-items:center'+
+      (act?';background:#1D1D1F;color:#fff':'')+'" title="'+esc(t.kind)+(t.added_by?' &middot; added by '+esc(t.added_by):'')+'">'+
+      esc(t.tag)+'<span onclick="ltRemove(\''+esc(dom)+'\',\''+esc(t.tag)+'\',\''+esc(t.kind)+'\')" '+
+      'title="remove" style="cursor:pointer;font-weight:700;opacity:.6">&times;</span></span>';
+  }).join('');
+  box.innerHTML='<span class="hint" style="margin-right:2px">Tags</span>'+chips+
+    '<button class="chip" style="padding:3px 10px;font-size:11px" onclick="ltAdd(this,\''+esc(dom)+'\')">+ tag</button>';
+}
+function ltAdd(btn,dom){
+  var wrap=document.createElement('span');
+  wrap.style.cssText='display:inline-flex;gap:4px;align-items:center';
+  var sugg=(window.__ltVocab||[]).filter(function(v){
+    return !(window.__ltTags||[]).some(function(t){ return t.tag===v; }); }).slice(0,4);
+  wrap.innerHTML='<input list="ltvocab" style="font:inherit;font-size:12px;padding:3px 9px;border-radius:8px;border:1px solid var(--line);background:#fff;width:150px" placeholder="action, e.g. Doughnut drop">'+
+    '<datalist id="ltvocab">'+sugg.map(function(v){ return '<option value="'+esc(v)+'">'; }).join('')+'</datalist>'+
+    '<button class="chip" style="padding:3px 10px;font-size:11px;background:#1D1D1F;color:#fff;border-color:#1D1D1F">Add</button>'+
+    '<span style="cursor:pointer;color:var(--mut);font-weight:700;font-size:14px;padding:0 3px" title="cancel">&times;</span>';
+  btn.parentNode.replaceChild(wrap,btn);
+  var inp=wrap.querySelector('input'); inp.focus();
+  var done=false;
+  function cancel(){ if(done) return; done=true; ltRender(dom); }
+  function save(){
+    if(done) return;
+    var t=(inp.value||'').replace(/\s+/g,' ').trim().slice(0,40);
+    if(!t){ cancel(); return; }
+    done=true;
+    // optimistic: the chip appears now, the write confirms behind it
+    window.__ltTags=(window.__ltTags||[]).concat([{tag:t,kind:"action",added_by:"you"}]);
+    ltRender(dom);
+    desk2Post({action:'tag_add',domain:dom,tag:t,kind:'action'},function(r){
+      if(!r||!r.ok){
+        window.__ltTags=(window.__ltTags||[]).filter(function(x){ return x.tag!==t; });
+        ltRender(dom); showNext('Could not add that tag.');
+      }
+    });
+  }
+  wrap.querySelector('button').onclick=function(e){ e.stopPropagation(); save(); };
+  wrap.querySelector('span[title="cancel"]').onclick=function(e){ e.stopPropagation(); cancel(); };
+  inp.onkeydown=function(e){ if(e.key==='Enter'){ e.stopPropagation(); save(); } if(e.key==='Escape') cancel(); };
+}
+function ltRemove(dom,tag,kind){
+  window.__ltTags=(window.__ltTags||[]).filter(function(x){ return !(x.tag===tag&&x.kind===kind); });
+  ltRender(dom);
+  desk2Post({action:'tag_remove',domain:dom,tag:tag,kind:kind},function(){});
+}
 function lmTagRemove(dom,tag,kind){
   desk2Post({action:'tag_remove',domain:dom,tag:tag,kind:kind},function(){});
   var l=(window.__lm||[]).filter(function(x){return x.domain===dom;})[0];
@@ -3579,6 +3650,15 @@ function loadTasksView(){
   deskPost(p,function(r){ fin("sugg",r); });
 }
 function taskViewAll(v){ window.__taskTeam=v; loadTasksView(); }
+// Why a handful of task rows will not open. The profile is keyed on the
+// website domain; a HubSpot company with none has nothing to look up, and
+// guessing from the name is worse than useless - "Atlas Composite
+// Technologies" matches four unrelated Atlas companies in our own records.
+function noDomainWhy(name){
+  showNext((name?name+' has':'This company has')+
+    ' no website domain on its HubSpot record, so there is no profile to open. '+
+    'Add the domain in HubSpot and the full card unlocks on the next hourly sync.');
+}
 // Find a company without scrolling 200 open tasks. Matches the company, the
 // task title, the domain and the contact - reps half-remember any of them.
 function taskHit(t){
@@ -3751,10 +3831,16 @@ function renderTasks(el,got){
   var taskRow=function(t){
     var due=t.due?new Date(Number(t.due)||t.due):null;
     var overdue=due&&due<now;
-    return '<div class="actrow'+(t.domain?' crow':'')+'" style="flex-wrap:nowrap"'+(t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"':'')+'>'+
+    // A task whose HubSpot company has no website domain has no profile to
+    // open. It used to render as a normal-looking row that simply did nothing
+    // on click, which reads as a broken app - so say why instead.
+    return '<div class="actrow crow" style="flex-wrap:nowrap"'+
+      (t.domain?' onclick="openCallLead(\''+esc(t.domain)+'\')"'
+               :' onclick="noDomainWhy(\''+esc(String(t.company_name||"").replace(/'/g,""))+'\')"')+'>'+
       '<button class="tickc" title="Mark done" onclick="event.stopPropagation();tickTask(this,\''+esc(t.id)+'\')"><i class="ph ph-check"></i></button>'+
       '<div class="co"><b>'+esc(t.subject||"(untitled)")+'</b>'+
-      '<div class="dom">'+(t.company_name?esc(t.company_name):'no company linked')+(t.contact_name?' &middot; '+esc(t.contact_name):'')+'</div>'+
+      '<div class="dom">'+(t.company_name?esc(t.company_name):'no company linked')+(t.contact_name?' &middot; '+esc(t.contact_name):'')+
+      (t.domain?'':' <span class="pill" style="background:#FEF6E7;color:#7A4E07;font-size:10.5px">no domain</span>')+'</div>'+
       custBadge(flagOf(t))+
       (t.body?'<div class="seg">'+esc(String(t.body).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,240))+'</div>':'')+'</div>'+
       '<div class="rt" style="flex-wrap:nowrap">'+
@@ -4912,7 +4998,10 @@ function openCallLead(dom){
         '<a target="_blank" rel="noopener" href="https://web.archive.org/web/2024*/'+esc(dom)+'" style="font-weight:600">Site history &#8599;</a>'+
         (ch&&ch.company_number?'<span>Company no '+esc(ch.company_number)+(ch.incorporated?' &middot; since '+esc(String(ch.incorporated).slice(0,4)):'')+'</span>':'')+
         (ch&&(ch.address||ch.postcode)?'<span>Registered: '+esc([ch.address,ch.postcode].filter(Boolean).join(', '))+'</span>':'')+
-      '</div>';
+      '</div>'+
+      // action tags sit above the tabs so they stay visible whichever tab the
+      // rep is on - they describe the account, not the call
+      '<div id="ltags" class="pillrow" style="margin:10px 0 2px;gap:6px;align-items:center;min-height:26px"></div>';
     var brief4=b4items.length?('<div style="background:var(--color-base-200);border-radius:12px;padding:3px 15px;margin:10px 0 4px">'+
       b4items.map(function(it,i){
         return '<div style="padding:10px 0;'+(i?'border-top:1px solid rgba(0,0,0,.05)':'')+'">'+
@@ -5018,6 +5107,7 @@ function openCallLead(dom){
         '</div></div>'+
       '<div class="outrow" style="margin-top:8px"><button class="chip" onclick="logNote(\''+esc(dom)+'\',this)">Save a note only &mdash; leaves the lead on your list</button></div>'+
       '<div id="logmsg" class="foot"></div>';
+    ltLoad(dom);
   });
 }
 // "Spoken to them" - straight off the list, and a fresh lead drops in behind
