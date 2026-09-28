@@ -2593,7 +2593,7 @@ function loadCustomers(){
     if(!r||!r.ok){ el.innerHTML='<div class="empty">'+esc((r&&r.error)||"Could not load customers.")+'</div>'; return; }
     paintFreshness(r.tms);
     window.__cust=r.customers||[]; window.__custAll=!!r.all; window.__custFilter="all";
-    window.__custWatch=r.watch||[]; window.__custQ="";
+    window.__custWatch=r.watch||[]; window.__custQ=""; window.__custQRaw="";
     window.__chAlerts=r.ch_alerts||window.__chAlerts||{};
     window.__myComm=null;
     renderCustomers();
@@ -2676,7 +2676,7 @@ function renderCustomers(){
     stat("Gone quiet",nf(cs.filter(function(x){return x.days_since_job!=null&&x.days_since_job>60;}).length),"no job in 60+ days")+
     '</div></div>'+
     '<div class="panel flush"><div class="phead"><h3>Accounts</h3>'+
-      '<input id="custq" class="input" placeholder="Search customer, domain, postcode, rep..." value="'+esc(window.__custQ||'')+'" oninput="custSearch(this.value)" style="margin-left:auto;flex:1;max-width:380px;padding:8px 13px;font-size:13.5px;border-radius:10px">'+
+      '<input id="custq" class="input" placeholder="Search customer, domain, postcode, rep..." value="'+esc(window.__custQRaw||'')+'" oninput="custSearch(this.value)" style="margin-left:auto;flex:1;max-width:380px;padding:8px 13px;font-size:13.5px;border-radius:10px">'+
       '<span class="viewseg">'+
         '<button'+((window.__cuView||'table')==='table'?' class="on"':'')+' onclick="cuViewSet(\'table\')" title="table view"><i class="ph ph-table"></i></button>'+
         '<button'+(window.__cuView==='cards'?' class="on"':'')+' onclick="cuViewSet(\'cards\')" title="compact card view"><i class="ph ph-squares-four"></i></button>'+
@@ -2725,7 +2725,13 @@ function renderCuCards(box, cs){
     '</div>';
   }).join('')||'<div class="empty" style="grid-column:1/-1">Nothing matches.</div>';
 }
-function custSearch(q){ window.__custQ=String(q||"").toLowerCase(); renderCustTable(); }
+// The box keeps exactly what was typed; the lowered, trimmed copy does the
+// matching - so a capital or a trailing space is not eaten on a re-render.
+function custSearch(q){
+  window.__custQRaw=String(q||"");
+  window.__custQ=window.__custQRaw.trim().toLowerCase();
+  renderCustTable();
+}
 /* customers table: every funnel is independent and they ALL stack - SK
    postcodes AND has-actions AND declining works exactly like the leads table */
 function cuArr(k){ return window.__cuSort===k?(' <span style="font-size:9px">'+(window.__cuDir>0?'&#9650;':'&#9660;')+'</span>'):''; }
@@ -2844,12 +2850,17 @@ function cuFilteredList(){
   return cs;
 }
 function renderCustTable(){
-  var box=document.getElementById("custrows")||document.getElementById("cucards");
-  if(!box) return;
   var bar=document.getElementById("cubar"); if(bar) bar.innerHTML=cuBar();
-  var team=!!window.__custAll;
   var cs=cuFilteredList();
   var cnt=document.getElementById("custcount"); if(cnt) cnt.textContent=cs.length+' accounts';
+  // The map is a third view of this same filtered list, but it has neither
+  // custrows nor cucards - so the early return that used to sit at the top of
+  // this function left search and the filters dead on it: you typed and
+  // nothing moved. Count and filter bar are updated above for every view.
+  if((window.__cuView||'table')==='map'){ mapRender('customers'); return; }
+  var box=document.getElementById("custrows")||document.getElementById("cucards");
+  if(!box) return;
+  var team=!!window.__custAll;
   if(box.id==="cucards"){ renderCuCards(box,cs); return; }
   var now2=Date.now();
   box.innerHTML=cs.map(function(x){
