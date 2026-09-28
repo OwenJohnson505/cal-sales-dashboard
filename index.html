@@ -3568,6 +3568,23 @@ function loadTasksView(){
   deskPost(p,function(r){ fin("sugg",r); });
 }
 function taskViewAll(v){ window.__taskTeam=v; loadTasksView(); }
+// Find a company without scrolling 200 open tasks. Matches the company, the
+// task title, the domain and the contact - reps half-remember any of them.
+function taskHit(t){
+  var q=window.__taskQ||""; if(!q) return true;
+  return ((t.company_name||"")+" "+(t.subject||"")+" "+(t.domain||"")+" "+(t.contact_name||""))
+    .toLowerCase().indexOf(q)>-1;
+}
+// Re-renders from the tasks already fetched - typing never waits on HubSpot.
+// The raw string is what the box shows, so capitals and spaces survive as they
+// are typed; the lowered, trimmed one does the matching.
+function taskSearch(q){
+  window.__taskQRaw=String(q||"");
+  window.__taskQ=window.__taskQRaw.trim().toLowerCase();
+  if(window.__taskEl&&window.__taskGot) renderTasks(window.__taskEl,window.__taskGot);
+  var i=document.getElementById("taskq");
+  if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); }
+}
 // Before the list is drawn, ask which of these companies already ship with us
 // - chasing an account that sent a job last week is the fastest way to lose
 // a rep's trust in their own task list. A failed lookup just renders as normal.
@@ -3672,6 +3689,12 @@ function renderTasks(el,got){
   var hs=(got.hs&&got.hs.tasks)||[], sg=(got.sugg&&got.sugg.tasks)||[];
   var note=got.hs&&got.hs.note;
   var now=new Date();
+  // Hold on to what we fetched so the search box can redraw without refetching.
+  window.__taskGot=got; window.__taskEl=el;
+  // Filter here, before anything is grouped or split out, so one search covers
+  // every section below - overdue, trading, "looks already done" and suggestions.
+  var q=window.__taskQ||"", hsAll=hs, nAll=0;
+  if(q){ hs=hs.filter(taskHit); sg=sg.filter(taskHit); }
   // a company we are still shipping for is not a prospect: those tasks come
   // OUT of the working list into their own bucket, so the overdue count means
   // real outstanding outreach. A LAPSED customer stays put - winning one back
@@ -3694,11 +3717,15 @@ function renderTasks(el,got){
   var doneLooking=hs.filter(function(t){ return !!vById[t.id]; });
   hs=hs.filter(function(t){ return !vById[t.id]; });
   window.__verdictIds=doneLooking.map(function(t){ return t.id; });
+  // "1 of 3 open" has to compare like with like - the total is the working
+  // list once trading and already-done come out, not every task HubSpot sent.
+  nAll=q?hsAll.filter(function(t){ return !isTrading(t)&&!vById[t.id]; }).length:hs.length;
   var overdueN=hs.filter(function(t){ var d=t.due?new Date(Number(t.due)||t.due):null; return d&&d<now; }).length;
   var html='<div id="nexttoast2"></div>'+
     '<div class="controls" style="margin-bottom:14px">'+
       '<button class="btn btn-primary" onclick="newTaskSheet()"><i class="ph ph-plus" style="margin-right:6px;font-size:15px;vertical-align:-2px"></i>New task</button>'+
-      '<span class="hint">'+(hs.length?(hs.length+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+
+      '<input id="taskq" class="input" placeholder="Search company, task, contact..." value="'+esc(window.__taskQRaw||'')+'" oninput="taskSearch(this.value)" autocomplete="off" style="width:300px;padding:8px 13px;font-size:13.5px;border-radius:10px">'+
+      '<span class="hint">'+(hs.length?((q?hs.length+' of '+nAll:hs.length)+' open'+(overdueN?' &middot; <b style="color:#C0272C">'+overdueN+' overdue</b>':'')):'')+
         (trading.length?' &middot; '+trading.length+' set aside':'')+
         (doneLooking.length?' &middot; '+doneLooking.length+' look done':'')+'</span>'+
       ((window.CAN_MANAGE&&!window.VIEW_AS)?('<span class="seg2" style="margin-left:auto">'+
@@ -3793,7 +3820,14 @@ function renderTasks(el,got){
       grp('This week',gWeek,'#0A6B4A',true)+
       grp('Later',gLater,'#98989F',gLater.length<=15)+
       grp('No due date',gNone,'#C7C7CC',false)
-    :'<div class="panel flush"><div class="plist"><div class="empty"><div class="ei">&#10003;</div>'+(note?esc(note):"All clear. New tasks from HubSpot land here.")+'</div></div></div>');
+    :(q
+       // a search that matched only a trading / already-done row has hit
+       // something - saying "no tasks match" underneath it would be a lie
+       ? ((trading.length+doneLooking.length)?''
+          :'<div class="panel flush"><div class="plist"><div class="empty">'+
+            '<div class="ei"><i class="ph ph-magnifying-glass"></i></div>'+
+            'No tasks match &ldquo;'+esc(window.__taskQRaw||'')+'&rdquo;.</div></div></div>')
+       :'<div class="panel flush"><div class="plist"><div class="empty"><div class="ei">&#10003;</div>'+(note?esc(note):"All clear. New tasks from HubSpot land here.")+'</div></div></div>'));
   // "They said THEY'D act" is not a task - it is a watch. Split it out so
   // the rep never reads someone else's promise as their own to-do.
   var wait=sg.filter(function(t){return t.kind==='waiting';});
