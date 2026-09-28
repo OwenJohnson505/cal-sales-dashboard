@@ -4219,9 +4219,12 @@ function doFollowup(id,withFollowup,btn){
               type:window.__ettype||null,priority:window.__etpri||null},function(r){
     if(r&&r.ok){
       closeModal();
-      showNext(r.due
-        ? "Closed. Next chase booked for "+new Date(r.due).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})+(note?" with your note attached.":".")
-        : "Closed"+(note?" and your note saved to the record.":"."));
+      // the server refuses a second chase when one is already booked - say so
+      // rather than reporting a booking that did not happen
+      showNext(r.message ? r.message
+        : (r.due
+          ? "Closed. Next chase booked for "+new Date(r.due).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})+(note?" with your note attached.":".")
+          : "Closed"+(note?" and your note saved to the record.":".")));
       loadTasksView();
     } else { btn.disabled=false; if(m) m.textContent="Could not do that: "+((r&&r.error)||"error"); }
   });
