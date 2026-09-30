@@ -2025,6 +2025,61 @@ function projItemNote(iid,note){
 function projArchive(id){ projPost({action:"archive",id:id},function(){ loadProjects(); }); }
 // ---- Sales desk: call list, lead profile, team scoreboard -------------------
 var DESK_=URL_+"/functions/v1/sales-desk", STAFF_=URL_+"/functions/v1/staff-admin", DESK2_=URL_+"/functions/v1/sales-desk2", SKIP_=URL_+"/functions/v1/daily-skip", TRIAGE_=URL_+"/functions/v1/task-triage", SWEEP_=URL_+"/functions/v1/task-sweep";
+// ---- what is behind the "meaningful" number ----------------------------
+// The count is two things added together - outcomes the rep logged in the app
+// and answered Aircall calls - so the number alone is not inspectable. This
+// lists the rows the very same SQL counted.
+var PDET_=URL_+"/functions/v1/pulse-detail";
+function pulseDetailPost(payload, cb){
+  sb.auth.getSession().then(function(s){ if(!s.data.session) return;
+    fetch(PDET_,{method:"POST",headers:{Authorization:"Bearer "+s.data.session.access_token,apikey:KEY_,"Content-Type":"application/json"},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(function(d){ if(cb)cb(d); })
+      .catch(function(){ if(cb)cb({ok:false}); }); });
+}
+function mfShow(em,name){
+  var m=document.getElementById("cmodal"); if(!m) return;
+  m.style.display="flex";
+  m.innerHTML='<div class="mcard"><div class="mhead"><b>'+esc(name)+' &middot; '+pDayLbl(PULSE_DAY)+'</b>'+
+    '<span class="mx" onclick="closeModal()">&times;</span></div><div class="mbody" id="mfbody">'+spinner()+'</div></div>';
+  pulseDetailPost({email:em,day:PULSE_DAY},function(r){
+    var b=document.getElementById("mfbody"); if(!b) return;
+    if(!r||!r.ok){ b.innerHTML='<div class="empty">Could not load these.</div>'; return; }
+    window.__mfRows=r.rows||[];
+    b.innerHTML=mfRender();
+  });
+}
+function mfRender(){
+  var rows=window.__mfRows||[];
+  if(!rows.length) return '<div class="empty">Nothing meaningful logged for this day.</div>';
+  var logged=rows.filter(function(r){return r.kind==="logged";}).length;
+  var dialled=rows.length-logged;
+  var secs=function(n){ n=Number(n||0); return n<60?n+'s':Math.floor(n/60)+'m '+(n%60)+'s'; };
+  var tm=function(s){ try{ return new Date(s).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } };
+  return '<p class="sub" style="margin:0 0 12px;max-width:640px">A contact counts when the rep logged <b>Got through</b>, '+
+      '<b>Opportunity</b> or <b>Call back</b> in the app, or Aircall recorded an <b>answered</b> call. '+
+      'The two are matched on the phone number so one conversation is never counted twice.</p>'+
+    '<div class="pillrow" style="margin:0 0 10px">'+
+      (logged?'<span class="pill" style="background:#1D1D1F;color:#fff">'+logged+' logged in the app</span>':'')+
+      (dialled?'<span class="pill">'+dialled+' answered on Aircall</span>':'')+'</div>'+
+    '<div class="plist">'+rows.map(function(r){
+      var who=r.company||r.domain||r.contact_name||r.phone||'(no company on the record)';
+      var sub=[];
+      if(r.domain&&r.company) sub.push(esc(r.domain));
+      if(r.contact_name&&r.contact_name!==who) sub.push(esc(r.contact_name));
+      if(r.phone) sub.push(esc(r.phone));
+      return '<div class="actrow'+(r.domain?' crow':'')+'"'+
+        (r.domain?' onclick="openCallLead(\''+esc(r.domain)+'\')"':'')+'>'+
+        '<div class="co"><b>'+esc(who)+'</b>'+
+        (sub.length?'<div class="dom">'+sub.join(' &middot; ')+'</div>':'')+
+        (r.note?'<div class="seg">'+esc(String(r.note).slice(0,200))+'</div>':'')+'</div>'+
+        '<div class="rt" style="flex-wrap:nowrap">'+
+        (r.kind==="logged"
+          ? '<span class="pill" style="background:#1D1D1F;color:#fff">'+esc(String(r.outcome||'').replace(/_/g,' '))+'</span>'
+          : '<span class="pill">answered &middot; '+secs(r.secs)+'</span>')+
+        '<span class="dom" style="white-space:nowrap">'+tm(r.at)+'</span>'+
+        (r.domain?'<i class="ph ph-caret-right chv"></i>':'')+'</div></div>';
+    }).join('')+'</div>';
+}
 function desk2Post(payload, cb){
   if(window.VIEW_AS && !payload.rep_email) payload.rep_email=window.VIEW_AS;
   sb.auth.getSession().then(function(se){
@@ -2279,7 +2334,7 @@ function renderPulse(){
         (x.visit?'<span class="pill" style="background:#F0F6FF;color:#0060C7">on a site visit</span>':'')+
         '<div class="m'+(x.calls?'':' dim')+'"><b>'+x.calls+'</b><span>calls</span></div>'+
         '<div class="m'+(x.emails?'':' dim')+'"><b>'+x.emails+'</b><span>emails</span></div>'+
-        '<div class="m'+(x.meaningful?'':' dim')+'"><b>'+x.meaningful+'</b><span>meaningful</span></div>'+
+        '<div class="m'+(x.meaningful?'':' dim')+(x.meaningful?'" style="cursor:pointer" title="see who" onclick="mfShow(\''+esc(x.em)+'\',\''+esc(x.name)+'\')':'')+'"><b>'+x.meaningful+'</b><span>meaningful</span></div>'+
         '</div></div>';
     }).join("")+'</div></div>';
   var any=false;
@@ -2344,7 +2399,7 @@ function renderPulse(){
           '<span style="margin-left:auto;display:flex;gap:6px">'+
             (d.calls>0?'<span class="pill" style="background:'+(persist>=50?"#E7F8F0":"#FEF6E7")+';color:'+(persist>=50?"#0A6B4A":"#7A4E07")+'" title="answered calls kept past 60s">'+persist+'% persisted</span>':'')+
             (Number(d.replies_in)>0?'<span class="pill">'+d.replies_in+' replies in</span>':'')+
-            (Number(d.meaningful)>0?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A">'+d.meaningful+' meaningful</span>':'')+
+            (Number(d.meaningful)>0?'<span class="pill" style="background:#E7F8F0;color:#0A6B4A;cursor:pointer" title="see who" onclick="mfShow(\''+esc(em)+'\',\''+esc(rep.name||em)+'\')">'+d.meaningful+' meaningful</span>':'')+
           '</span></div>'+
         '<div class="dom" style="margin-top:3px">'+d.calls+' calls ('+d.answer_pct+'% answered, avg '+d.avg_call_secs+'s) &middot; '+d.emails_front+' emails'+(d.emails_hs>0?' ('+d.emails_hs+' in HubSpot)':'')+'</div>'+
         '<div class="pillrow" style="margin:8px 0 0">'+dPill(Number(d.calls),avgC,'calls')+dPill(Number(d.emails_front),avgE,'emails')+
